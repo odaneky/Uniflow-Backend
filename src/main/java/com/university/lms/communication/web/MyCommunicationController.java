@@ -12,6 +12,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,4 +43,16 @@ public class MyCommunicationController {
             @PageableDefault(size = 50, sort = "sentAt", direction = Sort.Direction.ASC) Pageable pageable) {
         return communicationService.ownMessages(id, pageable);
     }
+
+    @PostMapping("/conversations/{id}/read")
+    public void markConversationRead(@PathVariable UUID id) {
+        communicationService.markConversationRead(id);
+    }
+
+    @GetMapping("/conversations/unread-count")
+    public UnreadCountResponse conversationUnreadCount() {
+        return new UnreadCountResponse(communicationService.ownUnreadConversationCount());
+    }
+
+    public record UnreadCountResponse(long count) {}
 }

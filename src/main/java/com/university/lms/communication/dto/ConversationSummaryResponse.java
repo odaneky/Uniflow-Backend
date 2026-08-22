@@ -10,4 +10,5 @@ public record ConversationSummaryResponse(
         Instant updatedAt,
         String lastMessagePreview,
         UUID lastSenderUserId,
-        String lastSenderName) {}
+        String lastSenderName,
+        long unreadCount) {}

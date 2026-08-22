@@ -1,5 +1,6 @@
 package com.university.lms.student.api;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,4 +28,10 @@ public interface StudentDirectory {
      * the students table. Empty for staff, who have a user but no student record.
      */
     Optional<UUID> studentIdOfUser(UUID userId);
+
+    /** The assigned academic advisor's user id, when the caller is a student with an advisor. */
+    Optional<UUID> advisorUserIdOf(UUID studentUserId);
+
+    /** User ids of students assigned to this advisor. Empty when none. */
+    List<UUID> adviseeUserIdsOf(UUID advisorUserId);
 }

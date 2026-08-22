@@ -3,6 +3,7 @@ package com.university.lms.student.service;
 import com.university.lms.student.api.StudentDirectory;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.repository.StudentRepository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -47,5 +48,23 @@ public class DefaultStudentDirectory implements StudentDirectory {
     @Override
     public Optional<UUID> studentIdOfUser(UUID userId) {
         return studentRepository.findByUserId(userId).map(Student::getId);
+    }
+
+    @Override
+    public Optional<UUID> advisorUserIdOf(UUID studentUserId) {
+        return studentRepository
+                .findByUserId(studentUserId)
+                .map(Student::getAdvisorUserId)
+                .filter(java.util.Objects::nonNull);
+    }
+
+    @Override
+    public List<UUID> adviseeUserIdsOf(UUID advisorUserId) {
+        if (advisorUserId == null) {
+            return List.of();
+        }
+        return studentRepository.findByAdvisorUserId(advisorUserId, org.springframework.data.domain.Pageable.unpaged())
+                .map(Student::getUserId)
+                .toList();
     }
 }

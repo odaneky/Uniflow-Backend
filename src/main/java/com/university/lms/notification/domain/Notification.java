@@ -61,6 +61,18 @@ public class Notification extends BaseEntity {
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
+    @Column(name = "source_type", length = 30)
+    private String sourceType;
+
+    @Column(name = "source_id")
+    private UUID sourceId;
+
+    @Column(name = "action_url", length = 500)
+    private String actionUrl;
+
+    @Column(name = "priority", nullable = false)
+    private short priority = 0;
+
     protected Notification() {
         // for JPA
     }
@@ -91,5 +103,14 @@ public class Notification extends BaseEntity {
     public void markRead(Instant at) {
         this.status = NotificationStatus.READ;
         this.readAt = at;
+    }
+
+    public void assignSource(String sourceType, UUID sourceId) {
+        this.sourceType = sourceType;
+        this.sourceId = sourceId;
+    }
+
+    public void assignActionUrl(String actionUrl) {
+        this.actionUrl = actionUrl;
     }
 }

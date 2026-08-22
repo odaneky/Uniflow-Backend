@@ -1,10 +1,11 @@
 package com.university.lms.communication.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.university.lms.common.dto.PageResponse;
-import com.university.lms.common.exception.CommonErrorCode;
-import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
-import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.common.outbox.OutboxWriter;
+import com.university.lms.communication.api.MessagingPolicy;
 import com.university.lms.communication.domain.Announcement;
 import com.university.lms.communication.domain.CommunicationErrorCode;
 import com.university.lms.communication.domain.Conversation;
@@ -16,6 +17,7 @@ import com.university.lms.communication.dto.CreateAnnouncementRequest;
 import com.university.lms.communication.dto.CreateConversationRequest;
 import com.university.lms.communication.dto.CreateMessageRequest;
 import com.university.lms.communication.dto.MessageResponse;
+import com.university.lms.communication.dto.StartConversationResult;
 import com.university.lms.communication.repository.AnnouncementRepository;
 import com.university.lms.communication.repository.ConversationParticipantRepository;
 import com.university.lms.communication.repository.ConversationRepository;
@@ -24,6 +26,7 @@ import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.notification.dispatch.MessageSentOutboxHandler;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
 import java.util.HashSet;
@@ -39,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CommunicationService {
 
     private static final UUID NONE = UUID.fromString("00000000-0000-4000-8000-000000000000");
+    private static final Instant EPOCH = Instant.EPOCH;
 
     private final AnnouncementRepository announcementRepository;
     private final ConversationRepository conversationRepository;
@@ -48,6 +52,9 @@ public class CommunicationService {
     private final UserDirectory userDirectory;
     private final StudentDirectory studentDirectory;
     private final EnrollmentDirectory enrollmentDirectory;
+    private final MessagingPolicy messagingPolicy;
+    private final OutboxWriter outboxWriter;
+    private final ObjectMapper objectMapper;
 
     public CommunicationService(
             AnnouncementRepository announcementRepository,
@@ -57,7 +64,10 @@ public class CommunicationService {
             CurrentUserProvider currentUserProvider,
             UserDirectory userDirectory,
             StudentDirectory studentDirectory,
-            EnrollmentDirectory enrollmentDirectory) {
+            EnrollmentDirectory enrollmentDirectory,
+            MessagingPolicy messagingPolicy,
+            OutboxWriter outboxWriter,
+            ObjectMapper objectMapper) {
         this.announcementRepository = announcementRepository;
         this.conversationRepository = conversationRepository;
         this.participantRepository = participantRepository;
@@ -66,6 +76,9 @@ public class CommunicationService {
         this.userDirectory = userDirectory;
         this.studentDirectory = studentDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
+        this.messagingPolicy = messagingPolicy;
+        this.outboxWriter = outboxWriter;
+        this.objectMapper = objectMapper;
     }
 
     public List<AnnouncementResponse> ownAnnouncements() {
@@ -127,55 +140,118 @@ public class CommunicationService {
     }
 
     public PageResponse<MessageResponse> ownMessages(UUID conversationId, Pageable pageable) {
-        requireParticipant(conversationId);
+        messagingPolicy.assertCanReadConversation(currentUserProvider.require(), conversationId);
         return PageResponse.from(
-                messageRepository.findByConversationIdOrderBySentAtDesc(conversationId, pageable),
+                messageRepository.findByConversationIdAndDeletedAtIsNullOrderBySentAtDesc(conversationId, pageable),
                 message -> MessageResponse.from(message, displayName(message.getSenderUserId())));
     }
 
+    public long ownUnreadConversationCount() {
+        UUID userId = currentUserProvider.require().userId();
+        return messageRepository.countTotalUnreadForUser(userId, EPOCH);
+    }
+
     @Transactional
-    public ConversationSummaryResponse startConversation(CreateConversationRequest request) {
+    public void markConversationRead(UUID conversationId) {
         CurrentUser caller = currentUserProvider.require();
+        messagingPolicy.assertCanReadConversation(caller, conversationId);
+        ConversationParticipant participant = participantRepository
+                .findByConversationIdAndUserId(conversationId, caller.userId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        CommunicationErrorCode.CONVERSATION_PARTICIPANT_NOT_FOUND,
+                        "You are not a participant in this conversation"));
+        participant.markReadAt(Instant.now());
+        participantRepository.save(participant);
+    }
+
+    @Transactional
+    public StartConversationResult startConversation(CreateConversationRequest request) {
+        CurrentUser caller = currentUserProvider.require();
+        Set<UUID> participants = new HashSet<>(request.participantUserIds());
+        participants.add(caller.userId());
+        messagingPolicy.assertCanStartConversation(caller, participants, request.courseSectionId());
+
+        List<Conversation> existing =
+                conversationRepository.findByExactParticipants(request.courseSectionId(), participants, participants.size());
+        if (!existing.isEmpty()) {
+            return new StartConversationResult(false, toSummary(existing.getFirst()));
+        }
+
         Conversation conversation = new Conversation(request.subject(), caller.userId());
         if (request.courseSectionId() != null) {
             conversation.attachToSection(request.courseSectionId());
         }
         conversationRepository.save(conversation);
 
-        Set<UUID> participants = new HashSet<>(request.participantUserIds());
-        participants.add(caller.userId());
         for (UUID userId : participants) {
-            if (!userDirectory.exists(userId)) {
-                continue;
-            }
             participantRepository.save(new ConversationParticipant(conversation, userId));
         }
 
         if (request.firstMessage() != null && !request.firstMessage().isBlank()) {
-            messageRepository.save(new Message(conversation, caller.userId(), request.firstMessage()));
+            sendInternal(conversation, caller, request.firstMessage(), null);
         }
-        return toSummary(conversation);
+        return new StartConversationResult(true, toSummary(conversation));
     }
 
     @Transactional
-    public MessageResponse send(UUID conversationId, CreateMessageRequest request) {
-        requireParticipant(conversationId);
+    public SendMessageResult send(UUID conversationId, CreateMessageRequest request, String idempotencyKey) {
+        CurrentUser caller = currentUserProvider.require();
+        messagingPolicy.assertCanSendMessage(caller, conversationId);
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            var existing = messageRepository.findByConversationIdAndIdempotencyKey(conversationId, idempotencyKey);
+            if (existing.isPresent()) {
+                Message message = existing.get();
+                return new SendMessageResult(false, MessageResponse.from(message, displayName(message.getSenderUserId())));
+            }
+        }
+
         Conversation conversation = conversationRepository
                 .findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         CommunicationErrorCode.CONVERSATION_NOT_FOUND,
                         "No conversation exists with id " + conversationId));
-        CurrentUser caller = currentUserProvider.require();
-        Message message = messageRepository.save(new Message(conversation, caller.userId(), request.body()));
+
+        MessageResponse created = sendInternal(conversation, caller, request.body(), idempotencyKey);
+        return new SendMessageResult(true, created);
+    }
+
+    private MessageResponse sendInternal(
+            Conversation conversation, CurrentUser caller, String body, String idempotencyKey) {
+        Message message = idempotencyKey == null || idempotencyKey.isBlank()
+                ? new Message(conversation, caller.userId(), body)
+                : new Message(conversation, caller.userId(), body, idempotencyKey);
+        messageRepository.save(message);
+        enqueueMessageSent(message, caller);
         return MessageResponse.from(message, caller.fullName());
     }
 
+    private void enqueueMessageSent(Message message, CurrentUser sender) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("messageId", message.getId().toString());
+        payload.put("conversationId", message.getConversation().getId().toString());
+        payload.put("senderUserId", sender.userId().toString());
+        payload.put("senderName", sender.fullName());
+        outboxWriter.enqueue(
+                "Message",
+                message.getId(),
+                MessageSentOutboxHandler.EVENT_TYPE,
+                payload.toString(),
+                "MessageSent:" + message.getId());
+    }
+
     private ConversationSummaryResponse toSummary(Conversation conversation) {
+        UUID userId = currentUserProvider.require().userId();
         Message last = messageRepository
-                .findFirstByConversationIdOrderBySentAtDesc(conversation.getId())
+                .findFirstByConversationIdAndDeletedAtIsNullOrderBySentAtDesc(conversation.getId())
                 .orElse(null);
-        String preview = last == null ? null : last.getBody();
+        String preview = last == null ? null : last.visibleBody();
         UUID senderId = last == null ? null : last.getSenderUserId();
+        Instant lastReadAt = participantRepository
+                .findByConversationIdAndUserId(conversation.getId(), userId)
+                .map(ConversationParticipant::getLastReadAt)
+                .orElse(null);
+        long unread = messageRepository.countUnreadInConversation(conversation.getId(), userId, lastReadAt, EPOCH);
         return new ConversationSummaryResponse(
                 conversation.getId(),
                 conversation.getSubject(),
@@ -183,28 +259,21 @@ public class CommunicationService {
                 conversation.getUpdatedAt(),
                 preview,
                 senderId,
-                senderId == null ? null : displayName(senderId));
+                senderId == null ? null : displayName(senderId),
+                unread);
     }
 
     private String displayName(UUID userId) {
         return userDirectory.findById(userId).map(UserDirectory.UserSummary::fullName).orElse("Member");
     }
 
-    private void requireParticipant(UUID conversationId) {
-        CurrentUser caller = currentUserProvider.require();
-        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
-            return;
-        }
-        if (!participantRepository.existsByConversationIdAndUserId(conversationId, caller.userId())) {
-            throw new ForbiddenException(
-                    CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
+    private static void requireStaff(CurrentUser caller) {
+        if (!caller.isStaff()) {
+            throw new com.university.lms.common.exception.ForbiddenException(
+                    com.university.lms.common.exception.CommonErrorCode.ACCESS_DENIED,
+                    "You do not have permission to access this record");
         }
     }
 
-    private static void requireStaff(CurrentUser caller) {
-        if (!caller.isStaff()) {
-            throw new ForbiddenException(
-                    CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
-        }
-    }
+    public record SendMessageResult(boolean created, MessageResponse message) {}
 }

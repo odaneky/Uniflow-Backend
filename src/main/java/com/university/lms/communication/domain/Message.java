@@ -38,6 +38,15 @@ public class Message extends BaseEntity {
     @Column(name = "sent_at", nullable = false)
     private Instant sentAt = Instant.now();
 
+    @Column(name = "idempotency_key", length = 200)
+    private String idempotencyKey;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "deleted_by_user_id")
+    private UUID deletedByUserId;
+
     protected Message() {
         // for JPA
     }
@@ -46,5 +55,18 @@ public class Message extends BaseEntity {
         this.conversation = conversation;
         this.senderUserId = senderUserId;
         this.body = body;
+    }
+
+    public Message(Conversation conversation, UUID senderUserId, String body, String idempotencyKey) {
+        this(conversation, senderUserId, body);
+        this.idempotencyKey = idempotencyKey;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    public String visibleBody() {
+        return isDeleted() ? "[Message removed]" : body;
     }
 }

@@ -17,4 +17,6 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     /** Paged rather than unbounded: the dispatcher drains the backlog in batches. */
     List<Notification> findByStatus(NotificationStatus status, Pageable pageable);
+
+    long countByRecipientUserIdAndReadAtIsNull(UUID recipientUserId);
 }

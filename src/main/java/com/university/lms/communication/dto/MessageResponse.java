@@ -11,7 +11,7 @@ public record MessageResponse(UUID id, UUID senderUserId, String senderName, Str
                 message.getId(),
                 message.getSenderUserId(),
                 senderName,
-                message.getBody(),
+                message.visibleBody(),
                 message.getSentAt());
     }
 }
