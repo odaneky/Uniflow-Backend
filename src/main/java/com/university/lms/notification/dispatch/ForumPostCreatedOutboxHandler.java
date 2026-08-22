@@ -7,10 +7,9 @@ import com.university.lms.common.outbox.OutboxEventHandler;
 import com.university.lms.notification.domain.Notification;
 import com.university.lms.notification.domain.NotificationChannel;
 import com.university.lms.notification.domain.NotificationType;
-import com.university.lms.notification.repository.NotificationRepository;
+import com.university.lms.notification.service.NotificationDeliveryService;
 import java.time.Instant;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -19,12 +18,12 @@ public class ForumPostCreatedOutboxHandler implements OutboxEventHandler {
     public static final String EVENT_TYPE = "ForumPostCreated";
 
     private final ObjectMapper objectMapper;
-    private final NotificationRepository notificationRepository;
+    private final NotificationDeliveryService notificationDeliveryService;
 
     public ForumPostCreatedOutboxHandler(
-            ObjectMapper objectMapper, NotificationRepository notificationRepository) {
+            ObjectMapper objectMapper, NotificationDeliveryService notificationDeliveryService) {
         this.objectMapper = objectMapper;
-        this.notificationRepository = notificationRepository;
+        this.notificationDeliveryService = notificationDeliveryService;
     }
 
     @Override
@@ -57,11 +56,7 @@ public class ForumPostCreatedOutboxHandler implements OutboxEventHandler {
         notification.assignSource("FORUM_POST", postId);
         notification.assignActionUrl(actionUrl);
         notification.markSent(Instant.now());
-        try {
-            notificationRepository.save(notification);
-        } catch (DataIntegrityViolationException ex) {
-            // Idempotent retry.
-        }
+        notificationDeliveryService.deliverInApp(notification);
     }
 
     private static String truncate(String value, int max) {

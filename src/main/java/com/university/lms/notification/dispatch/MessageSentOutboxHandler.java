@@ -7,13 +7,11 @@ import com.university.lms.common.outbox.OutboxEventHandler;
 import com.university.lms.communication.api.MessageDirectory;
 import com.university.lms.notification.domain.Notification;
 import com.university.lms.notification.domain.NotificationChannel;
-import com.university.lms.notification.domain.NotificationStatus;
 import com.university.lms.notification.domain.NotificationType;
-import com.university.lms.notification.repository.NotificationRepository;
+import com.university.lms.notification.service.NotificationDeliveryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /** Creates durable IN_APP notifications when a message is sent. */
@@ -24,15 +22,15 @@ public class MessageSentOutboxHandler implements OutboxEventHandler {
 
     private final ObjectMapper objectMapper;
     private final MessageDirectory messageDirectory;
-    private final NotificationRepository notificationRepository;
+    private final NotificationDeliveryService notificationDeliveryService;
 
     public MessageSentOutboxHandler(
             ObjectMapper objectMapper,
             MessageDirectory messageDirectory,
-            NotificationRepository notificationRepository) {
+            NotificationDeliveryService notificationDeliveryService) {
         this.objectMapper = objectMapper;
         this.messageDirectory = messageDirectory;
-        this.notificationRepository = notificationRepository;
+        this.notificationDeliveryService = notificationDeliveryService;
     }
 
     @Override
@@ -71,11 +69,7 @@ public class MessageSentOutboxHandler implements OutboxEventHandler {
             notification.assignSource("MESSAGE", messageId);
             notification.assignActionUrl(actionUrl);
             notification.markSent(now);
-            try {
-                notificationRepository.save(notification);
-            } catch (DataIntegrityViolationException ex) {
-                // Idempotent retry — notification already exists for this recipient/source.
-            }
+            notificationDeliveryService.deliverInApp(notification);
         }
     }
 }

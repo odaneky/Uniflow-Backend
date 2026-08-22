@@ -8,11 +8,10 @@ import com.university.lms.communication.api.AnnouncementDirectory;
 import com.university.lms.notification.domain.Notification;
 import com.university.lms.notification.domain.NotificationChannel;
 import com.university.lms.notification.domain.NotificationType;
-import com.university.lms.notification.repository.NotificationRepository;
+import com.university.lms.notification.service.NotificationDeliveryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /** Creates durable IN_APP notifications when an announcement is published. */
@@ -23,15 +22,15 @@ public class AnnouncementPublishedOutboxHandler implements OutboxEventHandler {
 
     private final ObjectMapper objectMapper;
     private final AnnouncementDirectory announcementDirectory;
-    private final NotificationRepository notificationRepository;
+    private final NotificationDeliveryService notificationDeliveryService;
 
     public AnnouncementPublishedOutboxHandler(
             ObjectMapper objectMapper,
             AnnouncementDirectory announcementDirectory,
-            NotificationRepository notificationRepository) {
+            NotificationDeliveryService notificationDeliveryService) {
         this.objectMapper = objectMapper;
         this.announcementDirectory = announcementDirectory;
-        this.notificationRepository = notificationRepository;
+        this.notificationDeliveryService = notificationDeliveryService;
     }
 
     @Override
@@ -62,11 +61,7 @@ public class AnnouncementPublishedOutboxHandler implements OutboxEventHandler {
             notification.assignSource("ANNOUNCEMENT", announcementId);
             notification.assignActionUrl(actionUrl);
             notification.markSent(now);
-            try {
-                notificationRepository.save(notification);
-            } catch (DataIntegrityViolationException ex) {
-                // Idempotent retry.
-            }
+            notificationDeliveryService.deliverInApp(notification);
         }
     }
 }

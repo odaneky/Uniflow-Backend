@@ -92,6 +92,16 @@ lms:
     support-email: ${LMS_SUPPORT_EMAIL:credeer0@gmail.com}
     contact-email: ${LMS_CONTACT_EMAIL:credeer0@gmail.com}
     phone-number: ${LMS_PHONE_NUMBER:+1(876)486-6195}
+  notifications:
+    sse:
+      timeout-ms: 300000
+    email:
+      enabled: false
+      provider: logging
+      from-address: ${LMS_EMAIL_FROM:noreply@uniflow.local}
+  outbox:
+    poll-interval-ms: 2000
+    batch-size: 25
   security:
     jwt:
       audience: ${JWT_AUDIENCE:university-lms-api}
