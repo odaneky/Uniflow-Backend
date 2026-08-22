@@ -38,6 +38,7 @@ public interface AuditTrail {
         public static final String OCCURRENCE_CANCELLED = "OCCURRENCE_CANCELLED";
         public static final String GRADE_PUBLISHED = "GRADE_PUBLISHED";
         public static final String GRADE_CHANGED = "GRADE_CHANGED";
+        public static final String MESSAGE_THREAD_ACCESSED = "MESSAGE_THREAD_ACCESSED";
 
         private Action() {}
     }
@@ -49,6 +50,7 @@ public interface AuditTrail {
         public static final String ENROLLMENT = "Enrollment";
         public static final String COURSE_SECTION = "CourseSection";
         public static final String GRADE = "Grade";
+        public static final String CONVERSATION = "Conversation";
 
         private EntityType() {}
     }

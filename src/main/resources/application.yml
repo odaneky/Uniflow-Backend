@@ -102,6 +102,20 @@ lms:
   outbox:
     poll-interval-ms: 2000
     batch-size: 25
+  comms:
+    rate-limit:
+      message-send:
+        limit: 30
+        window-seconds: 60
+      conversation-create:
+        limit: 10
+        window-seconds: 3600
+      forum-post:
+        limit: 20
+        window-seconds: 3600
+      forum-topic:
+        limit: 10
+        window-seconds: 3600
   security:
     jwt:
       audience: ${JWT_AUDIENCE:university-lms-api}

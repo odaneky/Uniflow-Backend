@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -55,6 +56,21 @@ public class GlobalExceptionHandler {
      * Covers the whole {@link ApplicationException} hierarchy in one place — the exception itself
      * already knows its stable code and its HTTP status.
      */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimit(RateLimitExceededException ex, HttpServletRequest request) {
+        log.warn("Rate limit exceeded on {}", request.getRequestURI());
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.TOO_MANY_REQUESTS.value(),
+                ex.getErrorCode().code(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                CorrelationIdFilter.current(),
+                List.of());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(body);
+    }
+
     @ExceptionHandler(ApplicationException.class)
     public ResponseEntity<ApiErrorResponse> handleApplication(ApplicationException ex, HttpServletRequest request) {
         HttpStatus status = ex.getStatus();

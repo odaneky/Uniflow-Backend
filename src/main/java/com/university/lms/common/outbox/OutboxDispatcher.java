@@ -1,5 +1,7 @@
 package com.university.lms.common.outbox;
 
+import com.university.lms.common.telemetry.CommsMetrics;
+import io.micrometer.core.instrument.Timer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,7 @@ public class OutboxDispatcher {
 
     private final DomainOutboxRepository repository;
     private final Map<String, OutboxEventHandler> handlers;
+    private final CommsMetrics commsMetrics;
     private final String instanceId;
 
     @Value("${lms.outbox.batch-size:25}")
@@ -34,10 +37,12 @@ public class OutboxDispatcher {
     public OutboxDispatcher(
             DomainOutboxRepository repository,
             List<OutboxEventHandler> handlerList,
+            CommsMetrics commsMetrics,
             @Value("${lms.instance-id:#{T(java.util.UUID).randomUUID().toString()}}") String instanceId) {
         this.repository = repository;
         this.handlers = handlerList.stream()
                 .collect(Collectors.toMap(OutboxEventHandler::eventType, Function.identity(), (a, b) -> a));
+        this.commsMetrics = commsMetrics;
         this.instanceId = instanceId;
     }
 
@@ -58,21 +63,28 @@ public class OutboxDispatcher {
         if (handler == null) {
             row.markFailed("No handler for event type " + row.getEventType(), now);
             repository.save(row);
+            commsMetrics.outboxProcessed(row.getEventType(), "no_handler");
             log.warn("Outbox row {} has no handler for {}", row.getId(), row.getEventType());
             return;
         }
+        Timer.Sample sample = commsMetrics.startOutboxTimer();
         try {
             handler.handle(row);
             row.markProcessed(now);
             repository.save(row);
+            commsMetrics.outboxProcessed(row.getEventType(), "success");
         } catch (Exception ex) {
             log.warn("Outbox processing failed for row {}: {}", row.getId(), ex.getMessage());
+            String outcome = row.getAttemptCount() + 1 >= MAX_ATTEMPTS ? "dead_letter" : "retry";
+            commsMetrics.outboxProcessed(row.getEventType(), outcome);
             if (row.getAttemptCount() + 1 >= MAX_ATTEMPTS) {
                 row.markFailed(truncate(ex.getMessage()), Instant.MAX);
             } else {
                 row.markFailed(truncate(ex.getMessage()), backoff(now, row.getAttemptCount() + 1));
             }
             repository.save(row);
+        } finally {
+            commsMetrics.recordOutboxDuration(sample, row.getEventType());
         }
     }
 

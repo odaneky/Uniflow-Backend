@@ -2,10 +2,15 @@ package com.university.lms.communication.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.dto.PageResponse;
+import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.outbox.OutboxWriter;
+import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.communication.api.CommsRateLimiter;
 import com.university.lms.communication.api.MessagingPolicy;
+import com.university.lms.communication.policy.InMemoryCommsRateLimiter;
 import com.university.lms.communication.domain.Announcement;
 import com.university.lms.communication.domain.AnnouncementRead;
 import com.university.lms.communication.domain.CommunicationErrorCode;
@@ -13,12 +18,14 @@ import com.university.lms.communication.domain.Conversation;
 import com.university.lms.communication.domain.ConversationParticipant;
 import com.university.lms.communication.domain.Message;
 import com.university.lms.communication.dto.AnnouncementResponse;
+import com.university.lms.communication.dto.ConversationComplianceExport;
 import com.university.lms.communication.dto.ConversationSummaryResponse;
 import com.university.lms.communication.dto.CreateAnnouncementRequest;
 import com.university.lms.communication.dto.CreateConversationRequest;
 import com.university.lms.communication.dto.CreateMessageRequest;
 import com.university.lms.communication.dto.MessageResponse;
 import com.university.lms.communication.dto.StartConversationResult;
+import com.university.lms.document.api.DocumentStore;
 import com.university.lms.communication.repository.AnnouncementReadRepository;
 import com.university.lms.communication.repository.AnnouncementRepository;
 import com.university.lms.communication.repository.ConversationParticipantRepository;
@@ -58,6 +65,9 @@ public class CommunicationService {
     private final StudentDirectory studentDirectory;
     private final EnrollmentDirectory enrollmentDirectory;
     private final MessagingPolicy messagingPolicy;
+    private final CommsRateLimiter commsRateLimiter;
+    private final DocumentStore documentStore;
+    private final AuditTrail auditTrail;
     private final OutboxWriter outboxWriter;
     private final ObjectMapper objectMapper;
 
@@ -72,6 +82,9 @@ public class CommunicationService {
             StudentDirectory studentDirectory,
             EnrollmentDirectory enrollmentDirectory,
             MessagingPolicy messagingPolicy,
+            CommsRateLimiter commsRateLimiter,
+            DocumentStore documentStore,
+            AuditTrail auditTrail,
             OutboxWriter outboxWriter,
             ObjectMapper objectMapper) {
         this.announcementRepository = announcementRepository;
@@ -84,6 +97,9 @@ public class CommunicationService {
         this.studentDirectory = studentDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
         this.messagingPolicy = messagingPolicy;
+        this.commsRateLimiter = commsRateLimiter;
+        this.documentStore = documentStore;
+        this.auditTrail = auditTrail;
         this.outboxWriter = outboxWriter;
         this.objectMapper = objectMapper;
     }
@@ -212,6 +228,7 @@ public class CommunicationService {
     @Transactional
     public StartConversationResult startConversation(CreateConversationRequest request) {
         CurrentUser caller = currentUserProvider.require();
+        commsRateLimiter.check(InMemoryCommsRateLimiter.CONVERSATION_CREATE, caller.userId());
         Set<UUID> participants = new HashSet<>(request.participantUserIds());
         participants.add(caller.userId());
         messagingPolicy.assertCanStartConversation(caller, participants, request.courseSectionId());
@@ -233,7 +250,7 @@ public class CommunicationService {
         }
 
         if (request.firstMessage() != null && !request.firstMessage().isBlank()) {
-            sendInternal(conversation, caller, request.firstMessage(), null);
+            sendInternal(conversation, caller, request.firstMessage(), null, null);
         }
         return new StartConversationResult(true, toSummary(conversation));
     }
@@ -242,6 +259,7 @@ public class CommunicationService {
     public SendMessageResult send(UUID conversationId, CreateMessageRequest request, String idempotencyKey) {
         CurrentUser caller = currentUserProvider.require();
         messagingPolicy.assertCanSendMessage(caller, conversationId);
+        commsRateLimiter.check(InMemoryCommsRateLimiter.MESSAGE_SEND, caller.userId());
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             var existing = messageRepository.findByConversationIdAndIdempotencyKey(conversationId, idempotencyKey);
@@ -257,15 +275,75 @@ public class CommunicationService {
                         CommunicationErrorCode.CONVERSATION_NOT_FOUND,
                         "No conversation exists with id " + conversationId));
 
-        MessageResponse created = sendInternal(conversation, caller, request.body(), idempotencyKey);
+        MessageResponse created = sendInternal(conversation, caller, request.body(), idempotencyKey, request.documentId());
         return new SendMessageResult(true, created);
     }
 
+    public ConversationComplianceExport exportConversationCompliance(UUID conversationId) {
+        CurrentUser caller = currentUserProvider.require();
+        if (!caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            throw new ForbiddenException(
+                    com.university.lms.common.exception.CommonErrorCode.ACCESS_DENIED,
+                    "You do not have permission to access this record");
+        }
+        Conversation conversation = conversationRepository
+                .findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        CommunicationErrorCode.CONVERSATION_NOT_FOUND,
+                        "No conversation exists with id " + conversationId));
+
+        auditTrail.record(
+                caller.userId(),
+                caller.fullName(),
+                AuditTrail.Action.MESSAGE_THREAD_ACCESSED,
+                AuditTrail.EntityType.CONVERSATION,
+                conversationId,
+                "Compliance export");
+
+        List<ConversationComplianceExport.ParticipantRow> participants = participantRepository
+                .findByConversationId(conversationId)
+                .stream()
+                .map(p -> new ConversationComplianceExport.ParticipantRow(
+                        p.getUserId(), displayName(p.getUserId())))
+                .toList();
+
+        List<ConversationComplianceExport.MessageRow> messages = messageRepository
+                .findByConversationIdOrderBySentAtAscIdAsc(conversationId)
+                .stream()
+                .map(m -> new ConversationComplianceExport.MessageRow(
+                        m.getId(),
+                        m.getSenderUserId(),
+                        displayName(m.getSenderUserId()),
+                        m.getSentAt(),
+                        m.isDeleted() ? "[removed]" : m.getBody(),
+                        m.getDocumentId(),
+                        m.isDeleted(),
+                        m.getDeletedAt()))
+                .toList();
+
+        return new ConversationComplianceExport(
+                conversation.getId(),
+                conversation.getSubject(),
+                conversation.getCourseSectionId(),
+                Instant.now(),
+                participants,
+                messages);
+    }
+
     private MessageResponse sendInternal(
-            Conversation conversation, CurrentUser caller, String body, String idempotencyKey) {
+            Conversation conversation, CurrentUser caller, String body, String idempotencyKey, UUID documentId) {
         Message message = idempotencyKey == null || idempotencyKey.isBlank()
                 ? new Message(conversation, caller.userId(), body)
                 : new Message(conversation, caller.userId(), body, idempotencyKey);
+        if (documentId != null) {
+            documentStore
+                    .find(documentId)
+                    .filter(doc -> doc.ownerUserId().equals(caller.userId()))
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            CommunicationErrorCode.MESSAGE_ATTACHMENT_NOT_FOUND,
+                            "No attachment exists with id " + documentId));
+            message.attachDocument(documentId);
+        }
         messageRepository.save(message);
         enqueueMessageSent(message, caller);
         return MessageResponse.from(message, caller.fullName());

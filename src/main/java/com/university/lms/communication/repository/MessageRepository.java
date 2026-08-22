@@ -2,6 +2,7 @@ package com.university.lms.communication.repository;
 
 import com.university.lms.communication.domain.Message;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -43,4 +44,6 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
               and m.sentAt > coalesce(p.lastReadAt, :epoch)
             """)
     long countTotalUnreadForUser(@Param("userId") UUID userId, @Param("epoch") Instant epoch);
+
+    List<Message> findByConversationIdOrderBySentAtAscIdAsc(UUID conversationId);
 }

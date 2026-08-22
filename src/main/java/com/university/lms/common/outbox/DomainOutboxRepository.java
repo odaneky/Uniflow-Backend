@@ -21,4 +21,6 @@ public interface DomainOutboxRepository extends JpaRepository<DomainOutbox, UUID
                     """,
             nativeQuery = true)
     List<DomainOutbox> claimBatch(@Param("now") Instant now, @Param("limit") int limit);
+
+    long countByStatusIn(java.util.Collection<OutboxStatus> statuses);
 }

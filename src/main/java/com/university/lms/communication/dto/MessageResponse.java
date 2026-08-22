@@ -4,7 +4,8 @@ import com.university.lms.communication.domain.Message;
 import java.time.Instant;
 import java.util.UUID;
 
-public record MessageResponse(UUID id, UUID senderUserId, String senderName, String body, Instant sentAt) {
+public record MessageResponse(
+        UUID id, UUID senderUserId, String senderName, String body, Instant sentAt, UUID documentId) {
 
     public static MessageResponse from(Message message, String senderName) {
         return new MessageResponse(
@@ -12,6 +13,7 @@ public record MessageResponse(UUID id, UUID senderUserId, String senderName, Str
                 message.getSenderUserId(),
                 senderName,
                 message.visibleBody(),
-                message.getSentAt());
+                message.getSentAt(),
+                message.getDocumentId());
     }
 }

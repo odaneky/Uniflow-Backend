@@ -6,7 +6,9 @@ import com.university.lms.common.dto.PageResponse;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.outbox.OutboxWriter;
+import com.university.lms.communication.api.CommsRateLimiter;
 import com.university.lms.communication.api.ForumAccess;
+import com.university.lms.communication.policy.InMemoryCommsRateLimiter;
 import com.university.lms.communication.domain.CommunicationErrorCode;
 import com.university.lms.communication.domain.ForumPost;
 import com.university.lms.communication.domain.ForumTopic;
@@ -37,6 +39,7 @@ public class ForumService {
     private final CurrentUserProvider currentUserProvider;
     private final UserDirectory userDirectory;
     private final ForumAccess forumAccess;
+    private final CommsRateLimiter commsRateLimiter;
     private final CourseCatalog courseCatalog;
     private final OutboxWriter outboxWriter;
     private final ObjectMapper objectMapper;
@@ -47,6 +50,7 @@ public class ForumService {
             CurrentUserProvider currentUserProvider,
             UserDirectory userDirectory,
             ForumAccess forumAccess,
+            CommsRateLimiter commsRateLimiter,
             CourseCatalog courseCatalog,
             OutboxWriter outboxWriter,
             ObjectMapper objectMapper) {
@@ -55,6 +59,7 @@ public class ForumService {
         this.currentUserProvider = currentUserProvider;
         this.userDirectory = userDirectory;
         this.forumAccess = forumAccess;
+        this.commsRateLimiter = commsRateLimiter;
         this.courseCatalog = courseCatalog;
         this.outboxWriter = outboxWriter;
         this.objectMapper = objectMapper;
@@ -72,6 +77,7 @@ public class ForumService {
     public ForumTopicResponse createTopic(UUID courseSectionId, CreateForumTopicRequest request) {
         CurrentUser caller = currentUserProvider.require();
         forumAccess.assertCanPostForum(caller, courseSectionId);
+        commsRateLimiter.check(InMemoryCommsRateLimiter.FORUM_TOPIC, caller.userId());
 
         ForumTopic topic = topicRepository.save(new ForumTopic(courseSectionId, request.title(), caller.userId()));
         postRepository.save(new ForumPost(topic, caller.userId(), request.body(), null));
@@ -97,6 +103,7 @@ public class ForumService {
                     CommunicationErrorCode.FORUM_TOPIC_LOCKED, "This discussion thread is locked");
         }
         forumAccess.assertCanPostForum(caller, topic.getCourseSectionId());
+        commsRateLimiter.check(InMemoryCommsRateLimiter.FORUM_POST, caller.userId());
 
         ForumPost parent = null;
         if (request.parentPostId() != null) {

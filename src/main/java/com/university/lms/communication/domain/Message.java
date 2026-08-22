@@ -47,6 +47,9 @@ public class Message extends BaseEntity {
     @Column(name = "deleted_by_user_id")
     private UUID deletedByUserId;
 
+    @Column(name = "document_id")
+    private UUID documentId;
+
     protected Message() {
         // for JPA
     }
@@ -68,5 +71,9 @@ public class Message extends BaseEntity {
 
     public String visibleBody() {
         return isDeleted() ? "[Message removed]" : body;
+    }
+
+    public void attachDocument(UUID documentId) {
+        this.documentId = documentId;
     }
 }

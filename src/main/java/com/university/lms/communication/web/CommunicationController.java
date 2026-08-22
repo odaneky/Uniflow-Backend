@@ -1,6 +1,7 @@
 package com.university.lms.communication.web;
 
 import com.university.lms.communication.dto.AnnouncementResponse;
+import com.university.lms.communication.dto.ConversationComplianceExport;
 import com.university.lms.communication.dto.ConversationSummaryResponse;
 import com.university.lms.communication.dto.CreateAnnouncementRequest;
 import com.university.lms.communication.dto.CreateConversationRequest;
@@ -12,6 +13,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -63,5 +65,10 @@ public class CommunicationController {
                     .body(body);
         }
         return ResponseEntity.ok(body);
+    }
+
+    @GetMapping("/conversations/{id}/compliance-export")
+    public ConversationComplianceExport complianceExport(@PathVariable UUID id) {
+        return communicationService.exportConversationCompliance(id);
     }
 }

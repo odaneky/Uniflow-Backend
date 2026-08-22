@@ -220,6 +220,8 @@ public class SecurityConfig {
                         // -------- audit trail --------
                         // Listed before the catch-all authenticated GET. The trail is a history of
                         // privileged actions; students and lecturers must not enumerate it.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/conversations/*/compliance-export")
+                        .hasRole(SYSTEM_ADMIN)
                         .requestMatchers(HttpMethod.GET, "/api/v1/audit-events", "/api/v1/audit-events/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
 
