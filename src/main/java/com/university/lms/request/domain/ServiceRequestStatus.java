@@ -5,9 +5,10 @@ public enum ServiceRequestStatus {
     IN_REVIEW,
     APPROVED,
     COMPLETED,
-    DENIED;
+    DENIED,
+    CANCELLED;
 
     public boolean terminal() {
-        return this == COMPLETED || this == DENIED;
+        return this == COMPLETED || this == DENIED || this == CANCELLED;
     }
 }

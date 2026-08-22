@@ -52,6 +52,13 @@ public class Enrollment extends BaseEntity {
     @Column(name = "checkout_batch_id")
     private UUID checkoutBatchId;
 
+    /**
+     * Which sit of the underlying course this enrolment is (1 = first attempt). Retakes in later
+     * terms increment this for the same student + course.
+     */
+    @Column(name = "attempt_number", nullable = false)
+    private int attemptNumber = 1;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -75,6 +82,20 @@ public class Enrollment extends BaseEntity {
     public Enrollment(UUID studentId, UUID courseSectionId, EnrollmentStatus status, UUID checkoutBatchId) {
         this(studentId, courseSectionId, status);
         this.checkoutBatchId = checkoutBatchId;
+    }
+
+    public Enrollment(
+            UUID studentId,
+            UUID courseSectionId,
+            EnrollmentStatus status,
+            UUID checkoutBatchId,
+            int attemptNumber) {
+        this(studentId, courseSectionId, status, checkoutBatchId);
+        this.attemptNumber = Math.max(1, attemptNumber);
+    }
+
+    public void assignAttemptNumber(int attemptNumber) {
+        this.attemptNumber = Math.max(1, attemptNumber);
     }
 
     public boolean occupiesSeat() {

@@ -6,7 +6,8 @@ public enum ServiceRequestType {
     WITHDRAWAL,
     VERIFICATION,
     APPEAL,
-    GRADUATION;
+    GRADUATION,
+    PROFILE_CORRECTION;
 
     public String referencePrefix() {
         return switch (this) {
@@ -15,6 +16,7 @@ public enum ServiceRequestType {
             case VERIFICATION -> "EV";
             case APPEAL -> "GA";
             case GRADUATION -> "GR";
+            case PROFILE_CORRECTION -> "PC";
         };
     }
 
@@ -25,12 +27,13 @@ public enum ServiceRequestType {
             case VERIFICATION -> "Enrollment Verification";
             case APPEAL -> "Grade Appeal";
             case GRADUATION -> "Graduation Application";
+            case PROFILE_CORRECTION -> "Profile Correction";
         };
     }
 
     public String reviewStep() {
         return switch (this) {
-            case TRANSCRIPT, VERIFICATION -> "Registrar Review";
+            case TRANSCRIPT, VERIFICATION, PROFILE_CORRECTION -> "Registrar Review";
             case WITHDRAWAL -> "Advisor Review";
             case APPEAL -> "Department Review";
             case GRADUATION -> "Degree Audit";

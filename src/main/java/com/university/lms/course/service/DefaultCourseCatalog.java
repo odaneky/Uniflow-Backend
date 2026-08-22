@@ -201,6 +201,7 @@ public class DefaultCourseCatalog implements CourseCatalog {
                 section.getId(),
                 section.getCourse().getId(),
                 section.getCourse().getCourseCode(),
+                section.getCourse().getTitle(),
                 section.getAcademicTermId(),
                 section.getSectionCode(),
                 section.getCapacity(),

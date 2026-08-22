@@ -39,6 +39,9 @@ public interface AuditTrail {
         public static final String GRADE_PUBLISHED = "GRADE_PUBLISHED";
         public static final String GRADE_CHANGED = "GRADE_CHANGED";
         public static final String MESSAGE_THREAD_ACCESSED = "MESSAGE_THREAD_ACCESSED";
+        public static final String SERVICE_REQUEST_CREATED = "SERVICE_REQUEST_CREATED";
+        public static final String SERVICE_REQUEST_TRANSITIONED = "SERVICE_REQUEST_TRANSITIONED";
+        public static final String SERVICE_REQUEST_FULFILLED = "SERVICE_REQUEST_FULFILLED";
 
         private Action() {}
     }
@@ -51,6 +54,7 @@ public interface AuditTrail {
         public static final String COURSE_SECTION = "CourseSection";
         public static final String GRADE = "Grade";
         public static final String CONVERSATION = "Conversation";
+        public static final String SERVICE_REQUEST = "ServiceRequest";
 
         private EntityType() {}
     }

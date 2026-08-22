@@ -51,6 +51,8 @@ public record StudentResponse(
             return null;
         }
         return new StudentContactResponse(
+                profile.getPersonalEmail(),
+                profile.getGender(),
                 profile.getPhoneNumber(),
                 profile.getDateOfBirth(),
                 profile.getNationality(),

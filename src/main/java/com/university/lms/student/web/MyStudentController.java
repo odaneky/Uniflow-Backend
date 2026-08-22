@@ -2,7 +2,9 @@ package com.university.lms.student.web;
 
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.student.dto.AdviseeSummaryResponse;
+import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
 import com.university.lms.student.dto.StudentResponse;
+import com.university.lms.student.dto.UpdateAdvisorOfficeHoursRequest;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.service.StudentService;
 import jakarta.validation.Valid;
@@ -48,5 +50,17 @@ public class MyStudentController {
     public PageResponse<AdviseeSummaryResponse> advisees(
             @PageableDefault(size = 50, sort = "studentNumber", direction = Sort.Direction.ASC) Pageable pageable) {
         return studentService.listOwnAdvisees(pageable);
+    }
+
+    /** Office hours the caller has posted for advisees. */
+    @GetMapping("/advisor/office-hours")
+    public AdvisorOfficeHoursResponse advisorOfficeHours() {
+        return studentService.findOwnAdvisorOfficeHours();
+    }
+
+    @PatchMapping("/advisor/office-hours")
+    public AdvisorOfficeHoursResponse updateAdvisorOfficeHours(
+            @Valid @RequestBody UpdateAdvisorOfficeHoursRequest request) {
+        return studentService.updateOwnAdvisorOfficeHours(request.officeHours());
     }
 }

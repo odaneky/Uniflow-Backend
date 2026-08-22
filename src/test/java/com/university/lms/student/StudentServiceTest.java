@@ -8,20 +8,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.exception.ValidationException;
+import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.identity.api.CurrentUser;
+import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentStatus;
+import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
 import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.UpdateStudentRequest;
 import com.university.lms.student.repository.StudentRepository;
 import com.university.lms.student.service.StudentService;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,6 +53,9 @@ class StudentServiceTest {
 
     @Mock
     private AcademicStructure academicStructure;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private StudentService service;
@@ -136,7 +146,7 @@ class StudentServiceTest {
         assertThatThrownBy(() ->
                         service.update(
                                 student.getId(),
-                                new UpdateStudentRequest(null, StudentStatus.ACTIVE, null, null, null, null)))
+                                new UpdateStudentRequest(null, StudentStatus.ACTIVE, null, null, null, null, null)))
                 .isInstanceOf(ValidationException.class)
                 .satisfies(thrown -> assertThat(((ValidationException) thrown).getErrorCode())
                         .isEqualTo(StudentErrorCode.INVALID_STUDENT_STATE));
@@ -149,11 +159,37 @@ class StudentServiceTest {
         when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
 
         StudentResponse response = service.update(
-                student.getId(), new UpdateStudentRequest(null, StudentStatus.ON_LEAVE, null, null, null, null));
+                student.getId(), new UpdateStudentRequest(null, StudentStatus.ON_LEAVE, null, null, null, null, null));
 
         assertThat(response.status()).isEqualTo(StudentStatus.ON_LEAVE);
         assertThat(response.programmeId()).isEqualTo(PROGRAMME_ID);
         assertThat(response.expectedGraduationDate()).isNull();
+    }
+
+    @Test
+    @DisplayName("advisors post office hours on their advisee records")
+    void advisorUpdatesOwnOfficeHours() {
+        UUID advisorId = UUID.randomUUID();
+        Student advisee = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        advisee.assignAdvisor(advisorId, null);
+        when(currentUserProvider.require())
+                .thenReturn(
+                        new CurrentUser(
+                                advisorId,
+                                "subject-advisor",
+                                "advisor",
+                                "advisor@university.test",
+                                "Ada Advisor",
+                                Optional.empty(),
+                                Set.of(SecurityRoles.ACADEMIC_ADVISOR),
+                                Set.of()));
+        when(studentRepository.findAllByAdvisorUserId(advisorId)).thenReturn(List.of(advisee));
+
+        AdvisorOfficeHoursResponse response =
+                service.updateOwnAdvisorOfficeHours("Tue 14:00–16:00 · Room 210");
+
+        assertThat(response.officeHours()).isEqualTo("Tue 14:00–16:00 · Room 210");
+        assertThat(advisee.getAdvisorOfficeHours()).isEqualTo("Tue 14:00–16:00 · Room 210");
     }
 
     private void givenValidReferences() {

@@ -29,8 +29,7 @@ public class MyNotificationsService {
     public PageResponse<NotificationResponse> own(Pageable pageable) {
         UUID recipient = currentUserProvider.require().userId();
         return PageResponse.from(
-                notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(recipient, pageable),
-                NotificationResponse::from);
+                notificationRepository.findForRecipientOrdered(recipient, pageable), NotificationResponse::from);
     }
 
     public long unreadCount() {
@@ -54,8 +53,8 @@ public class MyNotificationsService {
     public void markAllRead() {
         UUID recipient = currentUserProvider.require().userId();
         Instant now = Instant.now();
-        notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(
-                        recipient, org.springframework.data.domain.Pageable.unpaged())
+        notificationRepository
+                .findForRecipientOrdered(recipient, org.springframework.data.domain.Pageable.unpaged())
                 .forEach(n -> {
                     if (n.getReadAt() == null) {
                         n.markRead(now);

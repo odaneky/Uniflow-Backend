@@ -1,6 +1,7 @@
 package com.university.lms.enrollment.service;
 
 import com.university.lms.course.api.CourseCatalog;
+import com.university.lms.course.dto.TeachingMeetingResponse;
 import com.university.lms.course.dto.TeachingSectionResponse;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.identity.api.CurrentUserProvider;
@@ -55,6 +56,15 @@ public class TeachingLoadService {
                 section.academicTermId(),
                 section.lecturerUserId(),
                 live,
-                section.capacity());
+                section.capacity(),
+                courseCatalog.meetingsOf(section.id()).stream()
+                        .map(m -> new TeachingMeetingResponse(
+                                m.dayOfWeek(),
+                                m.day(),
+                                m.startTime(),
+                                m.endTime(),
+                                m.room(),
+                                m.sessionType()))
+                        .toList());
     }
 }

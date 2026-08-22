@@ -16,6 +16,7 @@ import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentStatus;
 import com.university.lms.student.dto.AdviseeSummaryResponse;
 import com.university.lms.student.dto.AdvisorCandidateResponse;
+import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
 import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.StudentSummaryResponse;
@@ -214,15 +215,53 @@ public class StudentService {
             student.clearAdvisor();
         } else if (request.advisorUserId() != null) {
             requireAssignableAdvisor(request.advisorUserId());
-            String hours = request.advisorOfficeHours() != null
-                    ? blankToNull(request.advisorOfficeHours())
-                    : student.getAdvisorOfficeHours();
-            student.assignAdvisor(request.advisorUserId(), hours);
-        } else if (request.advisorOfficeHours() != null) {
-            student.setAdvisorOfficeHours(blankToNull(request.advisorOfficeHours()));
+            UUID nextAdvisor = request.advisorUserId();
+            String hours =
+                    nextAdvisor.equals(student.getAdvisorUserId()) ? student.getAdvisorOfficeHours() : null;
+            student.assignAdvisor(nextAdvisor, hours);
+        }
+        if (request.contact() != null) {
+            applyContact(student, request.contact());
         }
 
         return toResponse(student);
+    }
+
+    /** Registry correction of contact details on a student record. */
+    @Transactional
+    public void updateContactById(UUID studentId, UpdateOwnProfileRequest request) {
+        applyContact(require(studentId), request);
+    }
+
+    /** Office hours the caller has posted for their advisees. */
+    public AdvisorOfficeHoursResponse findOwnAdvisorOfficeHours() {
+        CurrentUser caller = requireAdvisor();
+        return studentRepository.findAllByAdvisorUserId(caller.userId()).stream()
+                .map(Student::getAdvisorOfficeHours)
+                .filter(h -> h != null && !h.isBlank())
+                .findFirst()
+                .map(AdvisorOfficeHoursResponse::new)
+                .orElseGet(() -> new AdvisorOfficeHoursResponse(null));
+    }
+
+    /** Updates office hours on every student record assigned to the caller. */
+    @Transactional
+    public AdvisorOfficeHoursResponse updateOwnAdvisorOfficeHours(String officeHours) {
+        CurrentUser caller = requireAdvisor();
+        String normalized = blankToNull(officeHours);
+        for (Student student : studentRepository.findAllByAdvisorUserId(caller.userId())) {
+            student.setAdvisorOfficeHours(normalized);
+        }
+        return new AdvisorOfficeHoursResponse(normalized);
+    }
+
+    private CurrentUser requireAdvisor() {
+        CurrentUser caller = currentUserProvider.require();
+        if (!caller.hasRole(SecurityRoles.ACADEMIC_ADVISOR)) {
+            throw new ForbiddenException(
+                    CommonErrorCode.ACCESS_DENIED, "Only academic advisors can manage office hours");
+        }
+        return caller;
     }
 
     @Transactional
@@ -270,6 +309,12 @@ public class StudentService {
 
     private static void applyContact(Student student, UpdateOwnProfileRequest request) {
         var profile = student.getProfile();
+        if (request.personalEmail() != null) {
+            profile.updatePersonalEmail(blankToNull(request.personalEmail()));
+        }
+        if (request.gender() != null) {
+            profile.updateGender(blankToNull(request.gender()));
+        }
         profile.updateContact(
                 request.phoneNumber() != null ? request.phoneNumber() : profile.getPhoneNumber(),
                 request.nationality() != null ? request.nationality() : profile.getNationality(),

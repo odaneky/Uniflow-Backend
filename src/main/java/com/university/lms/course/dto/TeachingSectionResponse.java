@@ -1,5 +1,6 @@
 package com.university.lms.course.dto;
 
+import java.util.List;
 import java.util.UUID;
 
 public record TeachingSectionResponse(
@@ -11,4 +12,5 @@ public record TeachingSectionResponse(
         UUID academicTermId,
         UUID lecturerUserId,
         int enrolledCount,
-        int capacity) {}
+        int capacity,
+        List<TeachingMeetingResponse> meetings) {}

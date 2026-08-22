@@ -8,6 +8,15 @@ spring:
   profiles:
     default: local
 
+  # Redis is optional (multi-node SSE only). Without this exclusion, Boot auto-configures a
+  # Lettuce client and the health indicator probes localhost:6379 even when
+  # lms.notifications.sse.provider=local.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
   jpa:
     # The schema is owned by Flyway. Hibernate only ever checks that the mapping and the migrated
     # schema agree, and refuses to start when they have drifted.
@@ -92,7 +101,7 @@ lms:
     support-email: ${LMS_SUPPORT_EMAIL:credeer0@gmail.com}
     contact-email: ${LMS_CONTACT_EMAIL:credeer0@gmail.com}
     phone-number: ${LMS_PHONE_NUMBER:+1(876)486-6195}
-    notifications:
+  notifications:
     sse:
       provider: local
       timeout-ms: 300000

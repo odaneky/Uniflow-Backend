@@ -62,6 +62,9 @@ public class Grade extends BaseEntity {
     @Column(name = "published", nullable = false)
     private boolean published;
 
+    @Column(name = "under_appeal", nullable = false)
+    private boolean underAppeal;
+
     /**
      * Grade changes are the single most contended and most consequential write in the system —
      * a lost update here silently alters an academic record.
@@ -101,5 +104,13 @@ public class Grade extends BaseEntity {
         this.percentage = percentage;
         this.letter = letter;
         this.gradePoint = gradePoint;
+    }
+
+    public void markUnderAppeal() {
+        this.underAppeal = true;
+    }
+
+    public void clearUnderAppeal() {
+        this.underAppeal = false;
     }
 }

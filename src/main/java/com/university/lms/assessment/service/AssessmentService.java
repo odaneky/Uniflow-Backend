@@ -49,6 +49,7 @@ public class AssessmentService {
     private final DocumentStore documentStore;
     private final CurrentUserProvider currentUserProvider;
     private final StudentBilling studentBilling;
+    private final AssessmentOutboxPublisher assessmentOutboxPublisher;
 
     public AssessmentService(
             AssessmentRepository assessmentRepository,
@@ -59,7 +60,8 @@ public class AssessmentService {
             UserDirectory userDirectory,
             DocumentStore documentStore,
             CurrentUserProvider currentUserProvider,
-            StudentBilling studentBilling) {
+            StudentBilling studentBilling,
+            AssessmentOutboxPublisher assessmentOutboxPublisher) {
         this.assessmentRepository = assessmentRepository;
         this.attemptRepository = attemptRepository;
         this.courseCatalog = courseCatalog;
@@ -69,6 +71,7 @@ public class AssessmentService {
         this.documentStore = documentStore;
         this.currentUserProvider = currentUserProvider;
         this.studentBilling = studentBilling;
+        this.assessmentOutboxPublisher = assessmentOutboxPublisher;
     }
 
     public List<AssessmentResponse> own(UUID sectionId) {
@@ -109,7 +112,11 @@ public class AssessmentService {
         if (request.passMarkPercent() != null) {
             assessment.setPassMarkPercent(request.passMarkPercent());
         }
-        return AssessmentResponse.from(assessmentRepository.save(assessment));
+        Assessment saved = assessmentRepository.save(assessment);
+        if (saved.isPublished()) {
+            assessmentOutboxPublisher.publishPublished(saved);
+        }
+        return AssessmentResponse.from(saved);
     }
 
     @Transactional
@@ -119,8 +126,13 @@ public class AssessmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         AssessmentErrorCode.ASSESSMENT_NOT_FOUND, "No assessment exists with id " + assessmentId));
         requireTeacherOrAdmin(assessment.getCourseSectionId());
+        boolean wasPublished = assessment.isPublished();
         assessment.publish();
-        return AssessmentResponse.from(assessment);
+        Assessment saved = assessmentRepository.save(assessment);
+        if (!wasPublished) {
+            assessmentOutboxPublisher.publishPublished(saved);
+        }
+        return AssessmentResponse.from(saved);
     }
 
     public List<AttemptResponse> ownAttempts(UUID assessmentId) {

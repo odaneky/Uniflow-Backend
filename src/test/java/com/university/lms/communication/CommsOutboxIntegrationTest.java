@@ -19,6 +19,7 @@ import com.university.lms.notification.repository.NotificationRepository;
 import com.university.lms.support.AbstractPostgresIntegrationTest;
 import com.university.lms.support.AcademicFixtures;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 

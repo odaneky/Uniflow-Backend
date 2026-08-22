@@ -21,12 +21,14 @@ public interface AcademicStructure {
     /** Effective semester load after applying a programme override, if any. */
     record CreditLoad(int minSemesterCredits, int maxSemesterCredits, boolean programmeOverride) {}
 
-    record TermSummary(UUID id, String name, UUID academicYearId, boolean registrationOpen) {}
+    record TermSummary(
+            UUID id, String name, UUID academicYearId, String academicYearCode, boolean registrationOpen) {}
 
     record TermCalendar(
             UUID id,
             String name,
             UUID academicYearId,
+            String academicYearCode,
             LocalDate startDate,
             LocalDate endDate,
             Instant registrationOpensAt,

@@ -1,5 +1,6 @@
 package com.university.lms.grading.service;
 
+import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.telemetry.UniFlowMetrics;
 import com.university.lms.common.exception.CommonErrorCode;
@@ -11,6 +12,7 @@ import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.grading.api.AcademicRecord;
 import com.university.lms.grading.domain.Grade;
+import com.university.lms.grading.domain.GradeResult;
 import com.university.lms.grading.domain.GradeScale;
 import com.university.lms.grading.domain.GradeScaleBand;
 import com.university.lms.grading.domain.GradingErrorCode;
@@ -25,7 +27,11 @@ import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -48,10 +54,12 @@ public class GradeService implements AcademicRecord {
     private final GradeScaleBandRepository gradeScaleBandRepository;
     private final CourseCatalog courseCatalog;
     private final EnrollmentDirectory enrollmentDirectory;
+    private final AcademicStructure academicStructure;
     private final StudentDirectory studentDirectory;
     private final CurrentUserProvider currentUserProvider;
     private final AuditTrail auditTrail;
     private final UniFlowMetrics metrics;
+    private final GradeOutboxPublisher gradeOutboxPublisher;
 
     public GradeService(
             GradeRepository gradeRepository,
@@ -59,25 +67,53 @@ public class GradeService implements AcademicRecord {
             GradeScaleBandRepository gradeScaleBandRepository,
             CourseCatalog courseCatalog,
             EnrollmentDirectory enrollmentDirectory,
+            AcademicStructure academicStructure,
             StudentDirectory studentDirectory,
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
-            UniFlowMetrics metrics) {
+            UniFlowMetrics metrics,
+            GradeOutboxPublisher gradeOutboxPublisher) {
         this.gradeRepository = gradeRepository;
         this.gradeScaleRepository = gradeScaleRepository;
         this.gradeScaleBandRepository = gradeScaleBandRepository;
+        this.academicStructure = academicStructure;
         this.courseCatalog = courseCatalog;
         this.enrollmentDirectory = enrollmentDirectory;
         this.studentDirectory = studentDirectory;
         this.currentUserProvider = currentUserProvider;
         this.auditTrail = auditTrail;
         this.metrics = metrics;
+        this.gradeOutboxPublisher = gradeOutboxPublisher;
     }
 
     public List<GradeResponse> gradebook(UUID sectionId) {
         requireTeacherOrAdmin(sectionId);
+        CourseCatalog.SectionSummary section = courseCatalog.findSection(sectionId).orElse(null);
+        CourseCatalog.CourseSummary course = section == null
+                ? null
+                : courseCatalog.findCourse(section.courseId()).orElse(null);
+        Integer credits = course == null ? null : course.credits();
+        Integer level = course == null ? null : course.level();
+        String code = section == null ? null : section.courseCode();
+        String title = section == null ? null : section.courseTitle();
+        AcademicStructure.TermSummary term = section == null
+                ? null
+                : academicStructure.findTerm(section.academicTermId(), Instant.now()).orElse(null);
         return gradeRepository.findByCourseSectionId(sectionId).stream()
-                .map(GradeResponse::from)
+                .map(grade -> {
+                    Integer attempt = enrollmentDirectory
+                            .attemptNumberOf(grade.getStudentId(), grade.getCourseSectionId())
+                            .orElse(null);
+                    return GradeResponse.from(
+                            grade,
+                            code,
+                            title,
+                            credits,
+                            term == null ? null : term.academicYearCode(),
+                            term == null ? null : term.name(),
+                            level,
+                            attempt);
+                })
                 .toList();
     }
 
@@ -97,18 +133,37 @@ public class GradeService implements AcademicRecord {
         List<Grade> published = gradeRepository.findAllByStudentIdAndPublishedTrue(studentId);
         List<Grade> overall = published.stream().filter(grade -> grade.getAssessmentId() == null).toList();
 
+        // Most recent published overall per course counts for GPA; credits only if that sit is PASS.
+        Map<UUID, Grade> latestByCourse = new LinkedHashMap<>();
+        Map<UUID, Integer> creditsByCourse = new LinkedHashMap<>();
+        List<Grade> chronological = overall.stream()
+                .sorted(Comparator.comparing(Grade::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .toList();
+        for (Grade grade : chronological) {
+            Optional<CourseCatalog.SectionSummary> section = courseCatalog.findSection(grade.getCourseSectionId());
+            if (section.isEmpty()) {
+                continue;
+            }
+            UUID courseId = section.get().courseId();
+            int credits = courseCatalog
+                    .findCourse(courseId)
+                    .map(CourseCatalog.CourseSummary::credits)
+                    .orElse(0);
+            latestByCourse.put(courseId, grade);
+            creditsByCourse.put(courseId, credits);
+        }
+
         int creditsEarned = 0;
         BigDecimal weightedPoints = BigDecimal.ZERO;
         int weightedCredits = 0;
-        for (Grade grade : overall) {
-            int credits = courseCatalog
-                    .findSection(grade.getCourseSectionId())
-                    .flatMap(section -> courseCatalog.findCourse(section.courseId()))
-                    .map(CourseCatalog.CourseSummary::credits)
-                    .orElse(0);
-            creditsEarned += credits;
+        for (Map.Entry<UUID, Grade> entry : latestByCourse.entrySet()) {
+            Grade grade = entry.getValue();
+            int credits = creditsByCourse.getOrDefault(entry.getKey(), 0);
             weightedPoints = weightedPoints.add(grade.getGradePoint().multiply(BigDecimal.valueOf(credits)));
             weightedCredits += credits;
+            if (GradeResult.fromLetter(grade.getLetter()).isPass()) {
+                creditsEarned += credits;
+            }
         }
 
         int creditsAttempted = enrollmentDirectory.accessibleSectionIds(studentId).stream()
@@ -131,7 +186,10 @@ public class GradeService implements AcademicRecord {
         return gradeRepository.findAllByStudentIdAndPublishedTrue(studentId).stream()
                 .filter(grade -> grade.getAssessmentId() == null)
                 .map(grade -> new PublishedOverall(
-                        grade.getCourseSectionId(), grade.getLetter(), grade.getGradePoint()))
+                        grade.getCourseSectionId(),
+                        grade.getLetter(),
+                        grade.getGradePoint(),
+                        grade.getCreatedAt()))
                 .toList();
     }
 
@@ -168,6 +226,9 @@ public class GradeService implements AcademicRecord {
             String action = wasPublished ? AuditTrail.Action.GRADE_CHANGED : AuditTrail.Action.GRADE_PUBLISHED;
             recordGrade(action, saved);
             metrics.grade(wasPublished ? "changed" : "published");
+            if (!wasPublished) {
+                gradeOutboxPublisher.publishPublished(saved);
+            }
         }
         return GradeResponse.from(saved);
     }
@@ -184,6 +245,7 @@ public class GradeService implements AcademicRecord {
         if (!wasPublished) {
             recordGrade(AuditTrail.Action.GRADE_PUBLISHED, grade);
             metrics.grade("published");
+            gradeOutboxPublisher.publishPublished(grade);
         }
         return GradeResponse.from(grade);
     }

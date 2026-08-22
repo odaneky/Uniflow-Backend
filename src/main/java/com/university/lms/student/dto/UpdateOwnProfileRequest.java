@@ -1,10 +1,14 @@
 package com.university.lms.student.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 /** Contact details the student (or registrar) may maintain. Never includes student number. */
 public record UpdateOwnProfileRequest(
+        @Email(message = "must be a valid email address") @Size(max = 254, message = "must be at most 254 characters")
+                String personalEmail,
+        @Size(max = 30, message = "must be at most 30 characters") String gender,
         @Size(max = 30, message = "must be at most 30 characters") String phoneNumber,
         LocalDate dateOfBirth,
         @Size(max = 100, message = "must be at most 100 characters") String nationality,

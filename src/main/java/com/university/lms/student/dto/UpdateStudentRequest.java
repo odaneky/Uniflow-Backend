@@ -9,7 +9,9 @@ import java.util.UUID;
  * rather than "clear", which is why this is a PATCH rather than a PUT.
  *
  * <p>{@code clearAdvisor} is the explicit way to remove an assigned advisor. {@code advisorUserId}
- * assigns (or reassigns) when non-null.
+ * assigns (or reassigns) when non-null. Office hours are posted by the assigned advisor via
+ * {@code PATCH /me/advisor/office-hours}; {@code advisorOfficeHours} is ignored here.
+ * {@code contact} applies demographic/contact corrections directly when present.
  */
 public record UpdateStudentRequest(
         UUID programmeId,
@@ -17,4 +19,5 @@ public record UpdateStudentRequest(
         LocalDate expectedGraduationDate,
         UUID advisorUserId,
         Boolean clearAdvisor,
-        String advisorOfficeHours) {}
+        String advisorOfficeHours,
+        UpdateOwnProfileRequest contact) {}

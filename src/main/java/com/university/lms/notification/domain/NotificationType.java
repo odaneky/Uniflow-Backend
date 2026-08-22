@@ -8,5 +8,6 @@ public enum NotificationType {
     ANNOUNCEMENT,
     MESSAGE,
     FORUM_REPLY,
+    SERVICE_REQUEST,
     SYSTEM
 }

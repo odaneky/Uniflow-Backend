@@ -1,6 +1,7 @@
 package com.university.lms.grading.api;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,7 +15,7 @@ public interface AcademicRecord {
 
     record Summary(BigDecimal gpa, int creditsAttempted, int creditsEarned, long publishedGradeCount) {}
 
-    record PublishedOverall(UUID courseSectionId, String letter, BigDecimal gradePoint) {}
+    record PublishedOverall(UUID courseSectionId, String letter, BigDecimal gradePoint, Instant recordedAt) {}
 
     Summary summaryOf(UUID studentId);
 

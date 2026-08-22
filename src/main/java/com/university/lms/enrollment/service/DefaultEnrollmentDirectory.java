@@ -33,15 +33,29 @@ public class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     }
 
     @Override
+    public java.util.Optional<Integer> attemptNumberOf(UUID studentId, UUID courseSectionId) {
+        if (studentId == null || courseSectionId == null) {
+            return java.util.Optional.empty();
+        }
+        return enrollmentRepository
+                .findAllByStudentIdAndCourseSectionIdOrderByEnrolledAtDesc(studentId, courseSectionId)
+                .stream()
+                .filter(row -> row.getStatus() != EnrollmentStatus.DROPPED
+                        && row.getStatus() != EnrollmentStatus.WAITLISTED)
+                .findFirst()
+                .map(Enrollment::getAttemptNumber);
+    }
+
+    @Override
     public boolean canAccessLearning(UUID studentId, UUID courseSectionId) {
         if (studentId == null || courseSectionId == null) {
             return false;
         }
         return enrollmentRepository
-                .findByStudentIdAndCourseSectionId(studentId, courseSectionId)
+                .findAllByStudentIdAndCourseSectionIdOrderByEnrolledAtDesc(studentId, courseSectionId)
+                .stream()
                 .map(Enrollment::getStatus)
-                .filter(LEARNING_ACCESS::contains)
-                .isPresent();
+                .anyMatch(LEARNING_ACCESS::contains);
     }
 
     @Override

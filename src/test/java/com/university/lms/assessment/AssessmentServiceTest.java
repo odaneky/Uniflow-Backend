@@ -10,6 +10,7 @@ import com.university.lms.assessment.domain.AssessmentErrorCode;
 import com.university.lms.assessment.domain.AssessmentType;
 import com.university.lms.assessment.repository.AssessmentAttemptRepository;
 import com.university.lms.assessment.repository.AssessmentRepository;
+import com.university.lms.assessment.service.AssessmentOutboxPublisher;
 import com.university.lms.assessment.service.AssessmentService;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.security.SecurityRoles;
@@ -67,6 +68,9 @@ class AssessmentServiceTest {
     @Mock
     private StudentBilling studentBilling;
 
+    @Mock
+    private AssessmentOutboxPublisher assessmentOutboxPublisher;
+
     @InjectMocks
     private AssessmentService service;
 
@@ -85,7 +89,7 @@ class AssessmentServiceTest {
         when(studentDirectory.studentIdOfUser(USER_ID)).thenReturn(Optional.of(STUDENT_ID));
         when(courseCatalog.findSection(SECTION_ID))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        SECTION_ID, UUID.randomUUID(), "COMP2140", UUID.randomUUID(), "S01", 40, 1, true, null)));
+                        SECTION_ID, UUID.randomUUID(), "COMP2140", "Course", UUID.randomUUID(), "S01", 40, 1, true, null)));
         when(enrollmentDirectory.canAccessLearning(STUDENT_ID, SECTION_ID)).thenReturn(true);
         when(studentBilling.standingOf(any(), any(), any())).thenReturn(PaymentStanding.none());
 

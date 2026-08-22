@@ -17,12 +17,16 @@ import com.university.lms.curriculum.dto.DegreeProgressResponse.RequirementProgr
 import com.university.lms.curriculum.dto.RequirementBlockResponse;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
 import com.university.lms.grading.api.AcademicRecord;
+import com.university.lms.grading.domain.GradeResult;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.student.api.StudentDirectory;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -115,7 +119,7 @@ public class CurriculumService {
         blockRepository.delete(block);
     }
 
-    private DegreeProgressResponse progressOf(UUID studentId) {
+    DegreeProgressResponse progressOf(UUID studentId) {
         StudentDirectory.StudentSummary student = studentDirectory
                 .findById(studentId)
                 .orElseThrow(() -> new ForbiddenException(
@@ -126,11 +130,23 @@ public class CurriculumService {
                         CurriculumErrorCode.PROGRAMME_NOT_FOUND,
                         "No programme exists with id " + student.programmeId()));
         AcademicRecord.Summary summary = academicRecord.summaryOf(studentId);
+        // Most recent published overall per course; completed only when that sit is PASS.
+        Map<UUID, AcademicRecord.PublishedOverall> latestByCourse = new HashMap<>();
+        List<AcademicRecord.PublishedOverall> chronological = academicRecord.publishedOverallOf(studentId).stream()
+                .sorted(Comparator.comparing(
+                        AcademicRecord.PublishedOverall::recordedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())))
+                .toList();
+        for (AcademicRecord.PublishedOverall result : chronological) {
+            courseCatalog.findSection(result.courseSectionId()).ifPresent(section -> {
+                latestByCourse.put(section.courseId(), result);
+            });
+        }
         Set<UUID> completedCourseIds = new HashSet<>();
-        for (AcademicRecord.PublishedOverall result : academicRecord.publishedOverallOf(studentId)) {
-            courseCatalog
-                    .findSection(result.courseSectionId())
-                    .ifPresent(section -> completedCourseIds.add(section.courseId()));
+        for (Map.Entry<UUID, AcademicRecord.PublishedOverall> entry : latestByCourse.entrySet()) {
+            if (GradeResult.fromLetter(entry.getValue().letter()).isPass()) {
+                completedCourseIds.add(entry.getKey());
+            }
         }
 
         List<RequirementProgressResponse> blocks = new ArrayList<>();

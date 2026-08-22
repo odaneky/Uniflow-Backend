@@ -8,7 +8,15 @@ import java.util.UUID;
 
 /** A notification as its recipient may see it. Carries no delivery-provider detail. */
 public record NotificationResponse(
-        UUID id, NotificationType type, NotificationStatus status, String title, String body, Instant sentAt) {
+        UUID id,
+        NotificationType type,
+        NotificationStatus status,
+        String title,
+        String body,
+        Instant sentAt,
+        String actionUrl,
+        String sourceType,
+        UUID sourceId) {
 
     public static NotificationResponse from(Notification notification) {
         return new NotificationResponse(
@@ -17,6 +25,9 @@ public record NotificationResponse(
                 notification.getStatus(),
                 notification.getTitle(),
                 notification.getBody(),
-                notification.getSentAt());
+                notification.getSentAt(),
+                notification.getActionUrl(),
+                notification.getSourceType(),
+                notification.getSourceId());
     }
 }

@@ -73,6 +73,7 @@ public class DefaultAcademicStructure implements AcademicStructure {
                         term.getId(),
                         term.getName(),
                         term.getAcademicYear().getId(),
+                        term.getAcademicYear().getCode(),
                         term.isRegistrationOpenAt(asOf)));
     }
 
@@ -124,6 +125,7 @@ public class DefaultAcademicStructure implements AcademicStructure {
                 term.getId(),
                 term.getName(),
                 term.getAcademicYear().getId(),
+                term.getAcademicYear().getCode(),
                 term.getStartDate(),
                 term.getEndDate(),
                 term.getRegistrationOpensAt(),

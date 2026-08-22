@@ -1,0 +1,42 @@
+package com.university.lms.student.service;
+
+import com.university.lms.common.exception.ResourceNotFoundException;
+import com.university.lms.student.api.StudentLifecycle;
+import com.university.lms.student.domain.Student;
+import com.university.lms.student.domain.StudentErrorCode;
+import com.university.lms.student.domain.StudentStatus;
+import com.university.lms.student.dto.UpdateOwnProfileRequest;
+import com.university.lms.student.repository.StudentRepository;
+import java.util.UUID;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional
+public class DefaultStudentLifecycle implements StudentLifecycle {
+
+    private final StudentRepository studentRepository;
+    private final StudentService studentService;
+
+    public DefaultStudentLifecycle(StudentRepository studentRepository, @Lazy StudentService studentService) {
+        this.studentRepository = studentRepository;
+        this.studentService = studentService;
+    }
+
+    @Override
+    public void graduate(UUID studentId, UUID actorUserId) {
+        Student student = studentRepository
+                .findById(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.STUDENT_NOT_FOUND, "No student exists with id " + studentId));
+        if (student.getStatus() != StudentStatus.GRADUATED) {
+            student.changeStatus(StudentStatus.GRADUATED);
+        }
+    }
+
+    @Override
+    public void applyContactCorrection(UUID studentId, UpdateOwnProfileRequest contact) {
+        studentService.updateContactById(studentId, contact);
+    }
+}

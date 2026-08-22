@@ -12,7 +12,8 @@ public record EnrollmentResponse(
         UUID courseSectionId,
         EnrollmentStatus status,
         Instant enrolledAt,
-        Instant endedAt) {
+        Instant endedAt,
+        int attemptNumber) {
 
     public static EnrollmentResponse from(Enrollment enrolment) {
         return new EnrollmentResponse(
@@ -21,6 +22,7 @@ public record EnrollmentResponse(
                 enrolment.getCourseSectionId(),
                 enrolment.getStatus(),
                 enrolment.getEnrolledAt(),
-                enrolment.getEndedAt());
+                enrolment.getEndedAt(),
+                enrolment.getAttemptNumber());
     }
 }

@@ -177,6 +177,7 @@ class EnrollmentServiceTest {
         assertThat(response.studentId()).isEqualTo(STUDENT_ID);
         assertThat(response.courseSectionId()).isEqualTo(SECTION_ID);
         assertThat(response.status()).isEqualTo(EnrollmentStatus.ENROLLED);
+        assertThat(response.attemptNumber()).isEqualTo(1);
         verify(courseCatalog).tryReserveSeat(SECTION_ID);
         verify(studentBilling)
                 .chargeForEnrolment(eq(STUDENT_ID), any(), eq(TERM_ID), eq("COMP3101"), eq(COURSE_ID), eq(3), isNull());
@@ -188,6 +189,27 @@ class EnrollmentServiceTest {
                         eq(AuditTrail.EntityType.ENROLLMENT),
                         any(),
                         contains("COMP3101"));
+    }
+
+    @Test
+    @DisplayName("a later sit of the same course is attempt 2")
+    void secondSitOfSameCourseIsAttemptTwo() {
+        UUID priorSectionId = UUID.randomUUID();
+        givenEligibleStudent();
+        givenOpenSection(30, 10);
+        givenRegistrationOpen();
+        Enrollment prior = new Enrollment(
+                STUDENT_ID, priorSectionId, EnrollmentStatus.COMPLETED, null, 1);
+        when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any())).thenReturn(List.of(prior));
+        when(courseCatalog.findSection(priorSectionId))
+                .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
+                        priorSectionId, COURSE_ID, "COMP3101", "Course", TERM_ID, "B", 30, 5, true, null)));
+        when(courseCatalog.tryReserveSeat(SECTION_ID)).thenReturn(true);
+        when(repository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EnrollmentResponse response = service.enrol(request);
+
+        assertThat(response.attemptNumber()).isEqualTo(2);
     }
 
     // ------------------------------------------------------------------
@@ -394,7 +416,7 @@ class EnrollmentServiceTest {
         UUID otherSection = existing.getCourseSectionId();
         when(courseCatalog.findSection(otherSection))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        otherSection, COURSE_ID, "COMP3101", TERM_ID, "B", 30, 10, true, null)));
+                        otherSection, COURSE_ID, "COMP3101", "Course", TERM_ID, "B", 30, 10, true, null)));
 
         assertThatThrownBy(() -> service.enrol(request))
                 .isInstanceOf(BusinessException.class)
@@ -415,7 +437,7 @@ class EnrollmentServiceTest {
         when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any())).thenReturn(List.of(held));
         when(courseCatalog.findSection(otherSection))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        otherSection, UUID.randomUUID(), "MATH1150", TERM_ID, "UN1", 30, 10, true, null)));
+                        otherSection, UUID.randomUUID(), "MATH1150", "Course", TERM_ID, "UN1", 30, 10, true, null)));
         when(courseCatalog.meetingsOf(SECTION_ID))
                 .thenReturn(List.of(new CourseCatalog.Meeting(1, "Mon", "09:00", "10:00", "A1", "Lecture")));
         when(courseCatalog.meetingsOf(otherSection))
@@ -514,7 +536,7 @@ class EnrollmentServiceTest {
         givenEligibleStudent();
         when(courseCatalog.findSection(SECTION_ID))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        SECTION_ID, UUID.randomUUID(), "COMP3101", TERM_ID, "A", 30, 5, false, null)));
+                        SECTION_ID, UUID.randomUUID(), "COMP3101", "Course", TERM_ID, "A", 30, 5, false, null)));
 
         assertThatThrownBy(() -> service.enrol(request))
                 .isInstanceOf(BusinessException.class)
@@ -660,7 +682,7 @@ class EnrollmentServiceTest {
     private void givenOpenSection(int capacity, int enrolled) {
         when(courseCatalog.findSection(SECTION_ID))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        SECTION_ID, COURSE_ID, "COMP3101", TERM_ID, "A", capacity, enrolled, true, null)));
+                        SECTION_ID, COURSE_ID, "COMP3101", "Course", TERM_ID, "A", capacity, enrolled, true, null)));
     }
 
     private void givenRegistrationOpen() {

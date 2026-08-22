@@ -22,6 +22,7 @@ public interface CourseCatalog {
             UUID id,
             UUID courseId,
             String courseCode,
+            String courseTitle,
             UUID academicTermId,
             String sectionCode,
             int capacity,

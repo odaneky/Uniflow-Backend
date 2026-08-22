@@ -199,7 +199,7 @@ class QuizServiceTest {
         return new CourseCatalog.SectionSummary(
                 SECTION_ID,
                 UUID.randomUUID(),
-                "COMP2140",
+                "COMP2140", "Course",
                 UUID.randomUUID(),
                 "UN1",
                 40,

@@ -23,6 +23,8 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
     Page<Student> findByAdvisorUserId(UUID advisorUserId, Pageable pageable);
 
+    java.util.List<Student> findAllByAdvisorUserId(UUID advisorUserId);
+
     /**
      * Single filtered, paged query rather than several finder overloads. Null arguments disable
      * their predicate, so the caller never has to choose between combinations of finders and the

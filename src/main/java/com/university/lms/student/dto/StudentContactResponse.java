@@ -3,6 +3,8 @@ package com.university.lms.student.dto;
 import java.time.LocalDate;
 
 public record StudentContactResponse(
+        String personalEmail,
+        String gender,
         String phoneNumber,
         LocalDate dateOfBirth,
         String nationality,

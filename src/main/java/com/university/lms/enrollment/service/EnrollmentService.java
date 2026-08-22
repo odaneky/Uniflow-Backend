@@ -33,6 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -576,11 +577,12 @@ public class EnrollmentService {
 
     private EnrollmentResponse persistEnrolment(
             StudentDirectory.StudentSummary student, CourseCatalog.SectionSummary section, UUID checkoutBatchId) {
+        int attemptNumber = nextAttemptNumber(student.id(), section.courseId());
         if (courseCatalog.tryReserveSeat(section.id())) {
             Enrollment saved;
             try {
-                saved = repository.saveAndFlush(
-                        new Enrollment(student.id(), section.id(), EnrollmentStatus.ENROLLED, checkoutBatchId));
+                saved = repository.saveAndFlush(new Enrollment(
+                        student.id(), section.id(), EnrollmentStatus.ENROLLED, checkoutBatchId, attemptNumber));
             } catch (DataIntegrityViolationException ex) {
                 throw asDuplicateOrRethrow(student.id(), section, ex);
             }
@@ -594,8 +596,8 @@ public class EnrollmentService {
             return EnrollmentResponse.from(saved);
         }
         try {
-            Enrollment saved = repository.saveAndFlush(
-                    new Enrollment(student.id(), section.id(), EnrollmentStatus.WAITLISTED, checkoutBatchId));
+            Enrollment saved = repository.saveAndFlush(new Enrollment(
+                    student.id(), section.id(), EnrollmentStatus.WAITLISTED, checkoutBatchId, attemptNumber));
             recordAudit(
                     AuditTrail.Action.ENROLMENT_CREATED,
                     saved.getId(),
@@ -607,6 +609,26 @@ public class EnrollmentService {
         } catch (DataIntegrityViolationException ex) {
             throw asDuplicateOrRethrow(student.id(), section, ex);
         }
+    }
+
+    /**
+     * Next sit number for this student on the underlying course. Prior COMPLETED / WITHDRAWN /
+     * ENROLLED / PENDING rows count; DROPPED and WAITLISTED alone do not.
+     */
+    private int nextAttemptNumber(UUID studentId, UUID courseId) {
+        Set<EnrollmentStatus> sitStatuses = Set.of(
+                EnrollmentStatus.COMPLETED,
+                EnrollmentStatus.WITHDRAWN,
+                EnrollmentStatus.ENROLLED,
+                EnrollmentStatus.PENDING);
+        int max = 0;
+        for (Enrollment row : repository.findByStudentIdAndStatusIn(studentId, sitStatuses)) {
+            Optional<CourseCatalog.SectionSummary> prior = courseCatalog.findSection(row.getCourseSectionId());
+            if (prior.isPresent() && prior.get().courseId().equals(courseId)) {
+                max = Math.max(max, row.getAttemptNumber());
+            }
+        }
+        return max + 1;
     }
 
     private Instant correctionDeadline(Instant started) {

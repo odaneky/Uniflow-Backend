@@ -14,13 +14,19 @@ import lombok.Getter;
  * subject to data-protection handling; keeping it in its own table means the hot path never loads
  * personal data it does not need.
  *
- * <p>Name and email are not duplicated here — those belong to the identity module and are resolved
- * through {@code UserDirectory}.
+ * <p>Campus login email stays in the identity module. A separate personal email may be stored here
+ * for correspondence when it differs from the campus account.
  */
 @Entity
 @Table(name = "student_profiles")
 @Getter
 public class StudentProfile extends BaseEntity {
+
+    @Column(name = "personal_email", length = 254)
+    private String personalEmail;
+
+    @Column(name = "gender", length = 30)
+    private String gender;
 
     @Column(name = "phone_number", length = 30)
     private String phoneNumber;
@@ -73,5 +79,13 @@ public class StudentProfile extends BaseEntity {
     public void updateEmergencyContact(String name, String phone) {
         this.emergencyContactName = name;
         this.emergencyContactPhone = phone;
+    }
+
+    public void updatePersonalEmail(String personalEmail) {
+        this.personalEmail = personalEmail;
+    }
+
+    public void updateGender(String gender) {
+        this.gender = gender;
     }
 }

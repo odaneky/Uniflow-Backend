@@ -201,6 +201,8 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/notifications/**", "/api/v1/notifications")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/notifications/**", "/api/v1/notifications")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/documents/**", "/api/v1/documents")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/conversations/**", "/api/v1/conversations")

@@ -318,6 +318,30 @@
       }
     },
     {
+      "username": "201945001",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Laurenne",
+      "lastName": "Morgan",
+      "email": "laurenne.morgan@university.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "STUDENT"
+      ],
+      "requiredActions": [],
+      "attributes": {
+        "student_number": [
+          "201945001"
+        ]
+      }
+    },
+    {
       "username": "202067890",
       "enabled": true,
       "emailVerified": true,

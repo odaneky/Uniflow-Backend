@@ -15,6 +15,12 @@ public interface EnrollmentDirectory {
     record SectionEnrolment(UUID enrollmentId, UUID studentId, UUID courseSectionId, String status) {}
 
     /**
+     * Attempt number for the student's enrolment in this section, if any. Empty when they were
+     * never enrolled (or only dropped without a sit).
+     */
+    java.util.Optional<Integer> attemptNumberOf(UUID studentId, UUID courseSectionId);
+
+    /**
      * Whether this student may see published teaching material for the section.
      *
      * <p>True for an active or completed enrolment; false for dropped, withdrawn, pending, or

@@ -35,6 +35,28 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
 
     @Query(
             """
+            select coalesce(max(e.attemptNumber), 0) from Enrollment e
+            where e.studentId = :studentId
+              and e.courseSectionId in :sectionIds
+              and e.status in :statuses
+            """)
+    int maxAttemptNumberForSections(
+            UUID studentId,
+            java.util.Collection<UUID> sectionIds,
+            java.util.Collection<EnrollmentStatus> statuses);
+
+    @Query(
+            """
+            select e from Enrollment e
+            where e.studentId = :studentId
+              and e.courseSectionId = :courseSectionId
+            order by e.enrolledAt desc
+            """)
+    java.util.List<Enrollment> findAllByStudentIdAndCourseSectionIdOrderByEnrolledAtDesc(
+            UUID studentId, UUID courseSectionId);
+
+    @Query(
+            """
             select e from Enrollment e
             where (:studentId is null or e.studentId = :studentId)
               and (:courseSectionId is null or e.courseSectionId = :courseSectionId)

@@ -2,6 +2,7 @@ package com.university.lms.request.web;
 
 import com.university.lms.request.dto.CreateServiceRequestRequest;
 import com.university.lms.request.dto.ServiceRequestResponse;
+import com.university.lms.request.dto.TransitionServiceRequestRequest;
 import com.university.lms.request.service.ServiceRequestService;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -40,5 +41,11 @@ public class MyRequestController {
     public ResponseEntity<ServiceRequestResponse> create(@Valid @RequestBody CreateServiceRequestRequest request) {
         ServiceRequestResponse created = serviceRequestService.createOwn(request);
         return ResponseEntity.created(URI.create("/api/v1/me/requests/" + created.id())).body(created);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ServiceRequestResponse cancel(
+            @PathVariable UUID id, @Valid @RequestBody(required = false) TransitionServiceRequestRequest body) {
+        return serviceRequestService.cancelOwn(id, body);
     }
 }
