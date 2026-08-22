@@ -7,5 +7,6 @@ public enum NotificationType {
     GRADE_PUBLISHED,
     ANNOUNCEMENT,
     MESSAGE,
+    FORUM_REPLY,
     SYSTEM
 }

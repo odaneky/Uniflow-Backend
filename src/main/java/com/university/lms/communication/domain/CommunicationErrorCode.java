@@ -5,7 +5,10 @@ import com.university.lms.common.exception.ErrorCode;
 public enum CommunicationErrorCode implements ErrorCode {
     ANNOUNCEMENT_NOT_FOUND,
     CONVERSATION_NOT_FOUND,
-    CONVERSATION_PARTICIPANT_NOT_FOUND;
+    CONVERSATION_PARTICIPANT_NOT_FOUND,
+    FORUM_TOPIC_NOT_FOUND,
+    FORUM_POST_NOT_FOUND,
+    FORUM_TOPIC_LOCKED;
 
     @Override
     public String code() {
