@@ -90,7 +90,7 @@ Messages may reference `document_id` (owner must match sender). Upload via docum
 | 2 | Section forums | Done |
 | 3 | SSE, email port, preferences | Done |
 | 4 | Rate limits, metrics, attachments, compliance | Done |
-| 4+ | Redis SSE, distributed rate limits, retention jobs | Deferred until ops need |
+| 4+ | Redis SSE (`lms.notifications.sse.provider=redis`), distributed rate limits, retention jobs | Redis SSE available; retention deferred |
 
 ## Key files
 

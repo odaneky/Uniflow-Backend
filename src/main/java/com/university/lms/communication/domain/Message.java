@@ -76,4 +76,9 @@ public class Message extends BaseEntity {
     public void attachDocument(UUID documentId) {
         this.documentId = documentId;
     }
+
+    public void softDelete(UUID byUserId, Instant at) {
+        this.deletedAt = at;
+        this.deletedByUserId = byUserId;
+    }
 }

@@ -16,6 +16,22 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     Page<Message> findByConversationIdAndDeletedAtIsNullOrderBySentAtDesc(UUID conversationId, Pageable pageable);
 
+    List<Message> findByConversationIdAndDeletedAtIsNullOrderBySentAtDescIdDesc(UUID conversationId, Pageable pageable);
+
+    @Query(
+            """
+            select m from Message m
+            where m.conversation.id = :conversationId
+              and m.deletedAt is null
+              and (m.sentAt < :sentAt or (m.sentAt = :sentAt and m.id < :id))
+            order by m.sentAt desc, m.id desc
+            """)
+    List<Message> findBeforeCursor(
+            @Param("conversationId") UUID conversationId,
+            @Param("sentAt") Instant sentAt,
+            @Param("id") UUID id,
+            Pageable pageable);
+
     Optional<Message> findFirstByConversationIdAndDeletedAtIsNullOrderBySentAtDesc(UUID conversationId);
 
     Optional<Message> findByConversationIdAndIdempotencyKey(UUID conversationId, String idempotencyKey);

@@ -1,5 +1,6 @@
 package com.university.lms.communication.web;
 
+import com.university.lms.common.dto.CursorPageResponse;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.communication.dto.AnnouncementResponse;
 import com.university.lms.communication.dto.ConversationSummaryResponse;
@@ -10,10 +11,12 @@ import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -43,10 +46,16 @@ public class MyCommunicationController {
     }
 
     @GetMapping("/conversations/{id}/messages")
-    public PageResponse<MessageResponse> messages(
+    public CursorPageResponse<MessageResponse> messages(
             @PathVariable UUID id,
-            @PageableDefault(size = 50, sort = "sentAt", direction = Sort.Direction.ASC) Pageable pageable) {
-        return communicationService.ownMessages(id, pageable);
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "50") int size) {
+        return communicationService.ownMessages(id, cursor, size);
+    }
+
+    @DeleteMapping("/conversations/{conversationId}/messages/{messageId}")
+    public void deleteMessage(@PathVariable UUID conversationId, @PathVariable UUID messageId) {
+        communicationService.deleteOwnMessage(conversationId, messageId);
     }
 
     @PostMapping("/conversations/{id}/read")

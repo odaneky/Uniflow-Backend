@@ -3,6 +3,7 @@ package com.university.lms.communication.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.university.lms.administration.api.AuditTrail;
+import com.university.lms.common.dto.CursorPageResponse;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
@@ -23,6 +24,7 @@ import com.university.lms.communication.dto.ConversationSummaryResponse;
 import com.university.lms.communication.dto.CreateAnnouncementRequest;
 import com.university.lms.communication.dto.CreateConversationRequest;
 import com.university.lms.communication.dto.CreateMessageRequest;
+import com.university.lms.communication.dto.MessageCursor;
 import com.university.lms.communication.dto.MessageResponse;
 import com.university.lms.communication.dto.StartConversationResult;
 import com.university.lms.document.api.DocumentStore;
@@ -39,11 +41,13 @@ import com.university.lms.notification.dispatch.AnnouncementPublishedOutboxHandl
 import com.university.lms.notification.dispatch.MessageSentOutboxHandler;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -200,11 +204,60 @@ public class CommunicationService {
         return PageResponse.from(conversationRepository.findAllForParticipant(userId, pageable), this::toSummary);
     }
 
-    public PageResponse<MessageResponse> ownMessages(UUID conversationId, Pageable pageable) {
+    public CursorPageResponse<MessageResponse> ownMessages(UUID conversationId, String cursor, int size) {
+        messagingPolicy.assertCanReadConversation(currentUserProvider.require(), conversationId);
+        int limit = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(0, limit + 1);
+        MessageCursor before = MessageCursor.decode(cursor);
+        List<Message> batch = before == null
+                ? messageRepository.findByConversationIdAndDeletedAtIsNullOrderBySentAtDescIdDesc(conversationId, pageable)
+                : messageRepository.findBeforeCursor(conversationId, before.sentAt(), before.id(), pageable);
+        return toCursorPage(batch, limit);
+    }
+
+    /** @deprecated offset pagination — prefer {@link #ownMessages(UUID, String, int)} */
+    public PageResponse<MessageResponse> ownMessagesPaged(UUID conversationId, Pageable pageable) {
         messagingPolicy.assertCanReadConversation(currentUserProvider.require(), conversationId);
         return PageResponse.from(
                 messageRepository.findByConversationIdAndDeletedAtIsNullOrderBySentAtDesc(conversationId, pageable),
                 message -> MessageResponse.from(message, displayName(message.getSenderUserId())));
+    }
+
+    @Transactional
+    public void deleteOwnMessage(UUID conversationId, UUID messageId) {
+        CurrentUser caller = currentUserProvider.require();
+        messagingPolicy.assertCanReadConversation(caller, conversationId);
+        Message message = messageRepository
+                .findById(messageId)
+                .filter(m -> m.getConversation().getId().equals(conversationId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        CommunicationErrorCode.MESSAGE_NOT_FOUND,
+                        "No message exists with id " + messageId));
+        boolean owner = message.getSenderUserId().equals(caller.userId());
+        if (!owner && !caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            throw new ForbiddenException(
+                    com.university.lms.common.exception.CommonErrorCode.ACCESS_DENIED,
+                    "You do not have permission to access this record");
+        }
+        if (!message.isDeleted()) {
+            message.softDelete(caller.userId(), Instant.now());
+        }
+    }
+
+    private CursorPageResponse<MessageResponse> toCursorPage(List<Message> batch, int size) {
+        boolean hasMore = batch.size() > size;
+        List<Message> page = hasMore ? batch.subList(0, size) : new ArrayList<>(batch);
+        String nextCursor = hasMore && !page.isEmpty()
+                ? new MessageCursor(page.getLast().getSentAt(), page.getLast().getId()).encode()
+                : null;
+        List<MessageResponse> content = page.stream()
+                .map(message -> MessageResponse.from(message, displayName(message.getSenderUserId())))
+                .toList();
+        return new CursorPageResponse<>(content, nextCursor, hasMore);
+    }
+
+    public PageResponse<MessageResponse> ownMessages(UUID conversationId, Pageable pageable) {
+        return ownMessagesPaged(conversationId, pageable);
     }
 
     public long ownUnreadConversationCount() {

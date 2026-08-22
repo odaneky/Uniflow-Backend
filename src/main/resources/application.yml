@@ -92,8 +92,9 @@ lms:
     support-email: ${LMS_SUPPORT_EMAIL:credeer0@gmail.com}
     contact-email: ${LMS_CONTACT_EMAIL:credeer0@gmail.com}
     phone-number: ${LMS_PHONE_NUMBER:+1(876)486-6195}
-  notifications:
+    notifications:
     sse:
+      provider: local
       timeout-ms: 300000
     email:
       enabled: false
