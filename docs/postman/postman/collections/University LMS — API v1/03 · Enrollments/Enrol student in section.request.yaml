@@ -1,0 +1,25 @@
+$kind: http-request
+description: |-
+  The seat is taken by a single guarded UPDATE
+    (... SET enrolled_count = enrolled_count + 1 WHERE id = ? AND enrolled_count < capacity)
+  so two simultaneous callers are serialised by the database and exactly one wins. The seat reservation and the enrolment row commit in the same transaction: if the insert fails, the seat is released by the rollback, never by compensating code.
+url: "{{baseUrl}}/api/v1/enrollments"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "studentId": "{{studentId}}",
+      "courseSectionId": "{{sectionId}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const b = pm.response.json();
+      pm.test('ENROLLED', () => pm.expect(b.status).to.eql('ENROLLED'));
+      pm.collectionVariables.set('enrollmentId', b.id);
+    language: text/javascript
+order: 1000

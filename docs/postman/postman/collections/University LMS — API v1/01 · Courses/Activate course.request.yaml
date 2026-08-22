@@ -1,0 +1,22 @@
+$kind: http-request
+description: |-
+  Moves the course DRAFT -> ACTIVE. Required before a section can be added: CourseService rejects scheduling a section on a non-offerable course with 422 COURSE_NOT_OFFERABLE.
+
+  PATCH, not PUT — an absent field means 'leave unchanged', never 'clear'.
+url: "{{baseUrl}}/api/v1/courses/{{courseId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "status": "ACTIVE"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('now ACTIVE', () => pm.expect(pm.response.json().status).to.eql('ACTIVE'));
+    language: text/javascript
+order: 2000

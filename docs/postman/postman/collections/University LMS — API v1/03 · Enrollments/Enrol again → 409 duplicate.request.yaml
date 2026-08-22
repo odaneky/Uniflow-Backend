@@ -1,0 +1,38 @@
+$kind: http-request
+description: |-
+  Same student, same section. Rejected with 409 ENROLLMENT_ALREADY_EXISTS.
+
+  The service does check first, but that check is only for a good error message — the real guarantee is the unique index on (student_id, course_section_id), which is what rejects the loser when two identical requests arrive at the same instant.
+url: "{{baseUrl}}/api/v1/enrollments"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "studentId": "{{studentId}}",
+      "courseSectionId": "{{sectionId}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('409 Conflict', () => pm.response.to.have.status(409));
+      pm.test('stable machine-readable code', () =>
+          pm.expect(pm.response.json().code).to.eql('ENROLLMENT_ALREADY_EXISTS'));
+      const b = pm.response.json();
+      pm.test('error envelope is the standard contract', () => {
+          pm.expect(b).to.have.property('timestamp');
+          pm.expect(b).to.have.property('status', pm.response.code);
+          pm.expect(b).to.have.property('code');
+          pm.expect(b).to.have.property('message');
+          pm.expect(b).to.have.property('path');
+          pm.expect(b).to.have.property('traceId');
+      });
+      pm.test('no internal detail leaks', () => {
+          const raw = pm.response.text().toLowerCase();
+          ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']
+              .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));
+      });
+    language: text/javascript
+order: 2000

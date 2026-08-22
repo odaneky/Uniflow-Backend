@@ -1,0 +1,11 @@
+$kind: http-request
+description: PLANNED -> OPEN. Only an OPEN section will accept an enrolment; the guarded UPDATE that reserves a seat checks the status as part of the same atomic statement.
+url: "{{baseUrl}}/api/v1/courses/sections/{{sectionId}}/open"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('now OPEN', () => pm.expect(pm.response.json().status).to.eql('OPEN'));
+    language: text/javascript
+order: 4000

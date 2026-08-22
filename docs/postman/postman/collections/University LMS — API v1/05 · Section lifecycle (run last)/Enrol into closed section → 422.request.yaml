@@ -1,0 +1,35 @@
+$kind: http-request
+description: Confirms the section status gate.
+url: "{{baseUrl}}/api/v1/enrollments"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "studentId": "{{studentId}}",
+      "courseSectionId": "{{sectionId}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('422 or 409', () => pm.expect(pm.response.code).to.be.oneOf([422, 409]));
+      pm.test('refused for a stated reason', () => pm.expect(pm.response.json().code)
+          .to.be.oneOf(['ENROLLMENT_SECTION_NOT_OPEN','ENROLLMENT_ALREADY_EXISTS']));
+      const b = pm.response.json();
+      pm.test('error envelope is the standard contract', () => {
+          pm.expect(b).to.have.property('timestamp');
+          pm.expect(b).to.have.property('status', pm.response.code);
+          pm.expect(b).to.have.property('code');
+          pm.expect(b).to.have.property('message');
+          pm.expect(b).to.have.property('path');
+          pm.expect(b).to.have.property('traceId');
+      });
+      pm.test('no internal detail leaks', () => {
+          const raw = pm.response.text().toLowerCase();
+          ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']
+              .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));
+      });
+    language: text/javascript
+order: 2000

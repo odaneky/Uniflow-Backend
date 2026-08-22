@@ -1,0 +1,3 @@
+$kind: collection
+description: "Every failure in the system returns the same envelope: timestamp, status, code, message, path, traceId, errors[]. Clients branch on `code`, never on prose. Stack traces, SQL and constraint names never appear — they go to the log under the same traceId."
+order: 5000

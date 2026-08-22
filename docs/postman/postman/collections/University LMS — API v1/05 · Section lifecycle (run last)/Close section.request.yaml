@@ -1,0 +1,11 @@
+$kind: http-request
+description: OPEN -> CLOSED. Subsequent enrolment attempts get 422 ENROLLMENT_SECTION_NOT_OPEN — the status is part of the guarded UPDATE's WHERE clause, so a section cannot be enrolled into between the check and the write.
+url: "{{baseUrl}}/api/v1/courses/sections/{{sectionId}}/close"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('now CLOSED', () => pm.expect(pm.response.json().status).to.eql('CLOSED'));
+    language: text/javascript
+order: 1000

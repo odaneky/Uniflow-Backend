@@ -1,0 +1,42 @@
+$kind: http-request
+description: |-
+  Re-sends the course code created in folder 01. Returns 409 COURSE_CODE_ALREADY_EXISTS.
+
+  Run 'Create course' first, or this returns 400 because {{courseCode}} is unset.
+url: "{{baseUrl}}/api/v1/courses"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "courseCode": "{{courseCode}}",
+      "title": "Duplicate",
+      "credits": 3,
+      "level": 3,
+      "departmentId": "{{departmentId}}",
+      "components": ["LECTURE"]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('409 Conflict', () => pm.response.to.have.status(409));
+      pm.test('COURSE_CODE_ALREADY_EXISTS', () =>
+          pm.expect(pm.response.json().code).to.eql('COURSE_CODE_ALREADY_EXISTS'));
+      const b = pm.response.json();
+      pm.test('error envelope is the standard contract', () => {
+          pm.expect(b).to.have.property('timestamp');
+          pm.expect(b).to.have.property('status', pm.response.code);
+          pm.expect(b).to.have.property('code');
+          pm.expect(b).to.have.property('message');
+          pm.expect(b).to.have.property('path');
+          pm.expect(b).to.have.property('traceId');
+      });
+      pm.test('no internal detail leaks', () => {
+          const raw = pm.response.text().toLowerCase();
+          ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']
+              .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));
+      });
+    language: text/javascript
+order: 6000

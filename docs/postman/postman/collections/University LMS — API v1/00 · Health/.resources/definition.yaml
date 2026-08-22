@@ -1,0 +1,3 @@
+$kind: collection
+description: Confirms the app is up. This is the only endpoint outside /api/v1 that is deliberately public.
+order: 1000

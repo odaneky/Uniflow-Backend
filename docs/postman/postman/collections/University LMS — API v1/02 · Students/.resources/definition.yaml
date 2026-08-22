@@ -1,0 +1,3 @@
+$kind: collection
+description: OUT OF DATE — see the current collection JSON. Creating a student needs a userId and programmeId; both now have REST endpoints (POST /api/v1/users, POST /api/v1/programmes).
+order: 3000

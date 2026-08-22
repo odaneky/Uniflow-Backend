@@ -1,0 +1,9 @@
+$kind: http-request
+description: "No DELETE is exposed on a course: catalog entries are retired, never removed, so that historical results remain interpretable."
+url: "{{baseUrl}}/api/v1/courses/{{courseId}}"
+method: DELETE
+scripts:
+  - type: afterResponse
+    code: pm.test('405 Method Not Allowed', () => pm.response.to.have.status(405));
+    language: text/javascript
+order: 8000

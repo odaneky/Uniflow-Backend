@@ -1,0 +1,198 @@
+# Local development dependencies for the University LMS backend.
+#
+# PostgreSQL, and Keycloak as the identity provider. Message brokers, caches and object stores are
+# added when a concrete requirement arrives, not in anticipation of one — an unused Kafka in the
+# compose file costs every developer memory and start-up time for no benefit. Keycloak earns its
+# place because authentication is the one remaining deployment blocker (docs/ROADMAP.md, P0.1).
+#
+#   docker compose up -d
+#   ./mvnw spring-boot:run
+#
+# Keycloak is on http://localhost:8081 (admin/admin), the app on 8080.
+#
+# Observability (Prometheus, Tempo, Loki, Grafana, OTel Collector) is opt-in — it is several
+# hundred extra megabytes and is not needed to develop enrolment:
+#
+#   docker compose --profile obs up -d
+#
+# Grafana is then on http://localhost:3000 (admin/admin). The API still talks only to the collector.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: university-lms-postgres
+    environment:
+      POSTGRES_DB: university_lms
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: lms
+      # Match the collation the application expects so ordering is stable across machines.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Depending services wait for readiness, not merely for the container to exist.
+      test: ["CMD-SHELL", "pg_isready -U lms -d university_lms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # Creates Keycloak's database, once, and exits.
+  #
+  # This is NOT done with a /docker-entrypoint-initdb.d script: those run only when the data
+  # directory is empty, so on any machine that already has a postgres-data volume — which is every
+  # machine that ran this stack before Keycloak was added — the script would silently never fire
+  # and Keycloak would fail to start with a confusing error. A one-shot container that checks and
+  # creates works on a fresh volume and an existing one alike, and costs nothing once it has run.
+  keycloak-db-init:
+    image: postgres:16-alpine
+    container_name: university-lms-keycloak-db-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: lms
+    entrypoint:
+      - sh
+      - -c
+      - >
+        psql -h postgres -U lms -d postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='keycloak'" | grep -q 1
+        || psql -h postgres -U lms -d postgres -c "CREATE DATABASE keycloak OWNER lms"
+    restart: "no"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: university-lms-keycloak
+    depends_on:
+      keycloak-db-init:
+        condition: service_completed_successfully
+    # start-dev: HTTP without TLS, no hostname strictness, dev-mode caching. Convenient locally and
+    # unacceptable anywhere else — production uses `start` with TLS and a fixed hostname.
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Keycloak shares the Postgres instance but not the database. Its schema is its own and is
+      # migrated by Keycloak, not by Flyway — the two must never point at the same database.
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: lms
+      KC_DB_PASSWORD: lms
+      # Local-only bootstrap credentials. Keycloak logs a warning about these on every start; that
+      # warning is correct and should stay visible.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8081:8080"   # 8080 is the application's
+      - "9001:9000"   # management: /health, /metrics
+    volumes:
+      # Imported on first start only. Editing the realm through the admin console afterwards does
+      # not write back here — see docker/keycloak/README.md for how to re-import or export.
+      - ./docker/keycloak/realm:/opt/keycloak/data/import:ro
+      # Login theme. Mounted next to the built-in themes, not over them.
+      - ./docker/keycloak/themes/uniflow:/opt/keycloak/themes/uniflow:ro
+      - keycloak-data:/opt/keycloak/data
+    healthcheck:
+      # The image is UBI-micro: no curl, no wget. Bash's /dev/tcp is the one HTTP client present.
+      test:
+        - CMD-SHELL
+        - >
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    container_name: university-lms-otel-collector
+    profiles: ["obs"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./docker/observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    depends_on:
+      - tempo
+      - loki
+      - prometheus
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: university-lms-prometheus
+    profiles: ["obs"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: university-lms-tempo
+    profiles: ["obs"]
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./docker/observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "127.0.0.1:3200:3200"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: university-lms-loki
+    profiles: ["obs"]
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./docker/observability/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: university-lms-grafana
+    profiles: ["obs"]
+    environment:
+      # Local-only bootstrap, same class of throwaway as Keycloak admin/admin.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  keycloak-data:
+  prometheus-data:
+  tempo-data:
+  loki-data:
+  grafana-data:

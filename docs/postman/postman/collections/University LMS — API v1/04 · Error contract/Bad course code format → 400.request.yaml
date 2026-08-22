@@ -1,0 +1,41 @@
+$kind: http-request
+description: courseCode must match ^[A-Z]{2,6}[0-9]{3,5}$. Demonstrates a @Pattern message surfacing on the offending field rather than as an opaque failure.
+url: "{{baseUrl}}/api/v1/courses"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "courseCode": "not-a-code",
+      "title": "X",
+      "credits": 3,
+      "level": 3,
+      "departmentId": "{{departmentId}}",
+      "components": ["LECTURE"]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('400 Bad Request', () => pm.response.to.have.status(400));
+      pm.test('names the offending field', () => {
+          const f = pm.response.json().errors.map(e => e.field);
+          pm.expect(f).to.include('courseCode');
+      });
+      const b = pm.response.json();
+      pm.test('error envelope is the standard contract', () => {
+          pm.expect(b).to.have.property('timestamp');
+          pm.expect(b).to.have.property('status', pm.response.code);
+          pm.expect(b).to.have.property('code');
+          pm.expect(b).to.have.property('message');
+          pm.expect(b).to.have.property('path');
+          pm.expect(b).to.have.property('traceId');
+      });
+      pm.test('no internal detail leaks', () => {
+          const raw = pm.response.text().toLowerCase();
+          ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']
+              .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));
+      });
+    language: text/javascript
+order: 2000

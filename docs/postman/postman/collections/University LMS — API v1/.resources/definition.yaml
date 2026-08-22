@@ -1,0 +1,38 @@
+$kind: collection
+description: |-
+  REST API for the University LMS modular monolith.
+
+  ## Before you start
+
+  All commands run from `UniPro-Backend/`.
+
+  1. `docker compose up -d`
+  2. `./mvnw spring-boot:run`
+  3. Load the reference data — **required**:
+     ```
+     docker compose exec -T postgres psql -U lms -d university_lms \
+       < docs/postman/bootstrap-reference-data.sql
+     ```
+
+  OUT OF DATE — this is a mirror of an earlier version of the collection. Reference-data endpoints now exist and no SQL step is needed; re-import University-LMS.postman_collection.json for the current 59-request version.
+
+  ## Order
+
+  Folders are numbered and chain through collection variables: creating a course sets `courseId`, adding a section sets `sectionId`, and so on. Run top to bottom, or use the Collection Runner.
+
+  ## Authentication
+
+  There is none yet — `/api/v1/**` is `permitAll()`. That is a scaffolding decision and a deployment blocker, tracked as ROADMAP P0.1. When JWT lands, add the bearer token to collection-level auth and every request inherits it.
+variables:
+  baseUrl: http://localhost:8080
+  userId: aaaaaaaa-0000-4000-8000-000000000001
+  lecturerUserId: aaaaaaaa-0000-4000-8000-000000000002
+  departmentId: cccccccc-0000-4000-8000-000000000001
+  programmeId: dddddddd-0000-4000-8000-000000000001
+  termId: ffffffff-0000-4000-8000-000000000001
+  courseId: ""
+  courseCode: ""
+  sectionId: ""
+  studentId: ""
+  studentNumber: ""
+  enrollmentId: ""

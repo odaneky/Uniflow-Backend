@@ -1,0 +1,31 @@
+package com.university.lms.enrollment.domain;
+
+import com.university.lms.common.exception.ErrorCode;
+
+/** Error vocabulary owned by the enrolment module. */
+public enum EnrollmentErrorCode implements ErrorCode {
+
+    ENROLLMENT_NOT_FOUND,
+    ENROLLMENT_ALREADY_EXISTS,
+    ENROLLMENT_STUDENT_NOT_FOUND,
+    ENROLLMENT_STUDENT_NOT_ELIGIBLE,
+    ENROLLMENT_SECTION_NOT_FOUND,
+    ENROLLMENT_SECTION_NOT_OPEN,
+    ENROLLMENT_SECTION_FULL,
+    ENROLLMENT_REGISTRATION_CLOSED,
+    ENROLLMENT_ADD_DROP_CLOSED,
+    ENROLLMENT_FINANCIAL_HOLD,
+    ENROLLMENT_PREREQUISITE_NOT_MET,
+    ENROLLMENT_CREDIT_LOAD_EXCEEDED,
+    ENROLLMENT_CREDIT_LOAD_BELOW_MINIMUM,
+    ENROLLMENT_TIMETABLE_CLASH,
+    ENROLLMENT_COMPONENT_ORDER,
+    ENROLLMENT_NOT_ON_PROGRAMME,
+    ENROLLMENT_CORRECTION_CLOSED,
+    INVALID_ENROLLMENT_STATE;
+
+    @Override
+    public String code() {
+        return name();
+    }
+}

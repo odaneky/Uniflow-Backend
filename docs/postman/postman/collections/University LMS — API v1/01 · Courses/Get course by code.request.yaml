@@ -1,0 +1,12 @@
+$kind: http-request
+description: Lookup by the natural key. Case-insensitive.
+url: "{{baseUrl}}/api/v1/courses/by-code/{{courseCode}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('same course', () => pm.expect(pm.response.json().id)
+          .to.eql(pm.collectionVariables.get('courseId')));
+    language: text/javascript
+order: 6000

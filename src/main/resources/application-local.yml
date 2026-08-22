@@ -1,0 +1,65 @@
+# Local development against the PostgreSQL instance in docker-compose.yml.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/university_lms}
+    username: ${DB_USERNAME:lms}
+    password: ${DB_PASSWORD:lms}
+
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Keycloak from docker-compose.yml. Defaults are safe to commit precisely because they point at
+  # a throwaway local container; nothing here is a secret and a resource server holds none.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/university-lms}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/university-lms/protocol/openid-connect/certs}
+
+# Administrative access to the identity provider. The secret here is a throwaway matching the
+# imported dev realm; a real environment supplies it from a secret store and never from a file.
+lms:
+  identity:
+    keycloak:
+      enabled: ${KEYCLOAK_ADMIN_ENABLED:true}
+      base-url: ${KEYCLOAK_BASE_URL:http://localhost:8081}
+      realm: ${KEYCLOAK_REALM:university-lms}
+      client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:university-lms-admin}
+      client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:dev-only-secret-change-me}
+
+logging:
+  level:
+    com.university.lms: DEBUG
+    # Says exactly why a token was rejected — expiry, signature, issuer, audience. Invaluable
+    # locally, and never enabled in production where it would log token contents.
+    org.springframework.security.oauth2.server.resource: DEBUG
+    org.hibernate.SQL: DEBUG
+    # Uncomment when diagnosing a specific query; extremely verbose.
+    # org.hibernate.orm.jdbc.bind: TRACE
+
+# Loopback scrape + OTLP to the compose profile `obs` collector. Production does not fall back here.
+management:
+  server:
+    port: 8082
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+    metrics:
+      export:
+        enabled: true
+        url: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}

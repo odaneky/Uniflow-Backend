@@ -1,0 +1,52 @@
+# Integration-test profile. The datasource is supplied at runtime by Testcontainers
+# (see AbstractPostgresIntegrationTest), so no URL is hard-coded here.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    clean-disabled: false
+
+  # Never contacted. The decoder is built lazily from the JWK set URI, and tests either bypass it
+  # (`SecurityMockMvcRequestPostProcessors.jwt()`) or call services directly — so no test depends
+  # on a running Keycloak. The values exist so the context can start.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081/realms/university-lms
+          jwk-set-uri: http://localhost:8081/realms/university-lms/protocol/openid-connect/certs
+
+logging:
+  level:
+    com.university.lms: DEBUG
+    org.testcontainers: INFO
+    com.github.dockerjava: WARN
+
+# Identity-provider administration is off for tests. Nothing here should depend on a running
+# Keycloak: token validation is exercised with stubbed principals, and the administrative paths are
+# covered by tests that supply their own IdentityProvider double.
+lms:
+  storage:
+    local-root: ./target/test-blobs
+    max-upload-bytes: 12582912
+  identity:
+    keycloak:
+      enabled: false
+      base-url: http://localhost:8081
+      realm: university-lms
+
+management:
+  tracing:
+    enabled: false
+    sampling:
+      probability: 0.0
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  prometheus:
+    metrics:
+      export:
+        enabled: false

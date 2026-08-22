@@ -1,0 +1,3 @@
+$kind: collection
+description: "Registration — the concurrency-critical path. Requires: an ACTIVE course with an OPEN section (folder 01), an ACTIVE student (folder 02), and a term whose registration window is open."
+order: 4000

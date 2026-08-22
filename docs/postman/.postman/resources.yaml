@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 294b9499-e915-4c47-9ff3-cbd9df708454
+
+localResources:
+  collections:
+    - ../University-LMS.postman_collection.json
+  environments:
+    - ../University-LMS.postman_environment.json
+
+cloudResources:
+  collections:
+    ../postman/collections/University LMS — API v1: 3c76c1e5-f868-4fcd-8655-f7b03ef5125b

@@ -1,0 +1,11 @@
+$kind: http-request
+description: Actuator health. Returns 200 with {"status":"UP"} once Flyway has migrated and Hibernate has validated the schema against the migrations.
+url: "{{baseUrl}}/actuator/health"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('status is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));
+    language: text/javascript
+order: 1000

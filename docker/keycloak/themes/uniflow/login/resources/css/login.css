@@ -1,0 +1,497 @@
+/*
+  UniFlow Keycloak login theme.
+  Brand tokens live on :root — change these to re-skin without touching templates.
+*/
+
+:root {
+  --uf-font: Inter, ui-sans-serif, system-ui, sans-serif;
+  --uf-bg: #fafafa;
+  --uf-bg-accent: #f4f4f5;
+  --uf-surface: #ffffff;
+  --uf-text: #171717;
+  --uf-muted: #737373;
+  --uf-border: #e5e5e5;
+  --uf-primary: #171717;
+  --uf-primary-text: #fafafa;
+  --uf-accent: #3b82f6;
+  --uf-danger: #b42318;
+  --uf-danger-bg: #fef3f2;
+  --uf-success: #027a48;
+  --uf-success-bg: #ecfdf3;
+  --uf-warning: #b54708;
+  --uf-warning-bg: #fffaeb;
+  --uf-info: #026aa2;
+  --uf-info-bg: #f0f9ff;
+  --uf-radius: 8px;
+  --uf-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 8px 24px rgb(0 0 0 / 6%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --uf-bg: #0a0a0a;
+    --uf-bg-accent: #171717;
+    --uf-surface: #111111;
+    --uf-text: #fafafa;
+    --uf-muted: #a3a3a3;
+    --uf-border: #262626;
+    --uf-primary: #fafafa;
+    --uf-primary-text: #171717;
+    --uf-danger: #f97066;
+    --uf-danger-bg: #3b1210;
+    --uf-success: #6ce9a6;
+    --uf-success-bg: #053321;
+    --uf-warning: #fdb022;
+    --uf-warning-bg: #3b2507;
+    --uf-info: #7cd4fd;
+    --uf-info-bg: #062c41;
+    --uf-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body.uf-body {
+  font-family: var(--uf-font);
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: -0.011em;
+  color: var(--uf-text);
+  background:
+    radial-gradient(1200px 600px at 50% -10%, var(--uf-bg-accent), transparent 60%),
+    var(--uf-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.uf-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.uf-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+}
+
+.uf-shell {
+  width: 100%;
+  max-width: 400px;
+}
+
+.uf-card {
+  background: var(--uf-surface);
+  border: 1px solid var(--uf-border);
+  border-radius: var(--uf-radius);
+  box-shadow: var(--uf-shadow);
+  padding: 40px 32px 32px;
+}
+
+.uf-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.uf-logo {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.uf-wordmark {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--uf-muted);
+}
+
+.uf-card-head h1,
+#kc-page-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.uf-lede {
+  margin: 8px 0 24px;
+  color: var(--uf-muted);
+  font-size: 15px;
+}
+
+.uf-required {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--uf-muted);
+}
+
+.uf-required-star {
+  color: var(--uf-danger);
+}
+
+.uf-field {
+  margin: 0 0 20px;
+}
+
+.uf-label,
+label.uf-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  color: var(--uf-muted);
+}
+
+.uf-input,
+input.uf-input,
+select.uf-input,
+textarea.uf-input {
+  display: block;
+  width: 100%;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--uf-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--uf-text);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.uf-input:focus,
+input.uf-input:focus {
+  border-bottom-color: var(--uf-text);
+}
+
+.uf-input[aria-invalid="true"] {
+  border-bottom-color: var(--uf-danger);
+}
+
+.uf-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uf-input-row .uf-input {
+  flex: 1;
+}
+
+.uf-reveal {
+  flex: none;
+  height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--uf-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.uf-reveal:hover,
+.uf-reveal:focus-visible {
+  color: var(--uf-text);
+}
+
+.uf-icon-show,
+.uf-icon-hide {
+  font-style: normal;
+  font-size: 13px;
+}
+
+.uf-icon-show::before {
+  content: "Show";
+}
+
+.uf-icon-hide::before {
+  content: "Hide";
+}
+
+.uf-error,
+#input-error,
+[id^="input-error"] {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--uf-danger);
+}
+
+.uf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+  font-size: 13.5px;
+}
+
+.uf-options-end {
+  margin-left: auto;
+}
+
+.uf-actions {
+  margin-top: 8px;
+}
+
+.uf-btn,
+input.uf-btn,
+button.uf-btn,
+a.uf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.uf-btn--primary,
+input.uf-btn--primary {
+  background: var(--uf-primary);
+  color: var(--uf-primary-text);
+}
+
+.uf-btn--primary:hover,
+input.uf-btn--primary:hover {
+  filter: brightness(1.08);
+}
+
+.uf-btn--primary:disabled,
+input.uf-btn--primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.uf-btn--ghost,
+a.uf-btn--ghost {
+  background: transparent;
+  border-color: var(--uf-border);
+  color: var(--uf-text);
+}
+
+.uf-btn--block,
+input.uf-btn--block {
+  width: 100%;
+}
+
+a {
+  color: var(--uf-text);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.uf-info {
+  margin-top: 24px;
+  font-size: 14px;
+  color: var(--uf-muted);
+}
+
+.uf-alert {
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.uf-alert--error,
+.uf-alert.uf-alert--error {
+  background: var(--uf-danger-bg);
+  color: var(--uf-danger);
+}
+
+.uf-alert--success {
+  background: var(--uf-success-bg);
+  color: var(--uf-success);
+}
+
+.uf-alert--warning {
+  background: var(--uf-warning-bg);
+  color: var(--uf-warning);
+}
+
+.uf-alert--info {
+  background: var(--uf-info-bg);
+  color: var(--uf-info);
+}
+
+#kc-username {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+#kc-attempted-username {
+  margin: 0;
+  font-size: 15px;
+}
+
+.uf-restart-link {
+  font-size: 13px;
+  color: var(--uf-muted);
+}
+
+.uf-social {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--uf-border);
+}
+
+.uf-social-label {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--uf-muted);
+}
+
+.uf-social-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.uf-social-list--grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.uf-check-label,
+.checkbox label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--uf-muted);
+  cursor: pointer;
+}
+
+.uf-otp-radio {
+  position: absolute;
+  opacity: 0;
+}
+
+.uf-otp-choice {
+  display: block;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--uf-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.uf-otp-radio:checked + .uf-otp-choice,
+.uf-otp-radio:focus-visible + .uf-otp-choice {
+  border-color: var(--uf-text);
+}
+
+.uf-auth-list {
+  display: grid;
+  gap: 8px;
+}
+
+.uf-auth-item {
+  display: block;
+  padding: 12px;
+  border: 1px solid var(--uf-border);
+  border-radius: 6px;
+  color: inherit;
+}
+
+.uf-auth-title {
+  font-weight: 500;
+}
+
+.uf-auth-desc {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--uf-muted);
+}
+
+.uf-locale {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.uf-locale button {
+  border: 0;
+  background: none;
+  color: var(--uf-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.uf-locale-menu {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  border: 1px solid var(--uf-border);
+  border-radius: 6px;
+  background: var(--uf-surface);
+}
+
+.uf-locale-item {
+  display: block;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.uf-recovery-list {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  padding: 12px;
+  background: var(--uf-bg-accent);
+  border-radius: 6px;
+}
+
+#kc-header {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .uf-card {
+    padding: 28px 20px 24px;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .uf-page {
+    align-items: flex-start;
+    padding-top: 48px;
+  }
+}

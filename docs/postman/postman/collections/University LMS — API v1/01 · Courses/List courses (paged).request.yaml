@@ -1,0 +1,35 @@
+$kind: http-request
+description: |-
+  Catalog browsing. Always paged — the endpoint cannot be coerced into returning the whole catalog. size is capped at 100 by spring.data.web.pageable.max-page-size; ask for more and you still get 100.
+
+  Returns the compact summary shape, which omits the description.
+url: "{{baseUrl}}/api/v1/courses?page=0&size=20&sort=courseCode,asc"
+method: GET
+queryParams:
+  - key: page
+    value: "0"
+  - key: size
+    value: "20"
+  - key: sort
+    value: courseCode,asc
+  - key: status
+    value: ACTIVE
+    disabled: true
+  - key: search
+    value: software
+    disabled: true
+  - key: departmentId
+    value: "{{departmentId}}"
+    disabled: true
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('transport page shape, not Spring internals', () => {
+          ['content','page','size','totalElements','totalPages','first','last']
+              .forEach(k => pm.expect(b).to.have.property(k));
+          pm.expect(b).to.not.have.property('pageable');
+      });
+    language: text/javascript
+order: 7000

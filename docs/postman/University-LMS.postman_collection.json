@@ -1,0 +1,3935 @@
+{
+  "info": {
+    "_postman_id": "172f56af-b2b7-4b86-9e32-f6f9a8215c71",
+    "name": "University LMS \u2014 API v1",
+    "description": "REST API for the University LMS modular monolith.\n\n## Start\n\nAll commands run from `UniPro-Backend/`.\n\n```\ndocker compose up -d\n./mvnw spring-boot:run\n```\n\nThat is the whole setup. **No SQL seeding is required** \u2014 folder `01 \u00b7 Reference data` creates the users, faculty, department, programme, academic year and term through the API, and captures every id into a collection variable for the folders that follow.\n\n## Order\n\nRun the folders top to bottom, or use the Collection Runner. Two orderings are real constraints rather than convention:\n\n- A course is created **DRAFT** and must be **ACTIVE** before a section can be added.\n- A section is created **PLANNED** and must be **OPEN**, *and* the term's registration window must be open, before anyone can enrol.\n\nCodes, usernames and student numbers are randomised by pre-request scripts, so the collection is re-runnable without tripping unique indexes.\n\n## Authentication\n\nThere is none yet \u2014 `/api/v1/**` is `permitAll()`. That is a scaffolding decision and a deployment blocker, tracked as ROADMAP P0.1. When JWT lands, set a bearer token at collection level and every request inherits it.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 \u00b7 Health",
+      "description": "Confirms the app is up, Flyway has migrated, and Hibernate validated the schema.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "The only endpoint outside /api/v1 that is deliberately public."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 \u00b7 Reference data (run first)",
+      "description": "Builds the academic structure a course needs, entirely through the API.\n\nA course belongs to a **department**, a section is scheduled in an **academic term**, and a student is admitted to a **programme** \u2014 so none of those can be created until this folder has run. Every id is captured into a collection variable, so later folders just work.\n\nRun top to bottom once against a fresh database. Codes are randomised per run so the folder can be re-run without tripping the unique indexes.",
+      "item": [
+        {
+          "name": "Create lecturer account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Accounts are created **PENDING_ACTIVATION** \u2014 existing is not the same as being allowed to sign in. Note the response has no password field: the hash is never serialised.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{lecturerUsername}}\",\n  \"email\": \"{{lecturerUsername}}@university.test\",\n  \"password\": \"correct-horse-battery-staple\",\n  \"firstName\": \"Michael\",\n  \"lastName\": \"Chen\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = Math.random().toString(36).slice(2, 7);",
+                  "pm.collectionVariables.set('lecturerUsername', 'chen' + t);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('lecturerUserId', b.id);",
+                  "console.log('lecturerUserId =', b.id);",
+                  "pm.test('starts inactive', () => pm.expect(b.status).to.eql('PENDING_ACTIVATION'));",
+                  "pm.test('never returns the password hash', () => {",
+                  "    pm.expect(Object.keys(b)).to.not.include.members(['password','passwordHash']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activate lecturer",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{lecturerUserId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{lecturerUserId}}",
+                "activate"
+              ]
+            },
+            "description": "Provisioning and enabling access are separate events, so each is independently auditable."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('now ACTIVE', () => pm.expect(pm.response.json().status).to.eql('ACTIVE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grant LECTURER role",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{lecturerUserId}}/roles?role=LECTURER",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{lecturerUserId}}",
+                "roles"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "LECTURER"
+                }
+              ]
+            },
+            "description": "Roles are rows, not an enum, so the set can change without a redeploy. The six standard roles are installed by V14__seed_reference_data.sql."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create faculty",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/faculties",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "faculties"
+              ]
+            },
+            "description": "Top of the hierarchy. Codes are normalised to upper case on the way in \u2014 otherwise 'comp' and 'COMP' would both satisfy the unique index and become two departments every human reader would call the same one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{facultyCode}}\",\n  \"name\": \"Faculty of Science\",\n  \"deanUserId\": \"{{lecturerUserId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('facultyCode', 'FS' + Math.random().toString(36).slice(2, 7));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('facultyId', b.id);",
+                  "console.log('facultyId =', b.id);",
+                  "pm.test('code stored upper-case', () => pm.expect(b.code).to.eql(b.code.toUpperCase()));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departments"
+              ]
+            },
+            "description": "**This is what a course needs.** `departmentId` from here is the field that was previously impossible to obtain without SQL.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"facultyId\": \"{{facultyId}}\",\n  \"code\": \"{{departmentCode}}\",\n  \"name\": \"Department of Computing\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('departmentCode', 'CP' + Math.random().toString(36).slice(2, 7));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('departmentId', b.id);",
+                  "console.log('departmentId =', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create programme",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programmes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programmes"
+              ]
+            },
+            "description": "A student is admitted to a programme; `programmeId` is required to create one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departmentId\": \"{{departmentId}}\",\n  \"code\": \"{{programmeCode}}\",\n  \"name\": \"BSc Computer Science\",\n  \"degreeAward\": \"BSc (Hons)\",\n  \"totalCredits\": 120,\n  \"durationYears\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('programmeCode', 'BS' + Math.random().toString(36).slice(2, 7));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('programmeId', b.id);",
+                  "console.log('programmeId =', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create academic year",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-years",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-years"
+              ]
+            },
+            "description": "A session such as 2026/2027. `endDate` must be after `startDate`; the service checks it so the error names the field, rather than surfacing as a generic constraint violation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{academicYearCode}}\",\n  \"startDate\": \"2026-09-01\",\n  \"endDate\": \"2027-08-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('academicYearCode', 'Y' + Math.random().toString(36).slice(2, 7));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('academicYearId', b.id);",
+                  "console.log('academicYearId =', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create academic term",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-terms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-terms"
+              ]
+            },
+            "description": "A section is scheduled in a term. Created **closed to registration** \u2014 a term with no window does not accept enrolment. That is deliberate: registration has to be opened, not left open because a field was never set.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"academicYearId\": \"{{academicYearId}}\",\n  \"name\": \"Semester 1\",\n  \"termType\": \"SEMESTER\",\n  \"sequenceNumber\": 1,\n  \"startDate\": \"2026-09-01\",\n  \"endDate\": \"2026-12-20\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('termId', b.id);",
+                  "console.log('termId =', b.id);",
+                  "pm.test('registration starts closed', () => pm.expect(b.registrationOpen).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Open the registration window",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-terms/{{termId}}/registration-window",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-terms",
+                "{{termId}}",
+                "registration-window"
+              ]
+            },
+            "description": "Opens enrolment from yesterday to 90 days out, computed by a pre-request script so the window is always live when you run it.\n\nWithout this, enrolment is refused with 422 ENROLLMENT_REGISTRATION_CLOSED. PUT because it replaces the window wholesale and repeating it leaves the term in the same state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"opensAt\": \"{{registrationOpensAt}}\",\n  \"closesAt\": \"{{registrationClosesAt}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const day = 24 * 60 * 60 * 1000;",
+                  "pm.collectionVariables.set('registrationOpensAt',",
+                  "    new Date(Date.now() - day).toISOString().replace(/\\.\\d{3}/, ''));",
+                  "pm.collectionVariables.set('registrationClosesAt',",
+                  "    new Date(Date.now() + 90 * day).toISOString().replace(/\\.\\d{3}/, ''));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('registration is now open', () =>",
+                  "    pm.expect(pm.response.json().registrationOpen).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List faculties",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/faculties?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "faculties"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Paged, like every collection endpoint."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List departments of the faculty",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departments?facultyId={{facultyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departments"
+              ],
+              "query": [
+                {
+                  "key": "facultyId",
+                  "value": "{{facultyId}}"
+                }
+              ]
+            },
+            "description": "Optional facultyId filter."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('contains the department just created', () =>",
+                  "    pm.expect(pm.response.json().content.map(d => d.id))",
+                  "      .to.include(pm.collectionVariables.get('departmentId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List terms of the year",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-years/{{academicYearId}}/terms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-years",
+                "{{academicYearId}}",
+                "terms"
+              ]
+            },
+            "description": "Not paged: a year holds a handful of terms, bounded by the calendar."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get faculty by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/faculties/{{facultyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "faculties",
+                "{{facultyId}}"
+              ]
+            },
+            "description": "Single faculty."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get department by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departments/{{departmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departments",
+                "{{departmentId}}"
+              ]
+            },
+            "description": "Single department. `id` here is what a course's `departmentId` must be."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get programme by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programmes/{{programmeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programmes",
+                "{{programmeId}}"
+              ]
+            },
+            "description": "Single programme. `id` here is what a student's `programmeId` must be."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List programmes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programmes?departmentId={{departmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programmes"
+              ],
+              "query": [
+                {
+                  "key": "departmentId",
+                  "value": "{{departmentId}}"
+                }
+              ]
+            },
+            "description": "Paged; optional departmentId filter."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List academic years",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-years?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-years"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Paged, newest first."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get academic year by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-years/{{academicYearId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-years",
+                "{{academicYearId}}"
+              ]
+            },
+            "description": "Single year."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get academic term by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-terms/{{termId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-terms",
+                "{{termId}}"
+              ]
+            },
+            "description": "Single term. `registrationOpen` is evaluated server-side at request time \u2014 the term owns that rule rather than leaving the client to derive it from two timestamps."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('registration is open', () =>",
+                  "    pm.expect(pm.response.json().registrationOpen).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Paged. No password hash appears in any representation."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('no credential fields leak', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['passwordhash','\"password\"','$2a$'].forEach(t =>",
+                  "        pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get user by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{lecturerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{lecturerUserId}}"
+              ]
+            },
+            "description": "Single account."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get user roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{lecturerUserId}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{lecturerUserId}}",
+                "roles"
+              ]
+            },
+            "description": "Role names currently held. Fetch-joined server-side, so this is one query, not one per grant."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('holds LECTURER', () =>",
+                  "    pm.expect(pm.response.json()).to.include('LECTURER'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 \u00b7 Courses",
+      "description": "Needs `departmentId` and `termId` from folder 01.\n\nA course is created DRAFT and must be ACTIVE before a section can be scheduled; a section is created PLANNED and must be OPEN before anyone can enrol.",
+      "item": [
+        {
+          "name": "Create course",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "Uses `departmentId` captured in folder 01. A course is the durable catalog definition \u2014 not the thing students join. That is a section.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseCode\": \"{{courseCode}}\",\n  \"title\": \"Software Engineering\",\n  \"description\": \"Requirements, design, testing and delivery of software systems.\",\n  \"credits\": 3,\n  \"level\": 3,\n  \"departmentId\": \"{{departmentId}}\",\n  \"components\": [\"LECTURE\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('courseCode', 'COMP' + (Math.floor(Math.random()*9000)+1000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('courseId', b.id);",
+                  "console.log('courseId =', b.id);",
+                  "pm.collectionVariables.set('courseCode', b.courseCode);",
+                  "pm.test('starts DRAFT', () => pm.expect(b.status).to.eql('DRAFT'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activate course",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/{{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{courseId}}"
+              ]
+            },
+            "description": "DRAFT -> ACTIVE. Required before a section can exist (422 COURSE_NOT_OFFERABLE otherwise).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ACTIVE', () => pm.expect(pm.response.json().status).to.eql('ACTIVE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add section",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/{{courseId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{courseId}}",
+                "sections"
+              ]
+            },
+            "description": "Scheduled into `termId` from folder 01, taught by `lecturerUserId`. Capacity is small so the 'section full' path is easy to demonstrate.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"academicTermId\": \"{{termId}}\",\n  \"sectionCode\": \"A\",\n  \"capacity\": 2,\n  \"lecturerUserId\": \"{{lecturerUserId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('sectionId', b.id);",
+                  "console.log('sectionId =', b.id);",
+                  "pm.test('PLANNED with no one enrolled', () => {",
+                  "    pm.expect(b.status).to.eql('PLANNED');",
+                  "    pm.expect(b.enrolledCount).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Open section for enrolment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/sections/{{sectionId}}/open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "sections",
+                "{{sectionId}}",
+                "open"
+              ]
+            },
+            "description": "PLANNED -> OPEN. The status is part of the guarded UPDATE's WHERE clause, so a section cannot be enrolled into between the check and the write."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('OPEN', () => pm.expect(pm.response.json().status).to.eql('OPEN'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get course by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/{{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{courseId}}"
+              ]
+            },
+            "description": "Full representation."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get course by code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/by-code/{{courseCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "by-code",
+                "{{courseCode}}"
+              ]
+            },
+            "description": "Lookup by natural key, case-insensitive."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List catalog (paged)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses?page=0&size=20&sort=courseCode,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "courseCode,asc"
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "software",
+                  "disabled": true
+                },
+                {
+                  "key": "departmentId",
+                  "value": "{{departmentId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Always paged; `size` is capped at 100 server-side.\n\nThis exact request used to return 500 \u2014 a filter parameter Hibernate could not type was bound as `bytea`, and PostgreSQL has no `lower(bytea)`. It only failed when no search term was supplied, which is why it went unnoticed."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK \u2014 the regression that caused the 500', () =>",
+                  "    pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('transport page shape, not Spring internals', () => {",
+                  "    ['content','page','size','totalElements','totalPages','first','last']",
+                  "        .forEach(k => pm.expect(body).to.have.property(k));",
+                  "    pm.expect(body).to.not.have.property('pageable');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search escapes LIKE wildcards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses?search=%25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "%25"
+                }
+              ]
+            },
+            "description": "`%` is a LIKE wildcard. It is escaped, so this matches courses whose title literally contains a percent sign \u2014 not the entire catalog.\n\nNote the value is sent as `%25` \u2014 a bare `%` is a malformed percent-escape in a URL and never reaches the server as a literal percent sign."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test(\"'%' is literal, not a wildcard\", () =>",
+                  "    pm.expect(pm.response.json().totalElements).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List sections of a course",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/{{courseId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{courseId}}",
+                "sections"
+              ]
+            },
+            "description": "Not paged \u2014 bounded by the timetable."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 \u00b7 Students",
+      "description": "The student record is created for the *Keycloak* student account, not for a locally created user. That is what makes the account loggable \u2014 and it is the only way folder 07 can demonstrate owner-scoping, which needs a caller who genuinely owns a record.",
+      "item": [
+        {
+          "name": "Resolve the Keycloak student to a local user (GET /me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": "First request from this subject provisions the local user row. Everything downstream hangs off the userId it returns \u2014 without it an authenticated student holds no id they could pass to any endpoint.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const me = pm.response.json();",
+                  "pm.collectionVariables.set('studentUserId', me.userId);",
+                  "console.log('studentUserId =', me.userId);",
+                  "pm.test('the token resolved to a domain identity', () => {",
+                  "    pm.expect(me.userId).to.be.a('string');",
+                  "    pm.expect(me.subject).to.be.a('string');",
+                  "});",
+                  "pm.test('roles come from the token', () =>",
+                  "    pm.expect(me.roles).to.include('STUDENT'));",
+                  "pm.test('no credential material', () => {",
+                  "    ['password','passwordHash','credentials'].forEach(k =>",
+                  "        pm.expect(me).to.not.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create the student record (idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students"
+              ]
+            },
+            "description": "Accepts 409 as well as 201. The student record now belongs to the *Keycloak* student account, which is a fixed identity \u2014 so unlike a randomised course code it can only be created once per database. Tolerating the duplicate is what keeps the collection re-runnable.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{studentUserId}}\",\n  \"studentNumber\": \"{{studentNumber}}\",\n  \"programmeId\": \"{{programmeId}}\",\n  \"admissionDate\": \"2025-09-01\",\n  \"expectedGraduationDate\": \"2028-06-30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Only used on the 201 path; ignored when this student already has a record.",
+                  "// Padded because the number must be exactly 10 digits.",
+                  "pm.collectionVariables.set('studentNumber',",
+                  "    '20' + String(Math.floor(Math.random() * 100000000)).padStart(8, '0'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 on a fresh database, 409 if this student already exists', () =>",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]));",
+                  "// studentId is deliberately NOT set here \u2014 the next request reads it back, so both paths",
+                  "// end up with the same value rather than only the 201 path having one."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it back via /students/me (sets studentId)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "me"
+              ]
+            },
+            "description": "The single source of truth for studentId, whether the record was just created or already existed."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.collectionVariables.set('studentId', s.id);",
+                  "pm.collectionVariables.set('studentNumber', s.studentNumber);",
+                  "console.log('studentId =', s.id);",
+                  "pm.test('the caller owns this record', () => pm.expect(s.id).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get student by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/{{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "{{studentId}}"
+              ]
+            },
+            "description": "Full record."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get student by number",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/by-number/{{studentNumber}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "by-number",
+                "{{studentNumber}}"
+              ]
+            },
+            "description": "Lookup by the identifier staff actually use."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List students (paged)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "disabled": true
+                },
+                {
+                  "key": "programmeId",
+                  "value": "{{programmeId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Paged and filterable."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update student (partial)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/{{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "{{studentId}}"
+              ]
+            },
+            "description": "PATCH \u2014 an absent field means unchanged, never cleared.\n\nTry status GRADUATED then ACTIVE: the second is refused with 400 INVALID_STUDENT_STATE, because GRADUATED and WITHDRAWN are terminal and reversing them would invalidate an issued transcript.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedGraduationDate\": \"2029-06-30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 \u00b7 Enrollments",
+      "description": "The concurrency-critical path. Requires an OPEN section (folder 02), an ACTIVE student (folder 03) and an open registration window (folder 01).",
+      "item": [
+        {
+          "name": "Enrol student in section",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            },
+            "description": "The seat is taken by one guarded UPDATE\n  (SET enrolled_count = enrolled_count + 1 WHERE id = ? AND enrolled_count < capacity)\nso two simultaneous callers are serialised by the database and exactly one wins. The seat and the enrolment row commit together: if the insert fails, the rollback returns the seat.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"courseSectionId\": \"{{sectionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('enrollmentId', b.id);",
+                  "console.log('enrollmentId =', b.id);",
+                  "pm.test('ENROLLED', () => pm.expect(b.status).to.eql('ENROLLED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enrol again \u2192 409 duplicate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            },
+            "description": "Same student, same section. The service checks first for a good message, but the unique index on (student_id, course_section_id) is the actual guarantee \u2014 it is what rejects the loser when two identical requests arrive at once.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"courseSectionId\": \"{{sectionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('ENROLLMENT_ALREADY_EXISTS', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('ENROLLMENT_ALREADY_EXISTS'));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify the seat was consumed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/{{courseId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{courseId}}",
+                "sections"
+              ]
+            },
+            "description": "enrolledCount is the counter the guarded UPDATE maintains; a CHECK constraint keeps it inside 0..capacity regardless of how it is written."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json().find(x => x.id === pm.collectionVariables.get('sectionId'));",
+                  "pm.test('one seat taken', () => {",
+                  "    pm.expect(s.enrolledCount).to.eql(1);",
+                  "    pm.expect(s.availableSeats).to.eql(s.capacity - 1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get enrolment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollmentId}}"
+              ]
+            },
+            "description": "Single record."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List enrolments (paged)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments?studentId={{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ],
+              "query": [
+                {
+                  "key": "studentId",
+                  "value": "{{studentId}}"
+                },
+                {
+                  "key": "courseSectionId",
+                  "value": "{{sectionId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "ENROLLED",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Filter by student, section or status."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Drop enrolment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/drop",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollmentId}}",
+                "drop"
+              ]
+            },
+            "description": "ENROLLED -> DROPPED, seat returned.\n\nLifecycle changes are named actions rather than a PATCH taking a status: dropping and withdrawing differ academically, and an endpoint accepting an arbitrary target would invite transitions the domain forbids. DROPPED is terminal \u2014 run it twice and the second gets 422."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('DROPPED and ended', () => {",
+                  "    pm.expect(b.status).to.eql('DROPPED');",
+                  "    pm.expect(b.endedAt).to.not.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Withdraw (alternative terminal state)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/withdraw",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollmentId}}",
+                "withdraw"
+              ]
+            },
+            "description": "Leaving after the drop window \u2014 recorded on the transcript, seat still released. Run on a fresh enrolment; after a drop this correctly returns 422."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 if fresh, 422 if already terminal', () =>",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 422]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete (alternative terminal state)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollmentId}}",
+                "complete"
+              ]
+            },
+            "description": "ENROLLED -> COMPLETED at the end of teaching. Also terminal."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 if enrolled, 422 if already terminal', () =>",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 422]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 \u00b7 Error contract",
+      "description": "Every failure returns the same envelope: timestamp, status, code, message, path, traceId, errors[]. Clients branch on `code`, never on prose. Stack traces, SQL and constraint names never appear \u2014 they go to the log under the same traceId.",
+      "item": [
+        {
+          "name": "Validation failure \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "Empty body. One entry per rejected field, with the rejected value \u2014 except where the field name looks like a secret, which is redacted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "const b = pm.response.json();",
+                  "pm.test('VALIDATION_ERROR with field detail', () => {",
+                  "    pm.expect(b.code).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(b.errors).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Password never echoed back \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "A too-short password. The rule is reported, but the value is **not** reflected into the response body or the access log \u2014 the field name is recognised as sensitive.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"someone\",\n  \"email\": \"someone@university.test\",\n  \"password\": \"short\",\n  \"firstName\": \"A\",\n  \"lastName\": \"B\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('password rule reported', () => {",
+                  "    const f = pm.response.json().errors.map(e => e.field);",
+                  "    pm.expect(f).to.include('password');",
+                  "});",
+                  "pm.test('rejected value is redacted', () => {",
+                  "    const e = pm.response.json().errors.find(x => x.field === 'password');",
+                  "    pm.expect(e.rejectedValue, 'password must not be echoed').to.be.undefined;",
+                  "    pm.expect(pm.response.text()).to.not.include('short');",
+                  "});",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown facultyId \u2192 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/departments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "departments"
+              ]
+            },
+            "description": "Referential checks happen in the service, so the error names the missing thing rather than surfacing as a foreign-key violation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"facultyId\": \"11111111-2222-4333-8444-555555555555\",\n  \"code\": \"GHOST\",\n  \"name\": \"Ghost\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('FACULTY_NOT_FOUND', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('FACULTY_NOT_FOUND'));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bad date range \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-years",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-years"
+              ]
+            },
+            "description": "endDate before startDate. Checked in the service so the message is actionable; a CHECK constraint also exists to stop bad data arriving by any other route.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"BADYR\",\n  \"startDate\": \"2027-01-01\",\n  \"endDate\": \"2026-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('INVALID_DATE_RANGE', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('INVALID_DATE_RANGE'));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Malformed JSON \u2192 400",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"title\": ",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Unparseable body. The parser's message can quote the payload, so it is logged and never returned."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('MALFORMED_REQUEST', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('MALFORMED_REQUEST'));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown id \u2192 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/11111111-2222-4333-8444-555555555555",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "11111111-2222-4333-8444-555555555555"
+              ]
+            },
+            "description": "Well-formed but unknown UUID; module-owned code."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('STUDENT_NOT_FOUND', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('STUDENT_NOT_FOUND'));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Malformed id \u2192 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/not-a-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "not-a-uuid"
+              ]
+            },
+            "description": "Type mismatch on a path variable, handled as a 400 rather than a 500."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('VALIDATION_ERROR', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate course code \u2192 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "Re-sends the code created in folder 02.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseCode\": \"{{courseCode}}\",\n  \"title\": \"Duplicate\",\n  \"credits\": 3,\n  \"level\": 3,\n  \"departmentId\": \"{{departmentId}}\",\n  \"components\": [\"LECTURE\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('COURSE_CODE_ALREADY_EXISTS', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('COURSE_CODE_ALREADY_EXISTS'));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Method not allowed \u2192 405",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/{{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{courseId}}"
+              ]
+            },
+            "description": "No DELETE on a course: catalog entries are retired, never removed, so historical results stay interpretable."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('405', () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 \u00b7 Section lifecycle (run last)",
+      "description": "Closing a section stops further enrolment, so this is kept last to avoid breaking a full run.",
+      "item": [
+        {
+          "name": "Close section",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses/sections/{{sectionId}}/close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "sections",
+                "{{sectionId}}",
+                "close"
+              ]
+            },
+            "description": "OPEN -> CLOSED."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('CLOSED', () => pm.expect(pm.response.json().status).to.eql('CLOSED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enrol into closed section \u2192 refused",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            },
+            "description": "Confirms the status gate.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"courseSectionId\": \"{{sectionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 or 409', () => pm.expect(pm.response.code).to.be.oneOf([422, 409]));",
+                  "pm.test('refused for a stated reason', () => pm.expect(pm.response.json().code)",
+                  "    .to.be.oneOf(['ENROLLMENT_SECTION_NOT_OPEN','ENROLLMENT_ALREADY_EXISTS']));",
+                  "const b = pm.response.json();",
+                  "const errBody = pm.response.json();",
+                  "pm.test('standard error envelope', () => {",
+                  "    ['timestamp','status','code','message','path','traceId']",
+                  "        .forEach(k => pm.expect(errBody).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(t => pm.expect(raw, 'leaked: ' + t).to.not.include(t));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Suspend the student account",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{studentUserId}}/suspend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{studentUserId}}",
+                "suspend"
+              ]
+            },
+            "description": "ACTIVE -> SUSPENDED. Kept in the last folder because it blocks the account; anything earlier would break the run."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('SUSPENDED', () => pm.expect(pm.response.json().status).to.eql('SUSPENDED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 \u00b7 Authentication & authorization",
+      "description": "Proves the security rules are real. Every other folder runs as admin.lms (SYSTEM_ADMIN); these requests deliberately arrive with no token, a junk token, or a token whose role is insufficient. A green run here is the difference between 'auth is configured' and 'auth works'.",
+      "item": [
+        {
+          "name": "No token \u2192 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "The catalog is readable by any authenticated user \u2014 but only an authenticated one.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));",
+                  "pm.test('AUTHENTICATION_REQUIRED', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('AUTHENTICATION_REQUIRED'));",
+                  "pm.test('carries a bearer challenge', () =>",
+                  "    pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer'));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(n => pm.expect(raw).to.not.include(n));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Junk token \u2192 401 with no reason disclosed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "An unauthenticated caller must not be able to tell 'expired' from 'bad signature'.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not.a.token",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));",
+                  "pm.test('AUTHENTICATION_REQUIRED', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('AUTHENTICATION_REQUIRED'));",
+                  "// Regression test. The resource-server configurer installs its own entry point that",
+                  "// wins over the global one, and its default answers with an empty body and a header",
+                  "// naming the exact decode failure.",
+                  "pm.test('the body is the standard envelope, not empty', () =>",
+                  "    pm.expect(pm.response.text().length).to.be.above(0));",
+                  "pm.test('the decode reason is not disclosed', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['malformed','signature','expired','audience','decode'].forEach(w =>",
+                  "        pm.expect(raw).to.not.include(w));",
+                  "    pm.expect(pm.response.headers.get('WWW-Authenticate')).to.not.include('error');",
+                  "});",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(n => pm.expect(raw).to.not.include(n));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student token cannot administer users \u2192 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "The user roster is the whole institution; SYSTEM_ADMIN only.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Deliberately signs in as a weaker role to prove the rule refuses it.",
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('ACCESS_DENIED', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('ACCESS_DENIED'));",
+                  "pm.test('403, not 401 \u2014 the token was valid, the role was not', () =>",
+                  "    pm.expect(pm.response.json().status).to.eql(403));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(n => pm.expect(raw).to.not.include(n));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student cannot complete their own enrolment \u2192 403",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollmentId}}",
+                "complete"
+              ]
+            },
+            "description": "The ordering trap in SecurityConfig. POST /enrollments/*/complete must be matched before the general enrolment rule; if the broad rule won, a student could award themselves the credit.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Deliberately signs in as a weaker role to prove the rule refuses it.",
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('ACCESS_DENIED', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('ACCESS_DENIED'));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(n => pm.expect(raw).to.not.include(n));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lecturer cannot open registration \u2192 403",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/academic-terms/{{termId}}/registration-window",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "academic-terms",
+                "{{termId}}",
+                "registration-window"
+              ]
+            },
+            "description": "Opening registration belongs to the registry, not to teaching staff.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"opensAt\":\"2026-01-01T00:00:00Z\",\"closesAt\":\"2026-02-01T00:00:00Z\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Deliberately signs in as a weaker role to prove the rule refuses it.",
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'lecturer' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a lecturer token'); }",
+                  "    pm.collectionVariables.set('lecturerToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('ACCESS_DENIED', () =>",
+                  "    pm.expect(pm.response.json().code).to.eql('ACCESS_DENIED'));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});",
+                  "pm.test('no internal detail leaks', () => {",
+                  "    const raw = pm.response.text().toLowerCase();",
+                  "    ['sqlexception','org.hibernate','org.springframework','select ','insert into','constraint ']",
+                  "        .forEach(n => pm.expect(raw).to.not.include(n));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student may read the catalog \u2192 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/courses?page=0&size=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "The positive case, so the folder cannot pass by denying everything.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Deliberately signs in as a weaker role to prove the rule refuses it.",
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "// The rules must not be so tight that ordinary use breaks: a denial-only test suite",
+                  "// would still pass if everything returned 403.",
+                  "pm.test('a student really can browse courses', () =>",
+                  "    pm.expect(pm.response.json()).to.have.property('content'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student reads their own record via /students/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "me"
+              ]
+            },
+            "description": "The one student endpoint reachable without already knowing an id.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('it is their own record', () =>",
+                  "    pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('studentId')));",
+                  "// 'me' must not be parsed as a UUID \u2014 literal paths beat templates in Spring's matcher.",
+                  "pm.test('not a 400 from UUID parsing', () =>",
+                  "    pm.expect(pm.response.code).to.not.eql(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create a second user (as admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"{{otherUsername}}\",\"email\":\"{{otherUsername}}@university.test\",\"password\":\"Str0ng!Passw0rd\",\"firstName\":\"Other\",\"lastName\":\"Student\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Setup for the refusals below. Its own request, not a pre-request script, so the id it returns is available to the next one."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('otherUsername', 'other' + Math.random().toString(36).slice(2, 8));",
+                  "pm.collectionVariables.set('otherStudentNumber', '20' + String(Math.floor(Math.random() * 100000000)).padStart(8, '0'));  // padded: the number must be exactly 10 digits"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('otherUserId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create a second student record (as admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students"
+              ]
+            },
+            "description": "Setup for the refusals below. Runs as admin, who may create student records.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\":\"{{otherUserId}}\",\"studentNumber\":\"{{otherStudentNumber}}\",\"programmeId\":\"{{programmeId}}\",\"admissionDate\":\"2025-09-01\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('otherStudentId', pm.response.json().id);",
+                  "pm.collectionVariables.set('otherStudentNumber', pm.response.json().studentNumber);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student cannot read another student's record \u2192 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/{{otherStudentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "{{otherStudentId}}"
+              ]
+            },
+            "description": "Role rules cannot express this \u2014 the URL looks identical whoever owns the record.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('ACCESS_DENIED', () => pm.expect(pm.response.json().code).to.eql('ACCESS_DENIED'));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Looking up by student number is not a way around it \u2192 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students/by-number/{{otherStudentNumber}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students",
+                "by-number",
+                "{{otherStudentNumber}}"
+              ]
+            },
+            "description": "A second route to the same record needs the same check, or it is simply a way in.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('ACCESS_DENIED', () => pm.expect(pm.response.json().code).to.eql('ACCESS_DENIED'));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student cannot list all students \u2192 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/students?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "students"
+              ]
+            },
+            "description": "Refused rather than narrowed to one row: a listing that silently returns only the caller invites a client to believe the institution has one student.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('ACCESS_DENIED', () => pm.expect(pm.response.json().code).to.eql('ACCESS_DENIED'));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student cannot enrol a different student \u2192 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            },
+            "description": "The integrity half, and the sharper one. studentId arrives in the request body, so without this check a student can act as anyone by naming them.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"studentId\":\"{{otherStudentId}}\",\"courseSectionId\":\"{{sectionId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('ACCESS_DENIED', () => pm.expect(pm.response.json().code).to.eql('ACCESS_DENIED'));",
+                  "pm.test('standard error envelope', () => {",
+                  "    const e = pm.response.json();",
+                  "    ['timestamp','status','code','message','path','traceId'].forEach(k =>",
+                  "        pm.expect(e).to.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student's enrolment listing is scoped to them",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/enrollments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            },
+            "description": "Forced to the caller rather than refused: an enrolment list is exactly what a student portal needs, so narrowing is the useful behaviour here.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+                  "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+                  "    + '/protocol/openid-connect/token';",
+                  "pm.sendRequest({",
+                  "    url: tokenUrl, method: 'POST',",
+                  "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                  "    body: { mode: 'urlencoded', urlencoded: [",
+                  "        { key: 'grant_type', value: 'password' },",
+                  "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+                  "        { key: 'username', value: 'student' },",
+                  "        { key: 'password', value: 'password' }",
+                  "    ]}",
+                  "}, (err, res) => {",
+                  "    if (err || res.code !== 200) { throw new Error('Could not get a student token'); }",
+                  "    pm.collectionVariables.set('studentToken', res.json().access_token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('only their own enrolments come back', () => {",
+                  "    const own = pm.collectionVariables.get('studentId');",
+                  "    pm.response.json().content.forEach(e => pm.expect(e.studentId).to.eql(own));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "description": "Root of the running app."
+    },
+    {
+      "key": "lecturerUserId",
+      "value": "",
+      "description": "Captured by 'Create lecturer account'."
+    },
+    {
+      "key": "lecturerUsername",
+      "value": "",
+      "description": "Generated per run."
+    },
+    {
+      "key": "facultyId",
+      "value": "",
+      "description": "Captured by 'Create faculty'."
+    },
+    {
+      "key": "facultyCode",
+      "value": "",
+      "description": "Generated per run."
+    },
+    {
+      "key": "departmentId",
+      "value": "",
+      "description": "Captured by 'Create department' \u2014 this is what a course needs."
+    },
+    {
+      "key": "departmentCode",
+      "value": "",
+      "description": "Generated per run."
+    },
+    {
+      "key": "programmeId",
+      "value": "",
+      "description": "Captured by 'Create programme' \u2014 this is what a student needs."
+    },
+    {
+      "key": "programmeCode",
+      "value": "",
+      "description": "Generated per run."
+    },
+    {
+      "key": "academicYearId",
+      "value": "",
+      "description": "Captured by 'Create academic year'."
+    },
+    {
+      "key": "academicYearCode",
+      "value": "",
+      "description": "Generated per run."
+    },
+    {
+      "key": "termId",
+      "value": "",
+      "description": "Captured by 'Create academic term' \u2014 this is what a section needs."
+    },
+    {
+      "key": "registrationOpensAt",
+      "value": "",
+      "description": "Computed by the registration-window request."
+    },
+    {
+      "key": "registrationClosesAt",
+      "value": "",
+      "description": "Computed by the registration-window request."
+    },
+    {
+      "key": "courseId",
+      "value": "",
+      "description": "Captured by 'Create course'."
+    },
+    {
+      "key": "courseCode",
+      "value": "",
+      "description": "Generated by 'Create course'."
+    },
+    {
+      "key": "sectionId",
+      "value": "",
+      "description": "Captured by 'Add section'."
+    },
+    {
+      "key": "studentUserId",
+      "value": "",
+      "description": "Captured by 'Create student account'."
+    },
+    {
+      "key": "studentUsername",
+      "value": "",
+      "description": "Generated per run."
+    },
+    {
+      "key": "studentId",
+      "value": "",
+      "description": "Captured by 'Create student record'."
+    },
+    {
+      "key": "studentNumber",
+      "value": "",
+      "description": "Generated per run."
+    },
+    {
+      "key": "enrollmentId",
+      "value": "",
+      "description": "Captured by 'Enrol student in section'."
+    },
+    {
+      "key": "keycloakUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "keycloakRealm",
+      "value": "university-lms",
+      "type": "string"
+    },
+    {
+      "key": "keycloakClientId",
+      "value": "university-lms-dev",
+      "type": "string"
+    },
+    {
+      "key": "adminUsername",
+      "value": "admin.lms",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "password",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessTokenExpiresAt",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "studentToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lecturerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherStudentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherStudentNumber",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherUsername",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Fetches a Keycloak token once and reuses it until shortly before it expires.",
+          "// Runs before every request, so no folder needs its own sign-in step.",
+          "//",
+          "// admin.lms holds SYSTEM_ADMIN, which is the only role that satisfies every rule this",
+          "// collection exercises. Folder 06 deliberately uses weaker tokens to prove the rules bite.",
+          "const skew = 30 * 1000;",
+          "const expiresAt = Number(pm.collectionVariables.get('accessTokenExpiresAt') || 0);",
+          "",
+          "if (pm.collectionVariables.get('accessToken') && Date.now() < expiresAt - skew) {",
+          "    return;",
+          "}",
+          "",
+          "const tokenUrl = pm.collectionVariables.get('keycloakUrl')",
+          "    + '/realms/' + pm.collectionVariables.get('keycloakRealm')",
+          "    + '/protocol/openid-connect/token';",
+          "",
+          "pm.sendRequest({",
+          "    url: tokenUrl,",
+          "    method: 'POST',",
+          "    header: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+          "    body: { mode: 'urlencoded', urlencoded: [",
+          "        { key: 'grant_type', value: 'password' },",
+          "        { key: 'client_id', value: pm.collectionVariables.get('keycloakClientId') },",
+          "        { key: 'username', value: pm.collectionVariables.get('adminUsername') },",
+          "        { key: 'password', value: pm.collectionVariables.get('adminPassword') }",
+          "    ]}",
+          "}, (err, res) => {",
+          "    if (err || res.code !== 200) {",
+          "        // Fail loudly. Without this the whole run collapses into a wall of 401s and the",
+          "        // real cause \u2014 Keycloak not running \u2014 is nowhere in the output.",
+          "        throw new Error('Could not obtain a token from ' + tokenUrl + '. Is Keycloak up? '",
+          "            + '`docker compose up -d`. ' + (err ? err.message : 'HTTP ' + res.code));",
+          "    }",
+          "    const body = res.json();",
+          "    pm.collectionVariables.set('accessToken', body.access_token);",
+          "    pm.collectionVariables.set('accessTokenExpiresAt', String(Date.now() + body.expires_in * 1000));",
+          "});"
+        ]
+      }
+    }
+  ]
+}

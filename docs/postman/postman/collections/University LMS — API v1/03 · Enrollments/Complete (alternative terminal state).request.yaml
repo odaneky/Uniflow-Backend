@@ -1,0 +1,11 @@
+$kind: http-request
+description: ENROLLED -> COMPLETED at the end of teaching. Also terminal.
+url: "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/complete"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 if enrolled, 422 if already terminal', () =>
+          pm.expect(pm.response.code).to.be.oneOf([200, 422]));
+    language: text/javascript
+order: 8000

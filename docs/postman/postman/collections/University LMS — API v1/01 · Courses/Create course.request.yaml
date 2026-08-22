@@ -1,0 +1,39 @@
+$kind: http-request
+description: |-
+  Creates a catalog course definition. A course is the durable definition — it is NOT the thing students join. That is a section (next requests).
+
+  The course code is randomised by a pre-request script so the request stays re-runnable; sending the same code twice returns 409 (see folder 05).
+url: "{{baseUrl}}/api/v1/courses"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "courseCode": "{{courseCode}}",
+      "title": "Software Engineering",
+      "description": "Requirements, design, testing and delivery of software systems.",
+      "credits": 3,
+      "level": 3,
+      "departmentId": "{{departmentId}}",
+      "components": ["LECTURE"]
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Keep the request re-runnable: a duplicate course code is a 409 by design.
+      const n = Math.floor(Math.random() * 9000) + 1000;
+      pm.collectionVariables.set('courseCode', 'COMP' + n);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      pm.test('Location header points at the new course', () =>
+          pm.expect(pm.response.headers.get('Location')).to.include('/api/v1/courses/'));
+      const b = pm.response.json();
+      pm.test('starts life as DRAFT', () => pm.expect(b.status).to.eql('DRAFT'));
+      pm.collectionVariables.set('courseId', b.id);
+      console.log('courseId =', b.id, '| courseCode =', b.courseCode);
+    language: text/javascript
+order: 1000

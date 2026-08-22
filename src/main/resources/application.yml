@@ -1,0 +1,155 @@
+# Base configuration shared by every profile.
+# Environment-specific datasource / secret wiring lives in the profile files; nothing secret
+# is ever committed here.
+spring:
+  application:
+    name: university-lms
+
+  profiles:
+    default: local
+
+  jpa:
+    # The schema is owned by Flyway. Hibernate only ever checks that the mapping and the migrated
+    # schema agree, and refuses to start when they have drifted.
+    hibernate:
+      ddl-auto: validate
+    # Off deliberately: an open session in the view layer hides N+1 queries behind lazy loads that
+    # fire during serialisation, which is exactly the failure mode this system cannot afford.
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+          time_zone: UTC
+        # TIME columns are wall-clock hours, not instants. Direct JDBC binding stops Hibernate
+        # applying jdbc.time_zone to LocalTime (16:00–19:00 becoming 21:00–00:00 on UTC-5).
+        type:
+          java_time_use_direct_jdbc: true
+        order_inserts: true
+        order_updates: true
+        query:
+          in_clause_parameter_padding: true
+        # Fail loudly in development rather than silently emitting N+1 selects.
+        max_fetch_depth: 3
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+  datasource:
+    hikari:
+      pool-name: lms-pool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 10000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  servlet:
+    multipart:
+      max-file-size: 12MB
+      max-request-size: 12MB
+
+  # Safe pagination defaults so no endpoint can be coerced into returning an unbounded result set.
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
+        one-indexed-parameters: false
+
+# Audience the resource server demands in every token. Spring Boot 3.3 has no standard property
+# for this (`spring.security.oauth2.resourceserver.jwt.audiences` arrives in 3.4), so it lives in
+# the application's own namespace. It is the Keycloak clientId of this API and does not vary by
+# environment; the issuer and JWK set URI do, and are set per profile.
+lms:
+  storage:
+    local-root: ${LMS_STORAGE_ROOT:./data/blobs}
+    max-upload-bytes: 12582912
+  # Single-tenant white-label defaults. Admin overrides via PUT /api/v1/branding (System settings).
+  # Keycloak's uniflow theme reads the same tokens at deploy time — see docker/keycloak/themes/uniflow.
+  branding:
+    product-name: ${LMS_PRODUCT_NAME:Uniflow Campus Portal}
+    wordmark: ${LMS_WORDMARK:University Of Technology}
+    institution-name: ${LMS_INSTITUTION_NAME:The University Of Technology}
+    welcome-title: ${LMS_WELCOME_TITLE:Uniflow Campus Portal}
+    welcome-subtitle: ${LMS_WELCOME_SUBTITLE:Welcome to the University Digital Campus Experience}
+    student-cta-label: ${LMS_STUDENT_CTA:Students}
+    staff-cta-label: ${LMS_STAFF_CTA:Staff & faculty}
+    primary-color: ${LMS_PRIMARY_COLOR:#171717}
+    accent-color: ${LMS_ACCENT_COLOR:#3b82f6}
+    font-sans: ${LMS_FONT_SANS:Inter, ui-sans-serif, system-ui, sans-serif}
+    font-display: ${LMS_FONT_DISPLAY:Inria Sans, Inter, ui-sans-serif, system-ui, sans-serif}
+    logo-url: ${LMS_LOGO_URL:https://www.utech.edu.jm/assets/2023/12/UTech-Logo.webp}
+    favicon-url: ${LMS_FAVICON_URL:https://yt3.googleusercontent.com/connko1b_He_JwFuBO0YniegoXaVMsp6-CB49umTDGsObP25qTa35tJumxdWBrhVIs4E_J58_pA=s900-c-k-c0x00ffffff-no-rj}
+    support-email: ${LMS_SUPPORT_EMAIL:credeer0@gmail.com}
+    contact-email: ${LMS_CONTACT_EMAIL:credeer0@gmail.com}
+    phone-number: ${LMS_PHONE_NUMBER:+1(876)486-6195}
+  security:
+    jwt:
+      audience: ${JWT_AUDIENCE:university-lms-api}
+
+    # Where identity lives inside a token. Defaults are Keycloak's. They are configuration because
+    # the identity provider is expected to change — a realm federated to Active Directory, LDAP or
+    # another university's IdP may present the same facts under different names. Nothing outside
+    # TokenClaimReader and the role converter may name a claim.
+    claims:
+      subject: ${JWT_CLAIM_SUBJECT:sub}
+      username: ${JWT_CLAIM_USERNAME:preferred_username}
+      email: ${JWT_CLAIM_EMAIL:email}
+      email-verified: ${JWT_CLAIM_EMAIL_VERIFIED:email_verified}
+      given-name: ${JWT_CLAIM_GIVEN_NAME:given_name}
+      family-name: ${JWT_CLAIM_FAMILY_NAME:family_name}
+      # The institutional student number, asserted by a Keycloak protocol mapper. Deliberately
+      # distinct from `username`: a username can be renamed, and account correlation must never
+      # follow a rename onto a different person's academic record.
+      student-number: ${JWT_CLAIM_STUDENT_NUMBER:student_number}
+      roles-path: ${JWT_CLAIM_ROLES_PATH:realm_access,roles}
+
+server:
+  error:
+    # Errors are rendered exclusively by GlobalExceptionHandler; the servlet container must never
+    # leak an alternative representation containing internals.
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Prometheus and the verbose metrics dump never ride on the public API port.
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+  prometheus:
+    metrics:
+      export:
+        enabled: false
+  tracing:
+    sampling:
+      probability: 0.0
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  observations:
+    key-values:
+      service.namespace: uniflow
+
+logging:
+  pattern:
+    # traceId ties every log line back to the X-Correlation-Id echoed to the client.
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+  level:
+    com.university.lms: INFO

@@ -1,0 +1,20 @@
+$kind: http-request
+description: |-
+  ENROLLED -> DROPPED, and the seat is returned to the section.
+
+  Lifecycle changes are named actions rather than a PATCH taking a status field: dropping and withdrawing have different academic consequences, and an endpoint accepting an arbitrary target would invite transitions the domain forbids.
+
+  DROPPED is terminal — run this request twice and the second gets 422 INVALID_ENROLLMENT_STATE.
+url: "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/drop"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('DROPPED and ended', () => {
+          pm.expect(b.status).to.eql('DROPPED');
+          pm.expect(b.endedAt).to.not.eql(null);
+      });
+    language: text/javascript
+order: 6000

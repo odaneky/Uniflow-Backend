@@ -1,0 +1,11 @@
+$kind: http-request
+description: "Leaving after the drop window: recorded on the transcript, seat still released. Run this instead of Drop on a fresh enrolment — after a drop it correctly returns 422, since both are terminal."
+url: "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/withdraw"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 if fresh, 422 if already terminal', () =>
+          pm.expect(pm.response.code).to.be.oneOf([200, 422]));
+    language: text/javascript
+order: 7000

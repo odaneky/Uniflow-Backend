@@ -1,0 +1,34 @@
+$kind: http-request
+description: |-
+  Registers an existing identity account as a student.
+
+  Note what is NOT duplicated here: no name, no email. Those belong to the identity module and are resolved through UserDirectory. A student number is randomised per run.
+url: "{{baseUrl}}/api/v1/students"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "userId": "{{userId}}",
+      "studentNumber": "{{studentNumber}}",
+      "programmeId": "{{programmeId}}",
+      "admissionDate": "2025-09-01",
+      "expectedGraduationDate": "2028-06-30"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Unique per run: student_number carries a unique index.
+      pm.collectionVariables.set('studentNumber', '2026' + String(Date.now()).slice(-6));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const b = pm.response.json();
+      pm.test('defaults to ACTIVE standing', () => pm.expect(b.status).to.eql('ACTIVE'));
+      pm.collectionVariables.set('studentId', b.id);
+      console.log('studentId =', b.id, '| studentNumber =', b.studentNumber);
+    language: text/javascript
+order: 1000

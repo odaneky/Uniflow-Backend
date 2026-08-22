@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Schedules an offering of this course in a term. Capacity is deliberately small (2) so the 'section full' path in folder 05 can be demonstrated without scripting 30 requests.
+
+  academicTermId must be a term whose registration window is open — see bootstrap-reference-data.sql.
+url: "{{baseUrl}}/api/v1/courses/{{courseId}}/sections"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "academicTermId": "{{termId}}",
+      "sectionCode": "A",
+      "capacity": 2,
+      "lecturerUserId": "{{lecturerUserId}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const b = pm.response.json();
+      pm.test('starts PLANNED with no one enrolled', () => {
+          pm.expect(b.status).to.eql('PLANNED');
+          pm.expect(b.enrolledCount).to.eql(0);
+          pm.expect(b.availableSeats).to.eql(b.capacity);
+      });
+      pm.collectionVariables.set('sectionId', b.id);
+    language: text/javascript
+order: 3000

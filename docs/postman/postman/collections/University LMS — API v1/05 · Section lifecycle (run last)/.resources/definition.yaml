@@ -1,0 +1,3 @@
+$kind: collection
+description: Closing a section stops further enrolment, so these are kept at the end of the collection to avoid breaking a full top-to-bottom run.
+order: 6000

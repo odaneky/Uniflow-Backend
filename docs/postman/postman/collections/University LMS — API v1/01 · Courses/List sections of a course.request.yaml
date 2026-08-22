@@ -1,0 +1,9 @@
+$kind: http-request
+description: "Not paged, deliberately: the number of sections for one course is bounded by the timetable, unlike the catalog itself."
+url: "{{baseUrl}}/api/v1/courses/{{courseId}}/sections"
+method: GET
+scripts:
+  - type: afterResponse
+    code: pm.test('200 OK', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 8000

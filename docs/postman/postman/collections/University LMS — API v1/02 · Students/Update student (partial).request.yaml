@@ -1,0 +1,20 @@
+$kind: http-request
+description: "Partial update. Try changing status to GRADUATED and then to ACTIVE: the second call is refused with 400 INVALID_STUDENT_STATE, because GRADUATED and WITHDRAWN are terminal — reversing them would invalidate any transcript already issued."
+url: "{{baseUrl}}/api/v1/students/{{studentId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "expectedGraduationDate": "2029-06-30"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('field applied', () => pm.expect(pm.response.json().expectedGraduationDate)
+          .to.eql('2029-06-30'));
+    language: text/javascript
+order: 5000
