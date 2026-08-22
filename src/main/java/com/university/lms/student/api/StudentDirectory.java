@@ -34,4 +34,7 @@ public interface StudentDirectory {
 
     /** User ids of students assigned to this advisor. Empty when none. */
     List<UUID> adviseeUserIdsOf(UUID advisorUserId);
+
+    /** User ids of students in a programme. */
+    List<UUID> userIdsByProgramme(UUID programmeId);
 }

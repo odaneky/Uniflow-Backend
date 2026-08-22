@@ -1,6 +1,7 @@
 package com.university.lms.identity.service;
 
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.identity.domain.UserStatus;
 import com.university.lms.identity.repository.UserRepository;
 import com.university.lms.identity.spi.IdentityProvider;
 import java.util.ArrayList;
@@ -63,5 +64,10 @@ public class DefaultUserDirectory implements UserDirectory {
             log.warn("Could not list users with role {}", role, ex);
             return List.of();
         }
+    }
+
+    @Override
+    public List<UUID> activeUserIds() {
+        return userRepository.findIdsByStatus(UserStatus.ACTIVE);
     }
 }

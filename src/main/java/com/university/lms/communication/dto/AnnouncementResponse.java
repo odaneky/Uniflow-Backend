@@ -11,15 +11,17 @@ public record AnnouncementResponse(
         String body,
         AnnouncementAudience audience,
         UUID audienceRefId,
-        Instant publishedAt) {
+        Instant publishedAt,
+        boolean read) {
 
-    public static AnnouncementResponse from(Announcement announcement) {
+    public static AnnouncementResponse from(Announcement announcement, boolean read) {
         return new AnnouncementResponse(
                 announcement.getId(),
                 announcement.getTitle(),
                 announcement.getBody(),
                 announcement.getAudience(),
                 announcement.getAudienceRefId(),
-                announcement.getPublishedAt());
+                announcement.getPublishedAt(),
+                read);
     }
 }

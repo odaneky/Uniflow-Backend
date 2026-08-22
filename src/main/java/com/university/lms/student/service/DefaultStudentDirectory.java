@@ -67,4 +67,15 @@ public class DefaultStudentDirectory implements StudentDirectory {
                 .map(Student::getUserId)
                 .toList();
     }
+
+    @Override
+    public List<UUID> userIdsByProgramme(UUID programmeId) {
+        if (programmeId == null) {
+            return List.of();
+        }
+        return studentRepository
+                .search(null, programmeId, null, org.springframework.data.domain.Pageable.unpaged())
+                .map(Student::getUserId)
+                .toList();
+    }
 }

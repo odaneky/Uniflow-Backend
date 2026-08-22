@@ -28,4 +28,7 @@ public interface UserDirectory {
      * has not been projected into UniFlow yet.
      */
     java.util.List<UserSummary> findByRealmRole(String role);
+
+    /** Active local accounts — used for university-wide announcement fan-out. */
+    java.util.List<UUID> activeUserIds();
 }

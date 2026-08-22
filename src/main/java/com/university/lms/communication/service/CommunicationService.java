@@ -7,6 +7,7 @@ import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.outbox.OutboxWriter;
 import com.university.lms.communication.api.MessagingPolicy;
 import com.university.lms.communication.domain.Announcement;
+import com.university.lms.communication.domain.AnnouncementRead;
 import com.university.lms.communication.domain.CommunicationErrorCode;
 import com.university.lms.communication.domain.Conversation;
 import com.university.lms.communication.domain.ConversationParticipant;
@@ -18,6 +19,7 @@ import com.university.lms.communication.dto.CreateConversationRequest;
 import com.university.lms.communication.dto.CreateMessageRequest;
 import com.university.lms.communication.dto.MessageResponse;
 import com.university.lms.communication.dto.StartConversationResult;
+import com.university.lms.communication.repository.AnnouncementReadRepository;
 import com.university.lms.communication.repository.AnnouncementRepository;
 import com.university.lms.communication.repository.ConversationParticipantRepository;
 import com.university.lms.communication.repository.ConversationRepository;
@@ -26,6 +28,7 @@ import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.notification.dispatch.AnnouncementPublishedOutboxHandler;
 import com.university.lms.notification.dispatch.MessageSentOutboxHandler;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
@@ -33,6 +36,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +49,7 @@ public class CommunicationService {
     private static final Instant EPOCH = Instant.EPOCH;
 
     private final AnnouncementRepository announcementRepository;
+    private final AnnouncementReadRepository announcementReadRepository;
     private final ConversationRepository conversationRepository;
     private final ConversationParticipantRepository participantRepository;
     private final MessageRepository messageRepository;
@@ -58,6 +63,7 @@ public class CommunicationService {
 
     public CommunicationService(
             AnnouncementRepository announcementRepository,
+            AnnouncementReadRepository announcementReadRepository,
             ConversationRepository conversationRepository,
             ConversationParticipantRepository participantRepository,
             MessageRepository messageRepository,
@@ -69,6 +75,7 @@ public class CommunicationService {
             OutboxWriter outboxWriter,
             ObjectMapper objectMapper) {
         this.announcementRepository = announcementRepository;
+        this.announcementReadRepository = announcementReadRepository;
         this.conversationRepository = conversationRepository;
         this.participantRepository = participantRepository;
         this.messageRepository = messageRepository;
@@ -86,27 +93,49 @@ public class CommunicationService {
         UUID programmeId = NONE;
         List<UUID> sectionIds = List.of(NONE);
         UUID studentId = studentDirectory.studentIdOfUser(caller.userId()).orElse(null);
+        List<Announcement> visible;
         if (studentId != null) {
             programmeId = studentDirectory.findById(studentId).map(StudentDirectory.StudentSummary::programmeId).orElse(NONE);
             List<UUID> accessible = enrollmentDirectory.accessibleSectionIds(studentId);
             sectionIds = accessible.isEmpty() ? List.of(NONE) : accessible;
+            visible = announcementRepository.findVisibleTo(
+                    com.university.lms.communication.domain.AnnouncementAudience.UNIVERSITY_WIDE,
+                    com.university.lms.communication.domain.AnnouncementAudience.PROGRAMME,
+                    com.university.lms.communication.domain.AnnouncementAudience.COURSE_SECTION,
+                    programmeId,
+                    sectionIds);
         } else if (caller.isStaff()) {
-            return announcementRepository
-                    .findByAudienceAndPublishedAtIsNotNullOrderByPublishedAtDesc(
-                            com.university.lms.communication.domain.AnnouncementAudience.UNIVERSITY_WIDE)
-                    .stream()
-                    .map(AnnouncementResponse::from)
-                    .toList();
+            visible = announcementRepository.findByAudienceAndPublishedAtIsNotNullOrderByPublishedAtDesc(
+                    com.university.lms.communication.domain.AnnouncementAudience.UNIVERSITY_WIDE);
+        } else {
+            visible = List.of();
         }
-        return announcementRepository
-                .findVisibleTo(
-                        com.university.lms.communication.domain.AnnouncementAudience.UNIVERSITY_WIDE,
-                        com.university.lms.communication.domain.AnnouncementAudience.PROGRAMME,
-                        com.university.lms.communication.domain.AnnouncementAudience.COURSE_SECTION,
-                        programmeId,
-                        sectionIds)
-                .stream()
-                .map(AnnouncementResponse::from)
+        return mapWithReadState(visible, caller.userId());
+    }
+
+    @Transactional
+    public void markAnnouncementRead(UUID announcementId) {
+        CurrentUser caller = currentUserProvider.require();
+        boolean visible = ownAnnouncements().stream().anyMatch(a -> a.id().equals(announcementId));
+        if (!visible) {
+            throw new ResourceNotFoundException(
+                    CommunicationErrorCode.ANNOUNCEMENT_NOT_FOUND,
+                    "No announcement exists with id " + announcementId);
+        }
+        if (!announcementReadRepository.existsByAnnouncementIdAndUserId(announcementId, caller.userId())) {
+            announcementReadRepository.save(new AnnouncementRead(announcementId, caller.userId(), Instant.now()));
+        }
+    }
+
+    private List<AnnouncementResponse> mapWithReadState(List<Announcement> announcements, UUID userId) {
+        if (announcements.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> announcementIds =
+                announcements.stream().map(Announcement::getId).collect(Collectors.toSet());
+        Set<UUID> readIds = announcementReadRepository.findReadAnnouncementIdsForUser(userId, announcementIds);
+        return announcements.stream()
+                .map(a -> AnnouncementResponse.from(a, readIds.contains(a.getId())))
                 .toList();
     }
 
@@ -119,7 +148,11 @@ public class CommunicationService {
         if (Boolean.TRUE.equals(request.publish())) {
             announcement.publish(Instant.now());
         }
-        return AnnouncementResponse.from(announcementRepository.save(announcement));
+        Announcement saved = announcementRepository.save(announcement);
+        if (saved.isPublished()) {
+            enqueueAnnouncementPublished(saved);
+        }
+        return AnnouncementResponse.from(saved, false);
     }
 
     @Transactional
@@ -131,7 +164,19 @@ public class CommunicationService {
                         CommunicationErrorCode.ANNOUNCEMENT_NOT_FOUND,
                         "No announcement exists with id " + announcementId));
         announcement.publish(Instant.now());
-        return AnnouncementResponse.from(announcement);
+        enqueueAnnouncementPublished(announcement);
+        return AnnouncementResponse.from(announcement, false);
+    }
+
+    private void enqueueAnnouncementPublished(Announcement announcement) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("announcementId", announcement.getId().toString());
+        outboxWriter.enqueue(
+                "Announcement",
+                announcement.getId(),
+                AnnouncementPublishedOutboxHandler.EVENT_TYPE,
+                payload.toString(),
+                "AnnouncementPublished:" + announcement.getId());
     }
 
     public PageResponse<ConversationSummaryResponse> ownConversations(Pageable pageable) {

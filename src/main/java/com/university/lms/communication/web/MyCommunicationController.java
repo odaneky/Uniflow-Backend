@@ -31,6 +31,11 @@ public class MyCommunicationController {
         return communicationService.ownAnnouncements();
     }
 
+    @PostMapping("/announcements/{id}/read")
+    public void markAnnouncementRead(@PathVariable UUID id) {
+        communicationService.markAnnouncementRead(id);
+    }
+
     @GetMapping("/conversations")
     public PageResponse<ConversationSummaryResponse> conversations(
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
