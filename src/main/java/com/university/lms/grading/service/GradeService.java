@@ -8,6 +8,7 @@ import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.exception.ValidationException;
 import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.assessment.repository.AssessmentRepository;
 import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.grading.api.AcademicRecord;
@@ -60,6 +61,7 @@ public class GradeService implements AcademicRecord {
     private final AuditTrail auditTrail;
     private final UniFlowMetrics metrics;
     private final GradeOutboxPublisher gradeOutboxPublisher;
+    private final AssessmentRepository assessmentRepository;
 
     public GradeService(
             GradeRepository gradeRepository,
@@ -72,7 +74,8 @@ public class GradeService implements AcademicRecord {
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
             UniFlowMetrics metrics,
-            GradeOutboxPublisher gradeOutboxPublisher) {
+            GradeOutboxPublisher gradeOutboxPublisher,
+            AssessmentRepository assessmentRepository) {
         this.gradeRepository = gradeRepository;
         this.gradeScaleRepository = gradeScaleRepository;
         this.gradeScaleBandRepository = gradeScaleBandRepository;
@@ -84,6 +87,7 @@ public class GradeService implements AcademicRecord {
         this.auditTrail = auditTrail;
         this.metrics = metrics;
         this.gradeOutboxPublisher = gradeOutboxPublisher;
+        this.assessmentRepository = assessmentRepository;
     }
 
     public List<GradeResponse> gradebook(UUID sectionId) {
@@ -298,11 +302,32 @@ public class GradeService implements AcademicRecord {
                 .findSection(sectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         GradingErrorCode.GRADE_SECTION_NOT_FOUND, "No course section exists with id " + sectionId));
-        if (caller.hasRole(SecurityRoles.LECTURER) && caller.userId().equals(section.lecturerUserId())) {
+        if (caller.hasRole(SecurityRoles.LECTURER) && courseCatalog.teaches(caller.userId(), sectionId)) {
             return;
         }
         throw new ForbiddenException(
                 CommonErrorCode.ACCESS_DENIED, "You do not have permission to change this section");
+    }
+
+    public Optional<BigDecimal> computeWeightedOverall(UUID studentId, UUID sectionId) {
+        requireTeacherOrAdmin(sectionId);
+        List<Grade> assessmentGrades = gradeRepository.findAllByStudentIdAndPublishedTrue(studentId).stream()
+                .filter(grade -> grade.getCourseSectionId().equals(sectionId))
+                .filter(grade -> grade.getAssessmentId() != null)
+                .toList();
+        if (assessmentGrades.isEmpty()) {
+            return Optional.empty();
+        }
+        BigDecimal weighted = BigDecimal.ZERO;
+        for (Grade grade : assessmentGrades) {
+            BigDecimal weight = assessmentRepository
+                    .findById(grade.getAssessmentId())
+                    .map(a -> a.getWeightPercent())
+                    .orElse(BigDecimal.ZERO)
+                    .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            weighted = weighted.add(grade.getPercentage().multiply(weight));
+        }
+        return Optional.of(weighted.setScale(2, RoundingMode.HALF_UP));
     }
 
     private void recordGrade(String action, Grade grade) {

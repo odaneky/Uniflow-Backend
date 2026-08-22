@@ -95,7 +95,7 @@ public class PaymentPlanService {
         if (term == null) {
             return PaymentStanding.none();
         }
-        LedgerTotals totals = totalsOf(studentId);
+        LedgerTotals totals = totalsOf(studentId, term.id());
         List<PaymentSchedule.Step> steps = planRepository
                 .findByAcademicTermId(term.id())
                 .filter(plan -> !plan.getInstallments().isEmpty())
@@ -120,14 +120,25 @@ public class PaymentPlanService {
                         "No academic term exists with id " + academicTermId));
     }
 
-    private LedgerTotals totalsOf(UUID studentId) {
+    private LedgerTotals totalsOf(UUID studentId, UUID academicTermId) {
         StudentAccount account = accountRepository.findByStudentId(studentId).orElse(null);
         if (account == null) {
             return new LedgerTotals(BigDecimal.ZERO, BigDecimal.ZERO);
         }
         BigDecimal charges = BigDecimal.ZERO;
         BigDecimal paid = BigDecimal.ZERO;
+        String termToken = academicTermId == null ? null : academicTermId.toString();
         for (AccountEntry entry : entryRepository.findByAccountIdOrderByOccurredAtAsc(account.getId())) {
+            if (termToken != null && entry.getReference() != null && !entry.getReference().contains(termToken)) {
+                if (entry.getAcademicTermId() != null && !entry.getAcademicTermId().equals(academicTermId)) {
+                    continue;
+                }
+                if (entry.getAcademicTermId() == null
+                        && !entry.getReference().contains("term:" + termToken)
+                        && !entry.getReference().contains("campus-fee:" + termToken)) {
+                    continue;
+                }
+            }
             if (entry.getEntryType() == AccountEntryType.CHARGE) {
                 charges = charges.add(entry.getAmount().abs());
             } else {

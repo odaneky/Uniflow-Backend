@@ -205,6 +205,7 @@ class QuizServiceTest {
                 40,
                 1,
                 true,
-                lecturerUserId);
+                lecturerUserId,
+                false);
     }
 }

@@ -28,7 +28,8 @@ public interface CourseCatalog {
             int capacity,
             int enrolledCount,
             boolean openForEnrolment,
-            UUID lecturerUserId) {}
+            UUID lecturerUserId,
+            boolean requiresApproval) {}
 
     /** Sections this user is assigned to teach. Empty when they teach none. */
     List<SectionSummary> findSectionsTaughtBy(UUID lecturerUserId);

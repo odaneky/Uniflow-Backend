@@ -74,7 +74,8 @@ class TeachingLoadServiceTest {
                         40,
                         12,
                         true,
-                        LECTURER_ID);
+                        LECTURER_ID,
+                        false);
 
         when(courseCatalog.findSectionsTaughtBy(LECTURER_ID)).thenReturn(List.of(section));
         when(enrollmentDirectory.occupyingSeatCount(SECTION_ID)).thenReturn(12);

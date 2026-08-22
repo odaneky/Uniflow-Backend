@@ -9,4 +9,8 @@ public interface StudentLifecycle {
     void graduate(UUID studentId, UUID actorUserId);
 
     void applyContactCorrection(UUID studentId, UpdateOwnProfileRequest contact);
+
+    void beginLeave(UUID studentId, UUID actorUserId);
+
+    void readmit(UUID studentId, UUID actorUserId);
 }

@@ -34,6 +34,11 @@ public class ServiceRequestPayloadValidator {
             case VERIFICATION -> validateVerification(node);
             case GRADUATION -> validateGraduation(node);
             case PROFILE_CORRECTION -> validateProfileCorrection(node);
+            case SAP_APPEAL -> validateSapAppeal(node);
+            case LATE_ADD -> validateLateAdd(node);
+            case COURSE_SUBSTITUTION -> validateCourseSubstitution(node);
+            case LEAVE_OF_ABSENCE -> validateLeaveOfAbsence(node);
+            case READMISSION -> validateReadmission(node);
         };
     }
 
@@ -101,6 +106,40 @@ public class ServiceRequestPayloadValidator {
                     RequestErrorCode.REQUEST_INVALID_PAYLOAD,
                     "At least one corrected field is required");
         }
+        return node.toString();
+    }
+
+    private String validateSapAppeal(JsonNode node) {
+        requireText(node, "reason");
+        if (node.hasNonNull("termId")) {
+            requireUuid(node, "termId");
+        }
+        return node.toString();
+    }
+
+    private String validateLateAdd(JsonNode node) {
+        requireUuid(node, "courseSectionId");
+        requireText(node, "reason");
+        return node.toString();
+    }
+
+    private String validateCourseSubstitution(JsonNode node) {
+        requireUuid(node, "requiredCourseId");
+        requireUuid(node, "substituteCourseId");
+        requireText(node, "reason");
+        return node.toString();
+    }
+
+    private String validateLeaveOfAbsence(JsonNode node) {
+        requireText(node, "reason");
+        if (node.hasNonNull("expectedReturnTermId")) {
+            requireUuid(node, "expectedReturnTermId");
+        }
+        return node.toString();
+    }
+
+    private String validateReadmission(JsonNode node) {
+        requireText(node, "reason");
         return node.toString();
     }
 

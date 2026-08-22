@@ -83,12 +83,19 @@ public class DefaultStudentBilling implements StudentBilling {
                     amount,
                     "Tuition — " + courseCode,
                     at,
-                    tuitionRef));
+                    tuitionRef,
+                    academicTermId));
         }
         String feeRef = campusFeeReference(academicTermId);
         if (!entryRepository.existsByAccountIdAndReference(account.getId(), feeRef)) {
             entryRepository.save(new AccountEntry(
-                    account, AccountEntryType.CHARGE, quote.campusFee(), "Campus fee", at, feeRef));
+                    account,
+                    AccountEntryType.CHARGE,
+                    quote.campusFee(),
+                    "Campus fee",
+                    at,
+                    feeRef,
+                    academicTermId));
         }
         UUID programmeId =
                 studentDirectory.findById(studentId).map(StudentDirectory.StudentSummary::programmeId).orElse(null);
@@ -106,7 +113,8 @@ public class DefaultStudentBilling implements StudentBilling {
                     FeeApplicability.amount(fee, credits),
                     fee.getName(),
                     at,
-                    catalogRef));
+                    catalogRef,
+                    academicTermId));
         }
     }
 

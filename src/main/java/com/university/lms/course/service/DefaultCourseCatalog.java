@@ -207,7 +207,8 @@ public class DefaultCourseCatalog implements CourseCatalog {
                 section.getCapacity(),
                 section.getEnrolledCount(),
                 section.isOpenForEnrolment(),
-                section.getLecturerUserId());
+                section.getLecturerUserId(),
+                section.isRequiresApproval());
     }
 
     /**

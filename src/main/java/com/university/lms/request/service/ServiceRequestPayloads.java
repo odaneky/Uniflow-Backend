@@ -22,6 +22,18 @@ public final class ServiceRequestPayloads {
         return uuidField(payloadJson, "expectedGraduationTermId");
     }
 
+    public static UUID courseSectionId(String payloadJson) {
+        return uuidField(payloadJson, "courseSectionId");
+    }
+
+    public static UUID requiredCourseId(String payloadJson) {
+        return uuidField(payloadJson, "requiredCourseId");
+    }
+
+    public static UUID substituteCourseId(String payloadJson) {
+        return uuidField(payloadJson, "substituteCourseId");
+    }
+
     private static UUID uuidField(String payloadJson, String field) {
         if (payloadJson == null || payloadJson.isBlank()) {
             return null;

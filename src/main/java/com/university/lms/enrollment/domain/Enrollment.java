@@ -59,6 +59,10 @@ public class Enrollment extends BaseEntity {
     @Column(name = "attempt_number", nullable = false)
     private int attemptNumber = 1;
 
+    /** Set when a waitlisted student is promoted; they must accept before this instant. */
+    @Column(name = "waitlist_offer_expires_at")
+    private Instant waitlistOfferExpiresAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -96,6 +100,14 @@ public class Enrollment extends BaseEntity {
 
     public void assignAttemptNumber(int attemptNumber) {
         this.attemptNumber = Math.max(1, attemptNumber);
+    }
+
+    public void offerWaitlistUntil(Instant expiresAt) {
+        this.waitlistOfferExpiresAt = expiresAt;
+    }
+
+    public void clearWaitlistOffer() {
+        this.waitlistOfferExpiresAt = null;
     }
 
     public boolean occupiesSeat() {

@@ -5,6 +5,7 @@ import com.university.lms.enrollment.domain.EnrollmentStatus;
 import com.university.lms.enrollment.dto.CheckoutEnrollmentsRequest;
 import com.university.lms.enrollment.dto.CheckoutEnrollmentsResponse;
 import com.university.lms.enrollment.dto.CreateEnrollmentRequest;
+import com.university.lms.enrollment.dto.EnrollmentOverrideRequest;
 import com.university.lms.enrollment.dto.EnrollmentResponse;
 import com.university.lms.enrollment.service.EnrollmentService;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,8 +52,15 @@ public class EnrollmentController {
     /** Confirms a registration cart: min/max load, clashes, then enrol or waitlist each occurrence. */
     @PostMapping("/checkout")
     public ResponseEntity<CheckoutEnrollmentsResponse> checkout(
-            @Valid @RequestBody CheckoutEnrollmentsRequest request) {
-        CheckoutEnrollmentsResponse created = enrollmentService.checkout(request);
+            @Valid @RequestBody CheckoutEnrollmentsRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        CheckoutEnrollmentsResponse created = enrollmentService.checkout(request, idempotencyKey);
+        return ResponseEntity.status(201).body(created);
+    }
+
+    @PostMapping("/override")
+    public ResponseEntity<EnrollmentResponse> override(@Valid @RequestBody EnrollmentOverrideRequest request) {
+        EnrollmentResponse created = enrollmentService.overrideEnrol(request);
         return ResponseEntity.status(201).body(created);
     }
 
@@ -82,5 +91,20 @@ public class EnrollmentController {
     @PostMapping("/{id}/complete")
     public EnrollmentResponse complete(@PathVariable UUID id) {
         return enrollmentService.complete(id);
+    }
+
+    @PostMapping("/{id}/approve")
+    public EnrollmentResponse approve(@PathVariable UUID id) {
+        return enrollmentService.approvePending(id);
+    }
+
+    @PostMapping("/{id}/accept-waitlist-offer")
+    public EnrollmentResponse acceptWaitlistOffer(@PathVariable UUID id) {
+        return enrollmentService.acceptWaitlistOffer(id);
+    }
+
+    @PostMapping("/{id}/decline-waitlist-offer")
+    public EnrollmentResponse declineWaitlistOffer(@PathVariable UUID id) {
+        return enrollmentService.declineWaitlistOffer(id);
     }
 }

@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.Getter;
 
 @Entity
@@ -41,6 +42,9 @@ public class AccountEntry extends BaseEntity {
     @Column(name = "reference", length = 120)
     private String reference;
 
+    @Column(name = "academic_term_id")
+    private UUID academicTermId;
+
     protected AccountEntry() {}
 
     public AccountEntry(
@@ -59,11 +63,23 @@ public class AccountEntry extends BaseEntity {
             String description,
             Instant occurredAt,
             String reference) {
+        this(account, entryType, amount, description, occurredAt, reference, null);
+    }
+
+    public AccountEntry(
+            StudentAccount account,
+            AccountEntryType entryType,
+            BigDecimal amount,
+            String description,
+            Instant occurredAt,
+            String reference,
+            UUID academicTermId) {
         this.account = account;
         this.entryType = entryType;
         this.amount = amount;
         this.description = description;
         this.occurredAt = occurredAt;
         this.reference = reference;
+        this.academicTermId = academicTermId;
     }
 }

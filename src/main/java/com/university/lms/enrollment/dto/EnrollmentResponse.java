@@ -13,9 +13,15 @@ public record EnrollmentResponse(
         EnrollmentStatus status,
         Instant enrolledAt,
         Instant endedAt,
-        int attemptNumber) {
+        int attemptNumber,
+        Integer waitlistPosition,
+        Instant waitlistOfferExpiresAt) {
 
     public static EnrollmentResponse from(Enrollment enrolment) {
+        return from(enrolment, null);
+    }
+
+    public static EnrollmentResponse from(Enrollment enrolment, Integer waitlistPosition) {
         return new EnrollmentResponse(
                 enrolment.getId(),
                 enrolment.getStudentId(),
@@ -23,6 +29,8 @@ public record EnrollmentResponse(
                 enrolment.getStatus(),
                 enrolment.getEnrolledAt(),
                 enrolment.getEndedAt(),
-                enrolment.getAttemptNumber());
+                enrolment.getAttemptNumber(),
+                waitlistPosition,
+                enrolment.getWaitlistOfferExpiresAt());
     }
 }

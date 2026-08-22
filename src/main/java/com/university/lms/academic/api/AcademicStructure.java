@@ -16,7 +16,14 @@ import java.util.UUID;
 public interface AcademicStructure {
 
     record ProgrammeSummary(
-            UUID id, String code, String name, String degreeAward, int totalCredits, boolean active) {}
+            UUID id,
+            String code,
+            String name,
+            String degreeAward,
+            int totalCredits,
+            boolean active,
+            String programmeType,
+            java.math.BigDecimal minGraduationGpa) {}
 
     /** Effective semester load after applying a programme override, if any. */
     record CreditLoad(int minSemesterCredits, int maxSemesterCredits, boolean programmeOverride) {}

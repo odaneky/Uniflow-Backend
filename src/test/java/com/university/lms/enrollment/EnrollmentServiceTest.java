@@ -31,8 +31,11 @@ import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.enrollment.dto.EnrollmentResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.university.lms.enrollment.repository.EnrollmentCheckoutIdempotencyRepository;
 import com.university.lms.enrollment.repository.EnrollmentRepository;
 import com.university.lms.enrollment.service.EnrollmentService;
+import com.university.lms.financialaid.api.RegistrationHolds;
 import com.university.lms.finance.api.StudentBilling;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
@@ -64,6 +67,12 @@ class EnrollmentServiceTest {
     private EnrollmentRepository repository;
 
     @Mock
+    private EnrollmentCheckoutIdempotencyRepository checkoutIdempotencyRepository;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
+    @Mock
     private StudentDirectory studentDirectory;
 
     @Mock
@@ -77,6 +86,9 @@ class EnrollmentServiceTest {
 
     @Mock
     private StudentBilling studentBilling;
+
+    @Mock
+    private RegistrationHolds registrationHolds;
 
     @Mock
     private CurrentUserProvider currentUserProvider;
@@ -120,6 +132,7 @@ class EnrollmentServiceTest {
         lenient()
                 .when(studentBilling.standingOf(any(), any(), any()))
                 .thenReturn(com.university.lms.finance.api.PaymentStanding.none());
+        lenient().when(registrationHolds.activeRegistrationHolds(any())).thenReturn(List.of());
         lenient()
                 .when(academicStructure.creditLoadFor(any()))
                 .thenReturn(new AcademicStructure.CreditLoad(12, 18, false));
@@ -203,7 +216,7 @@ class EnrollmentServiceTest {
         when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any())).thenReturn(List.of(prior));
         when(courseCatalog.findSection(priorSectionId))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        priorSectionId, COURSE_ID, "COMP3101", "Course", TERM_ID, "B", 30, 5, true, null)));
+                        priorSectionId, COURSE_ID, "COMP3101", "Course", TERM_ID, "B", 30, 5, true, null, false)));
         when(courseCatalog.tryReserveSeat(SECTION_ID)).thenReturn(true);
         when(repository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -416,7 +429,7 @@ class EnrollmentServiceTest {
         UUID otherSection = existing.getCourseSectionId();
         when(courseCatalog.findSection(otherSection))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        otherSection, COURSE_ID, "COMP3101", "Course", TERM_ID, "B", 30, 10, true, null)));
+                        otherSection, COURSE_ID, "COMP3101", "Course", TERM_ID, "B", 30, 10, true, null, false)));
 
         assertThatThrownBy(() -> service.enrol(request))
                 .isInstanceOf(BusinessException.class)
@@ -437,7 +450,7 @@ class EnrollmentServiceTest {
         when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any())).thenReturn(List.of(held));
         when(courseCatalog.findSection(otherSection))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        otherSection, UUID.randomUUID(), "MATH1150", "Course", TERM_ID, "UN1", 30, 10, true, null)));
+                        otherSection, UUID.randomUUID(), "MATH1150", "Course", TERM_ID, "UN1", 30, 10, true, null, false)));
         when(courseCatalog.meetingsOf(SECTION_ID))
                 .thenReturn(List.of(new CourseCatalog.Meeting(1, "Mon", "09:00", "10:00", "A1", "Lecture")));
         when(courseCatalog.meetingsOf(otherSection))
@@ -536,7 +549,7 @@ class EnrollmentServiceTest {
         givenEligibleStudent();
         when(courseCatalog.findSection(SECTION_ID))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        SECTION_ID, UUID.randomUUID(), "COMP3101", "Course", TERM_ID, "A", 30, 5, false, null)));
+                        SECTION_ID, UUID.randomUUID(), "COMP3101", "Course", TERM_ID, "A", 30, 5, false, null, false)));
 
         assertThatThrownBy(() -> service.enrol(request))
                 .isInstanceOf(BusinessException.class)
@@ -682,7 +695,7 @@ class EnrollmentServiceTest {
     private void givenOpenSection(int capacity, int enrolled) {
         when(courseCatalog.findSection(SECTION_ID))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        SECTION_ID, COURSE_ID, "COMP3101", "Course", TERM_ID, "A", capacity, enrolled, true, null)));
+                        SECTION_ID, COURSE_ID, "COMP3101", "Course", TERM_ID, "A", capacity, enrolled, true, null, false)));
     }
 
     private void givenRegistrationOpen() {

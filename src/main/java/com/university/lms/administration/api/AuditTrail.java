@@ -42,6 +42,9 @@ public interface AuditTrail {
         public static final String SERVICE_REQUEST_CREATED = "SERVICE_REQUEST_CREATED";
         public static final String SERVICE_REQUEST_TRANSITIONED = "SERVICE_REQUEST_TRANSITIONED";
         public static final String SERVICE_REQUEST_FULFILLED = "SERVICE_REQUEST_FULFILLED";
+        public static final String APPLICATION_CREATED = "APPLICATION_CREATED";
+        public static final String APPLICATION_TRANSITIONED = "APPLICATION_TRANSITIONED";
+        public static final String APPLICATION_MATRICULATED = "APPLICATION_MATRICULATED";
 
         private Action() {}
     }
@@ -55,6 +58,7 @@ public interface AuditTrail {
         public static final String GRADE = "Grade";
         public static final String CONVERSATION = "Conversation";
         public static final String SERVICE_REQUEST = "ServiceRequest";
+        public static final String APPLICATION = "Application";
 
         private EntityType() {}
     }

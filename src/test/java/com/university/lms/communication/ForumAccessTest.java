@@ -74,8 +74,6 @@ class ForumAccessTest {
     @Test
     void studentMayNotModerateForum() {
         CurrentUser student = studentUser();
-        when(studentDirectory.studentIdOfUser(studentUserId)).thenReturn(Optional.of(studentId));
-        when(enrollmentDirectory.canAccessLearning(studentId, sectionId)).thenReturn(true);
 
         assertThatThrownBy(() -> forumAccess.assertCanModerateForum(student, sectionId))
                 .isInstanceOf(ForbiddenException.class);

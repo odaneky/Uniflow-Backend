@@ -66,6 +66,9 @@ class GradeServiceTest {
     @Mock
     private GradeOutboxPublisher gradeOutboxPublisher;
 
+    @Mock
+    private com.university.lms.assessment.repository.AssessmentRepository assessmentRepository;
+
     @InjectMocks
     private GradeService service;
 
@@ -112,10 +115,10 @@ class GradeServiceTest {
         when(gradeRepository.findAllByStudentIdAndPublishedTrue(studentId)).thenReturn(List.of(fail, pass));
         when(courseCatalog.findSection(failSection))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        failSection, courseId, "HTM1001", "Intro", termId, "A", 30, 10, true, null)));
+                        failSection, courseId, "HTM1001", "Intro", termId, "A", 30, 10, true, null, false)));
         when(courseCatalog.findSection(passSection))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        passSection, courseId, "HTM1001", "Intro", termId, "B", 30, 10, true, null)));
+                        passSection, courseId, "HTM1001", "Intro", termId, "B", 30, 10, true, null, false)));
         when(courseCatalog.findCourse(courseId))
                 .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
                         courseId, "HTM1001", "Intro", 3, 1, true)));
@@ -143,7 +146,7 @@ class GradeServiceTest {
         when(gradeRepository.findAllByStudentIdAndPublishedTrue(studentId)).thenReturn(List.of(fail));
         when(courseCatalog.findSection(sectionId))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        sectionId, courseId, "HTM1001", "Intro", termId, "A", 30, 10, true, null)));
+                        sectionId, courseId, "HTM1001", "Intro", termId, "A", 30, 10, true, null, false)));
         when(courseCatalog.findCourse(courseId))
                 .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
                         courseId, "HTM1001", "Intro", 3, 1, true)));

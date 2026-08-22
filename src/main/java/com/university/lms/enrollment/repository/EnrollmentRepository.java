@@ -63,4 +63,13 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
               and (:status is null or e.status = :status)
             """)
     Page<Enrollment> search(UUID studentId, UUID courseSectionId, EnrollmentStatus status, Pageable pageable);
+
+    @Query(
+            """
+            select count(e) from Enrollment e
+            where e.courseSectionId = :sectionId
+              and e.status = com.university.lms.enrollment.domain.EnrollmentStatus.WAITLISTED
+              and e.enrolledAt < :enrolledAt
+            """)
+    long countWaitlistedAhead(UUID sectionId, java.time.Instant enrolledAt);
 }

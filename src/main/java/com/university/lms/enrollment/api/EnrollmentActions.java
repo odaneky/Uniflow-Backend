@@ -10,4 +10,7 @@ public interface EnrollmentActions {
 
     /** Whether the enrolment belongs to the student and may be withdrawn. */
     boolean canWithdraw(UUID enrollmentId, UUID studentId);
+
+    /** Late-add enrolment after an approved petition. */
+    void lateAdd(UUID studentId, UUID courseSectionId, UUID actorUserId);
 }

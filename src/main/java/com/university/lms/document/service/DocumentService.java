@@ -58,6 +58,31 @@ public class DocumentService implements DocumentStore {
                 DocumentResponse::from);
     }
 
+    public Optional<DocumentResponse> findOwn(UUID documentId) {
+        return documentRepository
+                .findById(documentId)
+                .filter(doc -> doc.getOwnerUserId().equals(currentUserProvider.require().userId()))
+                .map(DocumentResponse::from);
+    }
+
+    public Optional<byte[]> downloadOwn(UUID documentId) {
+        return findOwn(documentId).flatMap(ignored -> content(documentId));
+    }
+
+    public Optional<byte[]> downloadForStaff(UUID documentId) {
+        if (!currentUserProvider.require().isStaff()) {
+            return Optional.empty();
+        }
+        return content(documentId);
+    }
+
+    public Optional<DocumentResponse> findMetadata(UUID documentId) {
+        if (!currentUserProvider.require().isStaff()) {
+            return Optional.empty();
+        }
+        return documentRepository.findById(documentId).map(DocumentResponse::from);
+    }
+
     @Transactional
     public DocumentResponse register(CreateDocumentRequest request) {
         if (!currentUserProvider.require().isStaff()) {

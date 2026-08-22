@@ -1,5 +1,7 @@
 package com.university.lms.enrollment.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.telemetry.UniFlowMetrics;
@@ -16,13 +18,17 @@ import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.course.api.Timetable;
 import com.university.lms.curriculum.api.CurriculumCatalog;
 import com.university.lms.enrollment.domain.Enrollment;
+import com.university.lms.enrollment.domain.EnrollmentCheckoutIdempotency;
 import com.university.lms.enrollment.domain.EnrollmentErrorCode;
 import com.university.lms.enrollment.domain.EnrollmentStatus;
 import com.university.lms.enrollment.dto.CheckoutEnrollmentsRequest;
 import com.university.lms.enrollment.dto.CheckoutEnrollmentsResponse;
 import com.university.lms.enrollment.dto.CreateEnrollmentRequest;
+import com.university.lms.enrollment.dto.EnrollmentOverrideRequest;
 import com.university.lms.enrollment.dto.EnrollmentResponse;
+import com.university.lms.enrollment.repository.EnrollmentCheckoutIdempotencyRepository;
 import com.university.lms.enrollment.repository.EnrollmentRepository;
+import com.university.lms.financialaid.api.RegistrationHolds;
 import com.university.lms.finance.api.StudentBilling;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Duration;
@@ -72,32 +78,43 @@ public class EnrollmentService {
     private static final List<EnrollmentStatus> ON_BOOKS =
             List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ENROLLED, EnrollmentStatus.WAITLISTED);
 
+    private static final Duration WAITLIST_OFFER_WINDOW = Duration.ofHours(24);
+
     private final EnrollmentRepository repository;
+    private final EnrollmentCheckoutIdempotencyRepository checkoutIdempotencyRepository;
+    private final ObjectMapper objectMapper;
     private final StudentDirectory studentDirectory;
     private final CourseCatalog courseCatalog;
     private final CurriculumCatalog curriculumCatalog;
     private final AcademicStructure academicStructure;
     private final StudentBilling studentBilling;
+    private final RegistrationHolds registrationHolds;
     private final CurrentUserProvider currentUserProvider;
     private final AuditTrail auditTrail;
     private final UniFlowMetrics metrics;
 
     public EnrollmentService(
             EnrollmentRepository repository,
+            EnrollmentCheckoutIdempotencyRepository checkoutIdempotencyRepository,
+            ObjectMapper objectMapper,
             StudentDirectory studentDirectory,
             CourseCatalog courseCatalog,
             CurriculumCatalog curriculumCatalog,
             AcademicStructure academicStructure,
             StudentBilling studentBilling,
+            RegistrationHolds registrationHolds,
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
             UniFlowMetrics metrics) {
         this.repository = repository;
+        this.checkoutIdempotencyRepository = checkoutIdempotencyRepository;
+        this.objectMapper = objectMapper;
         this.studentDirectory = studentDirectory;
         this.courseCatalog = courseCatalog;
         this.curriculumCatalog = curriculumCatalog;
         this.academicStructure = academicStructure;
         this.studentBilling = studentBilling;
+        this.registrationHolds = registrationHolds;
         this.currentUserProvider = currentUserProvider;
         this.auditTrail = auditTrail;
         this.metrics = metrics;
@@ -120,14 +137,44 @@ public class EnrollmentService {
         StudentDirectory.StudentSummary student = requireEligibleStudent(studentId);
         CourseCatalog.SectionSummary section = requireOpenSection(sectionId);
         requireRegistrationOpen(section);
-        requireNoFinancialHold(studentId, section.academicTermId());
+        requireNoRegistrationHolds(studentId, section.academicTermId());
         requireNotAlreadyOnBooks(studentId, sectionId);
         requireCourseRequirements(studentId, section.courseId());
         requireOnProgramme(student, section);
         requireNoTimetableClash(studentId, section);
         requireComponentOrder(studentId, List.of(section));
         requireCreditLoad(student, section.academicTermId(), creditsOf(section), false);
-        return persistEnrolment(student, section, null);
+        return toResponse(persistEnrolment(student, section, null));
+    }
+
+    @Transactional
+    public CheckoutEnrollmentsResponse checkout(CheckoutEnrollmentsRequest request, String idempotencyKey) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<EnrollmentCheckoutIdempotency> existing =
+                    checkoutIdempotencyRepository.findByStudentIdAndIdempotencyKey(request.studentId(), idempotencyKey);
+            if (existing.isPresent()) {
+                try {
+                    return objectMapper.readValue(existing.get().getResponseJson(), CheckoutEnrollmentsResponse.class);
+                } catch (JsonProcessingException ex) {
+                    throw new BusinessException(
+                            EnrollmentErrorCode.INVALID_ENROLLMENT_STATE, "Stored checkout response is invalid");
+                }
+            }
+        }
+        CheckoutEnrollmentsResponse response = checkoutInternal(request);
+        if (idempotencyKey != null && !idempotencyKey.isBlank() && response.checkoutBatchId() != null) {
+            try {
+                checkoutIdempotencyRepository.save(new EnrollmentCheckoutIdempotency(
+                        request.studentId(),
+                        idempotencyKey,
+                        response.checkoutBatchId(),
+                        objectMapper.writeValueAsString(response)));
+            } catch (JsonProcessingException ex) {
+                throw new BusinessException(
+                        EnrollmentErrorCode.INVALID_ENROLLMENT_STATE, "Could not persist checkout idempotency");
+            }
+        }
+        return response;
     }
 
     /**
@@ -136,6 +183,10 @@ public class EnrollmentService {
      */
     @Transactional
     public CheckoutEnrollmentsResponse checkout(CheckoutEnrollmentsRequest request) {
+        return checkout(request, null);
+    }
+
+    private CheckoutEnrollmentsResponse checkoutInternal(CheckoutEnrollmentsRequest request) {
         requireOwnStudentRecordOrStaff(request.studentId());
         StudentDirectory.StudentSummary student = requireEligibleStudent(request.studentId());
         List<CourseCatalog.SectionSummary> sections = resolveCheckoutSections(request.courseSectionIds());
@@ -144,11 +195,11 @@ public class EnrollmentService {
         for (CourseCatalog.SectionSummary section : sections) {
             Enrollment already = onBooks(student.id(), section.id());
             if (already != null) {
-                created.add(EnrollmentResponse.from(already));
+                created.add(toResponse(already));
                 continue;
             }
             requireRegistrationOpen(section);
-            requireNoFinancialHold(student.id(), section.academicTermId());
+            requireNoRegistrationHolds(student.id(), section.academicTermId());
             requireCourseRequirements(student.id(), section.courseId());
             requireOnProgramme(student, section);
             incoming.add(section);
@@ -159,7 +210,7 @@ public class EnrollmentService {
             requireCheckoutCreditLoad(student, incoming);
             batchId = UUID.randomUUID();
             for (CourseCatalog.SectionSummary section : incoming) {
-                created.add(persistEnrolment(student, section, batchId));
+                created.add(toResponse(persistEnrolment(student, section, batchId)));
             }
         }
         Instant expiresAt = correctionDeadline(batchId == null ? null : Instant.now());
@@ -230,13 +281,84 @@ public class EnrollmentService {
         Enrollment enrolment = require(enrollmentId);
         requireTeacherOrRegistry(enrolment.getCourseSectionId());
         transition(enrolment, EnrollmentStatus.COMPLETED);
-        return EnrollmentResponse.from(enrolment);
+        return toResponse(enrolment);
+    }
+
+    /** Registrar override to enrol a student, bypassing window and hold checks. */
+    @Transactional
+    public EnrollmentResponse overrideEnrol(EnrollmentOverrideRequest request) {
+        requireRegistrar();
+        StudentDirectory.StudentSummary student = requireEligibleStudent(request.studentId());
+        CourseCatalog.SectionSummary section = requireOpenSection(request.courseSectionId());
+        requireNotAlreadyOnBooks(student.id(), section.id());
+        requireCourseRequirements(student.id(), section.courseId());
+        requireOnProgramme(student, section);
+        requireNoTimetableClash(student.id(), section);
+        Enrollment saved = persistEnrolment(student, section, null);
+        recordAudit(
+                AuditTrail.Action.ENROLMENT_CREATED,
+                saved.getId(),
+                "override · "
+                        + request.reasonCode()
+                        + " · "
+                        + student.studentNumber()
+                        + " · "
+                        + section.courseCode()
+                        + " "
+                        + section.sectionCode());
+        return toResponse(saved);
+    }
+
+    /** Approves a PENDING enrolment for a restricted section. */
+    @Transactional
+    public EnrollmentResponse approvePending(UUID enrollmentId) {
+        Enrollment enrolment = require(enrollmentId);
+        requireTeacherOrRegistry(enrolment.getCourseSectionId());
+        if (enrolment.getStatus() != EnrollmentStatus.PENDING) {
+            throw new BusinessException(
+                    EnrollmentErrorCode.INVALID_ENROLLMENT_STATE, "Only pending enrolments may be approved");
+        }
+        transition(enrolment, EnrollmentStatus.ENROLLED);
+        courseCatalog.findSection(enrolment.getCourseSectionId()).ifPresent(section -> billForEnrolment(enrolment, section));
+        recordAudit(
+                AuditTrail.Action.ENROLMENT_CREATED,
+                enrolment.getId(),
+                "approved · section " + enrolment.getCourseSectionId());
+        return toResponse(enrolment);
+    }
+
+    /** Accepts a waitlist promotion before the offer expires. */
+    @Transactional
+    public EnrollmentResponse acceptWaitlistOffer(UUID enrollmentId) {
+        Enrollment enrolment = require(enrollmentId);
+        requireOwnStudentRecordOrStaff(enrolment.getStudentId());
+        if (enrolment.getStatus() != EnrollmentStatus.ENROLLED || enrolment.getWaitlistOfferExpiresAt() == null) {
+            throw new BusinessException(
+                    EnrollmentErrorCode.INVALID_ENROLLMENT_STATE, "No waitlist offer is pending acceptance");
+        }
+        if (Instant.now().isAfter(enrolment.getWaitlistOfferExpiresAt())) {
+            throw new BusinessException(EnrollmentErrorCode.INVALID_ENROLLMENT_STATE, "Waitlist offer has expired");
+        }
+        enrolment.clearWaitlistOffer();
+        return toResponse(enrolment);
+    }
+
+    /** Declines a waitlist promotion; seat is released and the next student is promoted. */
+    @Transactional
+    public EnrollmentResponse declineWaitlistOffer(UUID enrollmentId) {
+        Enrollment enrolment = require(enrollmentId);
+        requireOwnStudentRecordOrStaff(enrolment.getStudentId());
+        if (enrolment.getStatus() != EnrollmentStatus.ENROLLED || enrolment.getWaitlistOfferExpiresAt() == null) {
+            throw new BusinessException(
+                    EnrollmentErrorCode.INVALID_ENROLLMENT_STATE, "No waitlist offer is pending acceptance");
+        }
+        return endEnrolment(enrollmentId, EnrollmentStatus.DROPPED);
     }
 
     public EnrollmentResponse findById(UUID enrollmentId) {
         Enrollment enrolment = require(enrollmentId);
         requireOwnStudentRecordOrStaff(enrolment.getStudentId());
-        return EnrollmentResponse.from(enrolment);
+        return toResponse(enrolment);
     }
 
     /**
@@ -256,7 +378,25 @@ public class EnrollmentService {
             effectiveStudentId = own;
         }
         return PageResponse.from(
-                repository.search(effectiveStudentId, courseSectionId, status, pageable), EnrollmentResponse::from);
+                repository.search(effectiveStudentId, courseSectionId, status, pageable), this::toResponse);
+    }
+
+    private void requireRegistrar() {
+        CurrentUser caller = currentUserProvider.require();
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR)) {
+            return;
+        }
+        throw new ForbiddenException(
+                CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
+    }
+
+    private EnrollmentResponse toResponse(Enrollment enrolment) {
+        Integer position = null;
+        if (enrolment.getStatus() == EnrollmentStatus.WAITLISTED) {
+            position = (int) repository.countWaitlistedAhead(enrolment.getCourseSectionId(), enrolment.getEnrolledAt())
+                    + 1;
+        }
+        return EnrollmentResponse.from(enrolment, position);
     }
 
     // ---------------------------------------------------------------------
@@ -296,6 +436,13 @@ public class EnrollmentService {
         }
         throw new ForbiddenException(
                 CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
+    }
+
+    /** Late-add enrolment on behalf of staff after an approved petition. */
+    @Transactional
+    public EnrollmentResponse lateAdd(UUID studentId, UUID courseSectionId) {
+        requireRegistrar();
+        return overrideEnrol(new EnrollmentOverrideRequest(studentId, courseSectionId, "LATE_ADD", null));
     }
 
     /** A non-staff caller with no student record owns nothing, and is refused rather than matched. */
@@ -347,6 +494,30 @@ public class EnrollmentService {
                     EnrollmentErrorCode.ENROLLMENT_REGISTRATION_CLOSED,
                     "Registration is not currently open for this term");
         }
+    }
+
+    /**
+     * Blocks registration when payment-plan, service, or SAP holds are active.
+     *
+     * <p>Hook point: call from {@link #enrol} and {@link #checkout} before seat reservation. SAP
+     * holds are placed by {@code SapService.evaluateAfterGrades} after term grades publish — wire
+     * that call from the grading module when overall grades are finalized (see
+     * {@code docs/financial-aid-enrollment-hooks.md}).
+     */
+    private void requireNoRegistrationHolds(UUID studentId, UUID termId) {
+        requireNoFinancialHold(studentId, termId);
+        var holds = registrationHolds.activeRegistrationHolds(studentId);
+        if (holds.isEmpty()) {
+            return;
+        }
+        var first = holds.get(0);
+        metrics.enrolment("hold");
+        EnrollmentErrorCode code = switch (first.type()) {
+            case "SAP" -> EnrollmentErrorCode.ENROLLMENT_SAP_HOLD;
+            case "FINANCIAL" -> EnrollmentErrorCode.ENROLLMENT_FINANCIAL_HOLD;
+            default -> EnrollmentErrorCode.ENROLLMENT_REGISTRATION_HOLD;
+        };
+        throw new BusinessException(code, first.reason());
     }
 
     private void requireNoFinancialHold(UUID studentId, UUID termId) {
@@ -575,25 +746,29 @@ public class EnrollmentService {
                 .toList();
     }
 
-    private EnrollmentResponse persistEnrolment(
+    private Enrollment persistEnrolment(
             StudentDirectory.StudentSummary student, CourseCatalog.SectionSummary section, UUID checkoutBatchId) {
         int attemptNumber = nextAttemptNumber(student.id(), section.courseId());
         if (courseCatalog.tryReserveSeat(section.id())) {
+            EnrollmentStatus initialStatus =
+                    section.requiresApproval() ? EnrollmentStatus.PENDING : EnrollmentStatus.ENROLLED;
             Enrollment saved;
             try {
                 saved = repository.saveAndFlush(new Enrollment(
-                        student.id(), section.id(), EnrollmentStatus.ENROLLED, checkoutBatchId, attemptNumber));
+                        student.id(), section.id(), initialStatus, checkoutBatchId, attemptNumber));
             } catch (DataIntegrityViolationException ex) {
                 throw asDuplicateOrRethrow(student.id(), section, ex);
             }
-            billForEnrolment(saved, section);
+            if (initialStatus == EnrollmentStatus.ENROLLED) {
+                billForEnrolment(saved, section);
+            }
             recordAudit(
                     AuditTrail.Action.ENROLMENT_CREATED,
                     saved.getId(),
                     student.studentNumber() + " · " + section.courseCode() + " " + section.sectionCode());
-            metrics.enrolment("created");
-            log.info("Enrolled student {} into section {}", student.id(), section.id());
-            return EnrollmentResponse.from(saved);
+            metrics.enrolment(initialStatus == EnrollmentStatus.PENDING ? "pending" : "created");
+            log.info("Enrolled student {} into section {} as {}", student.id(), section.id(), initialStatus);
+            return saved;
         }
         try {
             Enrollment saved = repository.saveAndFlush(new Enrollment(
@@ -605,7 +780,7 @@ public class EnrollmentService {
                             + section.sectionCode());
             metrics.enrolment("waitlisted");
             log.info("Waitlisted student {} for section {}", student.id(), section.id());
-            return EnrollmentResponse.from(saved);
+            return saved;
         } catch (DataIntegrityViolationException ex) {
             throw asDuplicateOrRethrow(student.id(), section, ex);
         }
@@ -707,7 +882,7 @@ public class EnrollmentService {
             recordAudit(action, enrolment.getId(), targetLabel);
         }
         log.info("Enrolment {} moved to {}", enrollmentId, target);
-        return EnrollmentResponse.from(enrolment);
+        return toResponse(enrolment);
     }
 
     private void promoteWaitlist(UUID sectionId) {
@@ -721,6 +896,7 @@ public class EnrollmentService {
             return;
         }
         transition(next, EnrollmentStatus.ENROLLED);
+        next.offerWaitlistUntil(Instant.now().plus(WAITLIST_OFFER_WINDOW));
         courseCatalog.findSection(sectionId).ifPresent(section -> {
             billForEnrolment(next, section);
             recordAudit(

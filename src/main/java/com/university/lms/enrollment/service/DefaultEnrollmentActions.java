@@ -39,4 +39,10 @@ public class DefaultEnrollmentActions implements EnrollmentActions {
     public void withdraw(UUID enrollmentId, UUID actorUserId) {
         enrollmentService.withdraw(enrollmentId);
     }
+
+    @Override
+    @Transactional
+    public void lateAdd(UUID studentId, UUID courseSectionId, UUID actorUserId) {
+        enrollmentService.lateAdd(studentId, courseSectionId);
+    }
 }

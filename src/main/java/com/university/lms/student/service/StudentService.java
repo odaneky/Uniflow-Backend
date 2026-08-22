@@ -1,5 +1,6 @@
 package com.university.lms.student.service;
 
+import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.common.exception.CommonErrorCode;
@@ -52,16 +53,19 @@ public class StudentService {
     private final AcademicStructure academicStructure;
 
     private final CurrentUserProvider currentUserProvider;
+    private final RecordAccessLog recordAccessLog;
 
     public StudentService(
             StudentRepository studentRepository,
             UserDirectory userDirectory,
             AcademicStructure academicStructure,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            RecordAccessLog recordAccessLog) {
         this.studentRepository = studentRepository;
         this.userDirectory = userDirectory;
         this.academicStructure = academicStructure;
         this.currentUserProvider = currentUserProvider;
+        this.recordAccessLog = recordAccessLog;
     }
 
     @Transactional
@@ -106,7 +110,9 @@ public class StudentService {
 
     public StudentResponse findById(UUID studentId) {
         Student student = require(studentId);
-        currentUserProvider.require().requireSelfOrStaff(student.getUserId());
+        CurrentUser caller = currentUserProvider.require();
+        caller.requireSelfOrStaff(student.getUserId());
+        logStaffRecordAccess(caller, student.getId(), RecordAccessLog.Action.VIEW, "Student record");
         return toResponse(student);
     }
 
@@ -115,7 +121,9 @@ public class StudentService {
                 .findByStudentNumber(studentNumber)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         StudentErrorCode.STUDENT_NOT_FOUND, "No student exists with number " + studentNumber));
-        currentUserProvider.require().requireSelfOrStaff(student.getUserId());
+        CurrentUser caller = currentUserProvider.require();
+        caller.requireSelfOrStaff(student.getUserId());
+        logStaffRecordAccess(caller, student.getId(), RecordAccessLog.Action.VIEW, "Student record by number");
         return toResponse(student);
     }
 
@@ -331,6 +339,19 @@ public class StudentService {
                 request.emergencyContactPhone() != null
                         ? request.emergencyContactPhone()
                         : profile.getEmergencyContactPhone());
+    }
+
+    private void logStaffRecordAccess(CurrentUser caller, UUID studentId, String action, String details) {
+        if (!caller.isStaff()) {
+            return;
+        }
+        recordAccessLog.record(
+                caller.userId(),
+                caller.fullName(),
+                studentId,
+                RecordAccessLog.RecordType.STUDENT,
+                action,
+                details);
     }
 
     private Student require(UUID studentId) {

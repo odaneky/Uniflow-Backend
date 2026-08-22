@@ -76,6 +76,10 @@ public class CourseSection extends BaseEntity {
     @Column(name = "status", nullable = false, length = 30)
     private CourseSectionStatus status = CourseSectionStatus.PLANNED;
 
+    /** When true, new enrolments start in PENDING until registrar or lecturer approves. */
+    @Column(name = "requires_approval", nullable = false)
+    private boolean requiresApproval = false;
+
     /**
      * The most contended row in the system during a registration window: every concurrent
      * enrolment attempt for this section touches it.
@@ -145,5 +149,9 @@ public class CourseSection extends BaseEntity {
             throw new IllegalArgumentException("Capacity cannot be lower than the current enrolled count");
         }
         this.capacity = capacity;
+    }
+
+    public void setRequiresApproval(boolean requiresApproval) {
+        this.requiresApproval = requiresApproval;
     }
 }

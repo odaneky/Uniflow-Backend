@@ -61,7 +61,7 @@ class CurriculumProgressTest {
                         studentId, UUID.randomUUID(), "201945001", programmeId, true)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
-                        programmeId, "BSC-HTM", "Hospitality", "BSc", 120, true)));
+                        programmeId, "BSC-HTM", "Hospitality", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
         when(academicRecord.summaryOf(studentId))
                 .thenReturn(new AcademicRecord.Summary(new BigDecimal("0.00"), 3, 0, 1));
         when(academicRecord.publishedOverallOf(studentId))
@@ -69,7 +69,7 @@ class CurriculumProgressTest {
                         sectionId, "F", new BigDecimal("0.00"), Instant.parse("2024-01-01T00:00:00Z"))));
         when(courseCatalog.findSection(sectionId))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        sectionId, courseId, "HTM1001", "Intro", UUID.randomUUID(), "A", 30, 10, true, null)));
+                        sectionId, courseId, "HTM1001", "Intro", UUID.randomUUID(), "A", 30, 10, true, null, false)));
         when(courseCatalog.findCourse(courseId))
                 .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
                         courseId, "HTM1001", "Intro", 3, 1, true)));

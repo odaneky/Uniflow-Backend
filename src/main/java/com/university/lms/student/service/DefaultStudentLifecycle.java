@@ -39,4 +39,26 @@ public class DefaultStudentLifecycle implements StudentLifecycle {
     public void applyContactCorrection(UUID studentId, UpdateOwnProfileRequest contact) {
         studentService.updateContactById(studentId, contact);
     }
+
+    @Override
+    public void beginLeave(UUID studentId, UUID actorUserId) {
+        Student student = studentRepository
+                .findById(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.STUDENT_NOT_FOUND, "No student exists with id " + studentId));
+        if (student.getStatus() == StudentStatus.ACTIVE) {
+            student.changeStatus(StudentStatus.ON_LEAVE);
+        }
+    }
+
+    @Override
+    public void readmit(UUID studentId, UUID actorUserId) {
+        Student student = studentRepository
+                .findById(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.STUDENT_NOT_FOUND, "No student exists with id " + studentId));
+        if (student.getStatus() == StudentStatus.ON_LEAVE || student.getStatus() == StudentStatus.WITHDRAWN) {
+            student.changeStatus(StudentStatus.ACTIVE);
+        }
+    }
 }

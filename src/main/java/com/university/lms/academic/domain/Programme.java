@@ -1,8 +1,11 @@
 package com.university.lms.academic.domain;
 
 import com.university.lms.common.audit.BaseEntity;
+import java.math.BigDecimal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Index;
@@ -58,6 +61,14 @@ public class Programme extends BaseEntity {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "programme_type", nullable = false, length = 30)
+    private ProgrammeType programmeType = ProgrammeType.DEGREE;
+
+    /** Null means use institution default (2.0). */
+    @Column(name = "min_graduation_gpa", precision = 3, scale = 2)
+    private BigDecimal minGraduationGpa;
+
     protected Programme() {
         // for JPA
     }
@@ -95,5 +106,15 @@ public class Programme extends BaseEntity {
 
     public void reinstate() {
         this.active = true;
+    }
+
+    public void replaceProgrammeType(ProgrammeType programmeType) {
+        if (programmeType != null) {
+            this.programmeType = programmeType;
+        }
+    }
+
+    public void replaceMinGraduationGpa(BigDecimal minGraduationGpa) {
+        this.minGraduationGpa = minGraduationGpa;
     }
 }

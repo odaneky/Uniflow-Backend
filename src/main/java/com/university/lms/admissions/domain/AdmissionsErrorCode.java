@@ -1,0 +1,24 @@
+package com.university.lms.admissions.domain;
+
+import com.university.lms.common.exception.ErrorCode;
+
+public enum AdmissionsErrorCode implements ErrorCode {
+    APPLICATION_NOT_FOUND,
+    APPLICATION_ALREADY_OPEN,
+    APPLICATION_ALREADY_CLOSED,
+    APPLICATION_INVALID_TRANSITION,
+    APPLICATION_INVALID_DECISION,
+    APPLICATION_NOT_EDITABLE,
+    APPLICATION_DEPOSIT_REQUIRED,
+    APPLICATION_DEPOSIT_ALREADY_RECORDED,
+    APPLICATION_ALREADY_MATRICULATED,
+    APPLICATION_DOCUMENT_NOT_FOUND,
+    APPLICATION_PROGRAMME_NOT_FOUND,
+    APPLICATION_TERM_NOT_FOUND,
+    APPLICATION_MATRICULATION_FAILED;
+
+    @Override
+    public String code() {
+        return name();
+    }
+}

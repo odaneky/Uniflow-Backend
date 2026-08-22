@@ -59,7 +59,9 @@ public class DefaultAcademicStructure implements AcademicStructure {
                         programme.getName(),
                         programme.getDegreeAward(),
                         programme.getTotalCredits(),
-                        programme.isActive()));
+                        programme.isActive(),
+                        programme.getProgrammeType().name(),
+                        programme.getMinGraduationGpa()));
     }
 
     @Override
