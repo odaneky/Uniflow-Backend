@@ -2,6 +2,8 @@ package com.university.lms.attendance.service;
 
 import com.university.lms.attendance.domain.AttendanceMark;
 import com.university.lms.attendance.domain.AttendanceSession;
+import com.university.lms.attendance.domain.AttendanceStatus;
+import com.university.lms.attendance.dto.AttendanceDtos.AtRiskStudentResponse;
 import com.university.lms.attendance.dto.AttendanceDtos.AttendanceMarkResponse;
 import com.university.lms.attendance.dto.AttendanceDtos.AttendanceSessionDetailResponse;
 import com.university.lms.attendance.dto.AttendanceDtos.AttendanceSessionResponse;
@@ -18,7 +20,9 @@ import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -104,6 +108,50 @@ public class AttendanceService {
             marks.add(AttendanceMarkResponse.from(markRepository.save(mark)));
         }
         return new AttendanceSessionDetailResponse(AttendanceSessionResponse.from(savedSession), marks);
+    }
+
+    /**
+     * G4: students whose attendance rate for this section is below {@code thresholdPercent}.
+     *
+     * <p>An {@code EXCUSED} mark is dropped from both the numerator and the denominator — an
+     * excused absence should not count against the rate that flags a student as at risk. A student
+     * with no considered marks yet is never flagged: no evidence of absence is not evidence of it.
+     */
+    public List<AtRiskStudentResponse> atRiskStudents(UUID sectionId, double thresholdPercent) {
+        requireTeacherOrAdmin(sectionId);
+        List<UUID> sessionIds = sessionRepository.findByCourseSectionIdOrderBySessionDateDesc(sectionId).stream()
+                .map(AttendanceSession::getId)
+                .toList();
+        if (sessionIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, int[]> countsByStudent = new LinkedHashMap<>();
+        for (AttendanceMark mark : markRepository.findBySessionIdIn(sessionIds)) {
+            int[] counts = countsByStudent.computeIfAbsent(mark.getStudentId(), id -> new int[4]);
+            switch (mark.getStatus()) {
+                case PRESENT -> counts[0]++;
+                case LATE -> counts[1]++;
+                case ABSENT -> counts[2]++;
+                case EXCUSED -> counts[3]++;
+            }
+        }
+        double threshold = thresholdPercent / 100.0;
+        List<AtRiskStudentResponse> atRisk = new ArrayList<>();
+        countsByStudent.forEach((studentId, counts) -> {
+            int present = counts[0];
+            int late = counts[1];
+            int absent = counts[2];
+            int excused = counts[3];
+            int considered = present + late + absent;
+            if (considered == 0) {
+                return;
+            }
+            double rate = (double) (present + late) / considered;
+            if (rate < threshold) {
+                atRisk.add(new AtRiskStudentResponse(studentId, present, late, absent, excused, considered, rate));
+            }
+        });
+        return atRisk;
     }
 
     private void requireTeacherOrAdmin(UUID sectionId) {

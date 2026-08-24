@@ -41,4 +41,21 @@ public final class AttendanceDtos {
             @NotNull LocalDate sessionDate, String topic, @NotEmpty @Valid List<MarkRequest> marks) {}
 
     public record MarkRequest(@NotNull UUID studentId, @NotNull AttendanceStatus status, String note) {}
+
+    /**
+     * A student's attendance rate for a section, below the requested threshold.
+     *
+     * @param consideredSessions sessions counted toward the rate — every recorded mark except
+     *     {@code EXCUSED}, since an excused absence should not count against a student
+     * @param attendanceRate {@code (present + late) / consideredSessions}, as a fraction; {@code
+     *     null} when the student has no considered sessions yet
+     */
+    public record AtRiskStudentResponse(
+            UUID studentId,
+            int presentCount,
+            int lateCount,
+            int absentCount,
+            int excusedCount,
+            int consideredSessions,
+            Double attendanceRate) {}
 }

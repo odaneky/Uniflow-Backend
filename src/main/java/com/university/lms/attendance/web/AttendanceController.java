@@ -1,5 +1,6 @@
 package com.university.lms.attendance.web;
 
+import com.university.lms.attendance.dto.AttendanceDtos.AtRiskStudentResponse;
 import com.university.lms.attendance.dto.AttendanceDtos.AttendanceSessionDetailResponse;
 import com.university.lms.attendance.dto.AttendanceDtos.CreateAttendanceSessionRequest;
 import com.university.lms.attendance.service.AttendanceService;
@@ -44,5 +45,14 @@ public class AttendanceController {
             @PathVariable UUID sectionId, @Valid @RequestBody CreateAttendanceSessionRequest request) {
         AttendanceSessionDetailResponse created = attendanceService.recordSession(sectionId, request);
         return ResponseEntity.status(201).body(created);
+    }
+
+    /** G4: students below the given attendance-rate threshold, expressed as a whole percentage. */
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/at-risk")
+    public List<AtRiskStudentResponse> atRisk(
+            @PathVariable UUID sectionId,
+            @RequestParam(defaultValue = "75") double thresholdPercent) {
+        return attendanceService.atRiskStudents(sectionId, thresholdPercent);
     }
 }
