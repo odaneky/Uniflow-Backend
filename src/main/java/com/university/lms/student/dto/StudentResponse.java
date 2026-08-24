@@ -27,10 +27,11 @@ public record StudentResponse(
         StudentContactResponse contact) {
 
     public static StudentResponse from(Student student) {
-        return from(student, null, null);
+        return from(student, null, null, null);
     }
 
-    public static StudentResponse from(Student student, String advisorName, String advisorEmail) {
+    public static StudentResponse from(
+            Student student, String advisorName, String advisorEmail, String advisorOfficeHours) {
         return new StudentResponse(
                 student.getId(),
                 student.getUserId(),
@@ -42,7 +43,7 @@ public record StudentResponse(
                 student.getAdvisorUserId(),
                 advisorName,
                 advisorEmail,
-                student.getAdvisorOfficeHours(),
+                advisorOfficeHours,
                 student.getResidencyClassification(),
                 student.getCreatedAt(),
                 student.getUpdatedAt(),

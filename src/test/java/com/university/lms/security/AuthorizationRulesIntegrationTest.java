@@ -395,19 +395,6 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
             denied(json(post("/api/v1/students").with(as(SecurityRoles.STUDENT)), "{}"));
             denied(json(post("/api/v1/students").with(as(SecurityRoles.LECTURER)), "{}"));
         }
-
-        /**
-         * Documents a known and deliberate limitation rather than an intended end state: reads are
-         * role-gated but not owner-gated, so any authenticated student can currently read any
-         * other student's record. Narrowing this needs the entity in hand and belongs in the
-         * service layer — docs/ROADMAP.md, P0.1. If someone implements that, this test should
-         * start failing, and its failure is the signal to rewrite it.
-         */
-        @Test
-        @DisplayName("KNOWN GAP: reads are not yet scoped to the subject's own record")
-        void readsAreNotYetOwnerScoped() throws Exception {
-            allowed(get("/api/v1/students/" + UUID.randomUUID()).with(as(SecurityRoles.STUDENT)));
-        }
     }
 
     @Nested

@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.administration.api.AuditTrail;
+import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.common.telemetry.UniFlowMetrics;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.ForbiddenException;
@@ -53,6 +54,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Behaviour of the enrolment use case, with its collaborating modules stubbed at their published
@@ -98,6 +100,9 @@ class EnrollmentServiceTest {
 
     @Mock
     private AuditTrail auditTrail;
+
+    @Mock
+    private RecordAccessLog recordAccessLog;
 
     @Mock
     private UniFlowMetrics metrics;
@@ -727,6 +732,40 @@ class EnrollmentServiceTest {
         when(repository.findById(unknown)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findById(unknown)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("A7: staff searching a named student's enrolments is logged as a FERPA disclosure")
+    void staffSearchingAStudentsEnrolmentsIsLogged() {
+        when(currentUserProvider.require()).thenReturn(STAFF_CALLER);
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(repository.search(STUDENT_ID, null, null, pageable))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.search(STUDENT_ID, null, null, pageable);
+
+        verify(recordAccessLog)
+                .record(
+                        STAFF_CALLER.userId(),
+                        STAFF_CALLER.fullName(),
+                        STUDENT_ID,
+                        RecordAccessLog.RecordType.ENROLLMENT,
+                        RecordAccessLog.Action.VIEW,
+                        "Enrolment history");
+    }
+
+    @Test
+    @DisplayName("A7: a staff-wide search with no named student is not logged as a disclosure")
+    void staffBrowsingWithoutAStudentFilterIsNotLogged() {
+        when(currentUserProvider.require()).thenReturn(STAFF_CALLER);
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(repository.search(null, SECTION_ID, null, pageable))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.search(null, SECTION_ID, null, pageable);
+
+        verify(recordAccessLog, never())
+                .record(any(UUID.class), any(), any(UUID.class), any(), any(), any());
     }
 
     // ------------------------------------------------------------------

@@ -17,6 +17,7 @@ import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.student.domain.AdvisorOfficeHours;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentStatus;
@@ -24,6 +25,7 @@ import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
 import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.UpdateStudentRequest;
+import com.university.lms.student.repository.AdvisorOfficeHoursRepository;
 import com.university.lms.student.repository.StudentRepository;
 import com.university.lms.student.service.StudentProgrammeEnrolmentService;
 import com.university.lms.student.service.StudentService;
@@ -64,6 +66,9 @@ class StudentServiceTest {
 
     @Mock
     private AuditTrail auditTrail;
+
+    @Mock
+    private AdvisorOfficeHoursRepository advisorOfficeHoursRepository;
 
     @InjectMocks
     private StudentService service;
@@ -222,11 +227,9 @@ class StudentServiceTest {
     }
 
     @Test
-    @DisplayName("advisors post office hours on their advisee records")
+    @DisplayName("G8: an advisor's office hours are stored once, not duplicated across every advisee")
     void advisorUpdatesOwnOfficeHours() {
         UUID advisorId = UUID.randomUUID();
-        Student advisee = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
-        advisee.assignAdvisor(advisorId, null);
         when(currentUserProvider.require())
                 .thenReturn(
                         new CurrentUser(
@@ -238,13 +241,34 @@ class StudentServiceTest {
                                 Optional.empty(),
                                 Set.of(SecurityRoles.ACADEMIC_ADVISOR),
                                 Set.of()));
-        when(studentRepository.findAllByAdvisorUserId(advisorId)).thenReturn(List.of(advisee));
+        when(advisorOfficeHoursRepository.findByAdvisorUserId(advisorId)).thenReturn(Optional.empty());
+        when(advisorOfficeHoursRepository.save(any(AdvisorOfficeHours.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         AdvisorOfficeHoursResponse response =
                 service.updateOwnAdvisorOfficeHours("Tue 14:00–16:00 · Room 210");
 
         assertThat(response.officeHours()).isEqualTo("Tue 14:00–16:00 · Room 210");
-        assertThat(advisee.getAdvisorOfficeHours()).isEqualTo("Tue 14:00–16:00 · Room 210");
+        verify(advisorOfficeHoursRepository).save(any(AdvisorOfficeHours.class));
+    }
+
+    @Test
+    @DisplayName("G8: assigning an advisor who already posted office hours shows them immediately")
+    void newlyAssignedStudentSeesTheAdvisorsExistingOfficeHours() {
+        Student student = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
+        UUID advisorId = UUID.randomUUID();
+        when(userDirectory.exists(advisorId)).thenReturn(true);
+        when(userDirectory.findByRealmRole(SecurityRoles.ACADEMIC_ADVISOR))
+                .thenReturn(List.of(new UserDirectory.UserSummary(advisorId, "advisor", "Ada Advisor", "advisor@university.test", true)));
+        when(advisorOfficeHoursRepository.findByAdvisorUserId(advisorId))
+                .thenReturn(Optional.of(new AdvisorOfficeHours(advisorId, "Tue 14:00–16:00 · Room 210")));
+
+        StudentResponse response = service.update(
+                student.getId(),
+                new UpdateStudentRequest(null, null, null, advisorId, null, null, null, null, null));
+
+        assertThat(response.advisorOfficeHours()).isEqualTo("Tue 14:00–16:00 · Room 210");
     }
 
     private void givenValidReferences() {

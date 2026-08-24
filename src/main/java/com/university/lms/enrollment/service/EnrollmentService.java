@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.administration.api.AuditTrail;
+import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.common.telemetry.UniFlowMetrics;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.common.exception.CommonErrorCode;
@@ -91,6 +92,7 @@ public class EnrollmentService {
     private final RegistrationHolds registrationHolds;
     private final CurrentUserProvider currentUserProvider;
     private final AuditTrail auditTrail;
+    private final RecordAccessLog recordAccessLog;
     private final UniFlowMetrics metrics;
 
     public EnrollmentService(
@@ -105,6 +107,7 @@ public class EnrollmentService {
             RegistrationHolds registrationHolds,
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
+            RecordAccessLog recordAccessLog,
             UniFlowMetrics metrics) {
         this.repository = repository;
         this.checkoutIdempotencyRepository = checkoutIdempotencyRepository;
@@ -117,6 +120,7 @@ public class EnrollmentService {
         this.registrationHolds = registrationHolds;
         this.currentUserProvider = currentUserProvider;
         this.auditTrail = auditTrail;
+        this.recordAccessLog = recordAccessLog;
         this.metrics = metrics;
     }
 
@@ -385,6 +389,14 @@ public class EnrollmentService {
                         CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
             }
             effectiveStudentId = own;
+        } else if (studentId != null) {
+            recordAccessLog.record(
+                    caller.userId(),
+                    caller.fullName(),
+                    studentId,
+                    RecordAccessLog.RecordType.ENROLLMENT,
+                    RecordAccessLog.Action.VIEW,
+                    "Enrolment history");
         }
         return PageResponse.from(
                 repository.search(effectiveStudentId, courseSectionId, status, pageable), this::toResponse);

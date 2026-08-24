@@ -7,6 +7,7 @@ import com.lowagie.text.FontFactory;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfWriter;
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
@@ -44,6 +45,7 @@ public class TranscriptService {
     private final TransferCreditRepository transferCreditRepository;
     private final CurrentUserProvider currentUserProvider;
     private final GradeService gradeService;
+    private final RecordAccessLog recordAccessLog;
 
     public TranscriptService(
             GradeRepository gradeRepository,
@@ -52,7 +54,8 @@ public class TranscriptService {
             StudentDirectory studentDirectory,
             TransferCreditRepository transferCreditRepository,
             CurrentUserProvider currentUserProvider,
-            GradeService gradeService) {
+            GradeService gradeService,
+            RecordAccessLog recordAccessLog) {
         this.gradeRepository = gradeRepository;
         this.courseCatalog = courseCatalog;
         this.academicStructure = academicStructure;
@@ -60,10 +63,20 @@ public class TranscriptService {
         this.transferCreditRepository = transferCreditRepository;
         this.currentUserProvider = currentUserProvider;
         this.gradeService = gradeService;
+        this.recordAccessLog = recordAccessLog;
     }
 
     public byte[] officialTranscript(UUID studentId) {
-        requireAccess(studentId);
+        CurrentUser caller = requireAccess(studentId);
+        if (caller.isStaff()) {
+            recordAccessLog.record(
+                    caller.userId(),
+                    caller.fullName(),
+                    studentId,
+                    RecordAccessLog.RecordType.GRADES,
+                    RecordAccessLog.Action.EXPORT,
+                    "Official transcript");
+        }
         StudentDirectory.StudentSummary student = studentDirectory
                 .findById(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -140,10 +153,10 @@ public class TranscriptService {
         return officialTranscript(studentId);
     }
 
-    private void requireAccess(UUID studentId) {
+    private CurrentUser requireAccess(UUID studentId) {
         CurrentUser caller = currentUserProvider.require();
         if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR)) {
-            return;
+            return caller;
         }
         UUID own = studentDirectory
                 .studentIdOfUser(caller.userId())
@@ -153,5 +166,6 @@ public class TranscriptService {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
+        return caller;
     }
 }

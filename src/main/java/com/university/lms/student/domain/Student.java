@@ -68,9 +68,6 @@ public class Student extends BaseEntity {
     @Column(name = "advisor_user_id")
     private UUID advisorUserId;
 
-    @Column(name = "advisor_office_hours", length = 200)
-    private String advisorOfficeHours;
-
     /** Drives which tuition tier this student is charged. See {@link #reclassifyResidency}. */
     @Enumerated(EnumType.STRING)
     @Column(name = "residency_classification", nullable = false, length = 30)
@@ -122,18 +119,12 @@ public class Student extends BaseEntity {
         this.expectedGraduationDate = expectedGraduationDate;
     }
 
-    public void assignAdvisor(UUID advisorUserId, String officeHours) {
+    public void assignAdvisor(UUID advisorUserId) {
         this.advisorUserId = advisorUserId;
-        this.advisorOfficeHours = officeHours;
     }
 
     public void clearAdvisor() {
         this.advisorUserId = null;
-        this.advisorOfficeHours = null;
-    }
-
-    public void setAdvisorOfficeHours(String officeHours) {
-        this.advisorOfficeHours = officeHours;
     }
 
     public void reclassifyResidency(ResidencyClassification residencyClassification) {

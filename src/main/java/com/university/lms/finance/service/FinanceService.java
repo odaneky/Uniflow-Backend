@@ -1,5 +1,6 @@
 package com.university.lms.finance.service;
 
+import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
@@ -40,6 +41,7 @@ public class FinanceService {
     private final CurrentUserProvider currentUserProvider;
     private final PaymentPlanService paymentPlanService;
     private final FinanceProperties financeProperties;
+    private final RecordAccessLog recordAccessLog;
 
     public FinanceService(
             StudentAccountRepository accountRepository,
@@ -47,13 +49,15 @@ public class FinanceService {
             StudentDirectory studentDirectory,
             CurrentUserProvider currentUserProvider,
             PaymentPlanService paymentPlanService,
-            FinanceProperties financeProperties) {
+            FinanceProperties financeProperties,
+            RecordAccessLog recordAccessLog) {
         this.accountRepository = accountRepository;
         this.entryRepository = entryRepository;
         this.studentDirectory = studentDirectory;
         this.currentUserProvider = currentUserProvider;
         this.paymentPlanService = paymentPlanService;
         this.financeProperties = financeProperties;
+        this.recordAccessLog = recordAccessLog;
     }
 
     public AccountResponse own() {
@@ -69,11 +73,18 @@ public class FinanceService {
     }
 
     public AccountResponse forStudent(UUID studentId) {
-        requireRegistry();
+        CurrentUser caller = requireRegistry();
         if (!studentDirectory.exists(studentId)) {
             throw new ResourceNotFoundException(
                     FinanceErrorCode.ACCOUNT_STUDENT_NOT_FOUND, "No student exists with id " + studentId);
         }
+        recordAccessLog.record(
+                caller.userId(),
+                caller.fullName(),
+                studentId,
+                RecordAccessLog.RecordType.FINANCE,
+                RecordAccessLog.Action.VIEW,
+                "Student account");
         return accountRepository
                 .findByStudentId(studentId)
                 .map(this::toResponse)
@@ -173,11 +184,12 @@ public class FinanceService {
         return type == AccountEntryType.CHARGE ? amount : amount.negate();
     }
 
-    private void requireRegistry() {
+    private CurrentUser requireRegistry() {
         CurrentUser caller = currentUserProvider.require();
         if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
+        return caller;
     }
 }

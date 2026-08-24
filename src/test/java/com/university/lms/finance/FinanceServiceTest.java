@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.finance.config.FinanceProperties;
 import com.university.lms.common.security.SecurityRoles;
@@ -26,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -36,6 +39,7 @@ class FinanceServiceTest {
 
     private static final UUID USER_ID = UUID.randomUUID();
     private static final UUID STUDENT_ID = UUID.randomUUID();
+    private static final UUID REGISTRAR_USER_ID = UUID.randomUUID();
     private static final CurrentUser STUDENT = new CurrentUser(
             USER_ID,
             "sub",
@@ -44,6 +48,15 @@ class FinanceServiceTest {
             "Demo Student",
             Optional.of("202012345"),
             Set.of(SecurityRoles.STUDENT),
+            Set.of());
+    private static final CurrentUser REGISTRAR = new CurrentUser(
+            REGISTRAR_USER_ID,
+            "sub-registrar",
+            "registrar",
+            "registrar@university.test",
+            "Rita Registrar",
+            Optional.empty(),
+            Set.of(SecurityRoles.REGISTRAR),
             Set.of());
 
     @Mock
@@ -61,6 +74,9 @@ class FinanceServiceTest {
     @Mock
     private PaymentPlanService paymentPlanService;
 
+    @Mock
+    private RecordAccessLog recordAccessLog;
+
     private FinanceService service;
 
     @BeforeEach
@@ -73,7 +89,8 @@ class FinanceServiceTest {
                 studentDirectory,
                 currentUserProvider,
                 paymentPlanService,
-                new FinanceProperties(true));
+                new FinanceProperties(true),
+                recordAccessLog);
     }
 
     @Test
@@ -124,11 +141,31 @@ class FinanceServiceTest {
                 studentDirectory,
                 currentUserProvider,
                 paymentPlanService,
-                new FinanceProperties(false));
+                new FinanceProperties(false),
+                recordAccessLog);
 
         assertThatThrownBy(() -> disabled.payOwn(new CreatePaymentRequest(new BigDecimal("1.00"))))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())
                         .isEqualTo(FinanceErrorCode.SELF_SERVICE_PAYMENT_DISABLED));
+    }
+
+    @Test
+    @DisplayName("A7: a registrar viewing a student's account is logged as a FERPA disclosure")
+    void staffViewingAStudentsAccountIsLogged() {
+        when(currentUserProvider.require()).thenReturn(REGISTRAR);
+        when(studentDirectory.exists(STUDENT_ID)).thenReturn(true);
+        when(accountRepository.findByStudentId(STUDENT_ID)).thenReturn(Optional.empty());
+
+        service.forStudent(STUDENT_ID);
+
+        verify(recordAccessLog)
+                .record(
+                        REGISTRAR_USER_ID,
+                        "Rita Registrar",
+                        STUDENT_ID,
+                        RecordAccessLog.RecordType.FINANCE,
+                        RecordAccessLog.Action.VIEW,
+                        "Student account");
     }
 }

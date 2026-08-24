@@ -24,6 +24,8 @@ import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.StudentSummaryResponse;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.dto.UpdateStudentRequest;
+import com.university.lms.student.domain.AdvisorOfficeHours;
+import com.university.lms.student.repository.AdvisorOfficeHoursRepository;
 import com.university.lms.student.repository.StudentRepository;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -58,6 +60,7 @@ public class StudentService {
     private final RecordAccessLog recordAccessLog;
     private final StudentProgrammeEnrolmentService programmeEnrolmentService;
     private final AuditTrail auditTrail;
+    private final AdvisorOfficeHoursRepository advisorOfficeHoursRepository;
 
     public StudentService(
             StudentRepository studentRepository,
@@ -66,7 +69,8 @@ public class StudentService {
             CurrentUserProvider currentUserProvider,
             RecordAccessLog recordAccessLog,
             StudentProgrammeEnrolmentService programmeEnrolmentService,
-            AuditTrail auditTrail) {
+            AuditTrail auditTrail,
+            AdvisorOfficeHoursRepository advisorOfficeHoursRepository) {
         this.studentRepository = studentRepository;
         this.userDirectory = userDirectory;
         this.academicStructure = academicStructure;
@@ -74,6 +78,7 @@ public class StudentService {
         this.recordAccessLog = recordAccessLog;
         this.programmeEnrolmentService = programmeEnrolmentService;
         this.auditTrail = auditTrail;
+        this.advisorOfficeHoursRepository = advisorOfficeHoursRepository;
     }
 
     @Transactional
@@ -207,10 +212,15 @@ public class StudentService {
             return StudentResponse.from(student);
         }
         var advisor = userDirectory.findById(student.getAdvisorUserId());
+        String officeHours = advisorOfficeHoursRepository
+                .findByAdvisorUserId(student.getAdvisorUserId())
+                .map(AdvisorOfficeHours::getOfficeHours)
+                .orElse(null);
         return StudentResponse.from(
                 student,
                 advisor.map(UserDirectory.UserSummary::fullName).orElse(null),
-                advisor.map(UserDirectory.UserSummary::email).orElse(null));
+                advisor.map(UserDirectory.UserSummary::email).orElse(null),
+                officeHours);
     }
 
     @Transactional
@@ -241,10 +251,7 @@ public class StudentService {
             student.clearAdvisor();
         } else if (request.advisorUserId() != null) {
             requireAssignableAdvisor(request.advisorUserId());
-            UUID nextAdvisor = request.advisorUserId();
-            String hours =
-                    nextAdvisor.equals(student.getAdvisorUserId()) ? student.getAdvisorOfficeHours() : null;
-            student.assignAdvisor(nextAdvisor, hours);
+            student.assignAdvisor(request.advisorUserId());
         }
         if (request.contact() != null) {
             applyContact(student, request.contact());
@@ -262,25 +269,26 @@ public class StudentService {
         applyContact(require(studentId), request);
     }
 
-    /** Office hours the caller has posted for their advisees. */
+    /** Office hours the caller has posted, stored once per advisor. */
     public AdvisorOfficeHoursResponse findOwnAdvisorOfficeHours() {
         CurrentUser caller = requireAdvisor();
-        return studentRepository.findAllByAdvisorUserId(caller.userId()).stream()
-                .map(Student::getAdvisorOfficeHours)
-                .filter(h -> h != null && !h.isBlank())
-                .findFirst()
+        return advisorOfficeHoursRepository
+                .findByAdvisorUserId(caller.userId())
+                .map(AdvisorOfficeHours::getOfficeHours)
                 .map(AdvisorOfficeHoursResponse::new)
                 .orElseGet(() -> new AdvisorOfficeHoursResponse(null));
     }
 
-    /** Updates office hours on every student record assigned to the caller. */
+    /** Updates the office hours the caller has posted, once, regardless of how many advisees they have. */
     @Transactional
     public AdvisorOfficeHoursResponse updateOwnAdvisorOfficeHours(String officeHours) {
         CurrentUser caller = requireAdvisor();
         String normalized = blankToNull(officeHours);
-        for (Student student : studentRepository.findAllByAdvisorUserId(caller.userId())) {
-            student.setAdvisorOfficeHours(normalized);
-        }
+        AdvisorOfficeHours row = advisorOfficeHoursRepository
+                .findByAdvisorUserId(caller.userId())
+                .orElseGet(() -> new AdvisorOfficeHours(caller.userId(), normalized));
+        row.replace(normalized);
+        advisorOfficeHoursRepository.save(row);
         return new AdvisorOfficeHoursResponse(normalized);
     }
 
