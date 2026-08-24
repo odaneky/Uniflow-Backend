@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Docker is preinstalled on GitHub-hosted runners, so Testcontainers can start its own
+      # version-pinned Postgres — see TestDatabase.java for why that is the default this suite
+      # is written to expect, rather than a Postgres service container reused across the job.
+      - name: Run the test suite
+        run: ./mvnw --batch-mode --no-transfer-progress verify
