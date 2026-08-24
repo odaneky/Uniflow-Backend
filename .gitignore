@@ -1,0 +1,20 @@
+# ---- Java / Maven ----
+target/
+*.class
+# Keep the Maven wrapper itself committed; ignore only the downloaded distribution.
+.mvn/wrapper/maven-wrapper.jar
+
+# ---- IDE ----
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# ---- OS / logs ----
+.DS_Store
+*.log
+
+# Local object-store blobs (assignment submissions). Never commit file bytes.
+data/
