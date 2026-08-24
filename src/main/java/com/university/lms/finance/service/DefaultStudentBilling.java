@@ -1,5 +1,6 @@
 package com.university.lms.finance.service;
 
+import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.finance.api.PaymentStanding;
 import com.university.lms.finance.api.StudentBilling;
 import com.university.lms.finance.api.StudentBilling.TuitionQuote;
@@ -14,8 +15,11 @@ import com.university.lms.finance.repository.FeeCatalogRepository;
 import com.university.lms.finance.repository.StudentAccountRepository;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -33,6 +37,7 @@ public class DefaultStudentBilling implements StudentBilling {
     private final FeeCatalogService feeCatalogService;
     private final FeeCatalogRepository feeRepository;
     private final StudentDirectory studentDirectory;
+    private final AcademicStructure academicStructure;
 
     public DefaultStudentBilling(
             StudentAccountRepository accountRepository,
@@ -41,7 +46,8 @@ public class DefaultStudentBilling implements StudentBilling {
             TuitionScheduleService tuitionScheduleService,
             FeeCatalogService feeCatalogService,
             FeeCatalogRepository feeRepository,
-            StudentDirectory studentDirectory) {
+            StudentDirectory studentDirectory,
+            AcademicStructure academicStructure) {
         this.accountRepository = accountRepository;
         this.entryRepository = entryRepository;
         this.paymentPlanService = paymentPlanService;
@@ -49,6 +55,7 @@ public class DefaultStudentBilling implements StudentBilling {
         this.feeCatalogService = feeCatalogService;
         this.feeRepository = feeRepository;
         this.studentDirectory = studentDirectory;
+        this.academicStructure = academicStructure;
     }
 
     @Override
@@ -134,21 +141,24 @@ public class DefaultStudentBilling implements StudentBilling {
                 tuitionReference(enrollmentId),
                 tuitionCreditReference(enrollmentId),
                 "Tuition credit — " + courseCode + " (course drop)",
-                at);
+                at,
+                BigDecimal.ONE);
         for (FeeCatalogItem fee : feeRepository.findAll()) {
             reverse(
                     account,
                     catalogEnrolmentReference(fee.getId(), enrollmentId),
                     catalogEnrolmentCreditReference(fee.getId(), enrollmentId),
                     fee.getName() + " credit (course drop)",
-                    at);
+                    at,
+                    BigDecimal.ONE);
             if (lastEnrolmentInTerm && academicTermId != null && fee.getAssessment() == FeeAssessment.ONCE_PER_TERM) {
                 reverse(
                         account,
                         catalogTermReference(fee.getId(), academicTermId),
                         catalogTermCreditReference(fee.getId(), academicTermId),
                         fee.getName() + " credit (course drop)",
-                        at);
+                        at,
+                        BigDecimal.ONE);
             }
         }
         if (lastEnrolmentInTerm && academicTermId != null) {
@@ -157,12 +167,113 @@ public class DefaultStudentBilling implements StudentBilling {
                     campusFeeReference(academicTermId),
                     campusFeeCreditReference(academicTermId),
                     "Campus fee credit (course drop)",
-                    at);
+                    at,
+                    BigDecimal.ONE);
         }
     }
 
+    @Override
+    public void creditForWithdrawal(
+            UUID studentId, UUID enrollmentId, UUID academicTermId, String courseCode, boolean lastEnrolmentInTerm) {
+        if (studentId == null || enrollmentId == null) {
+            return;
+        }
+        BigDecimal percent = withdrawalRefundPercent(academicTermId, Instant.now());
+        if (percent.signum() <= 0) {
+            return;
+        }
+        StudentAccount account = accountRepository.lockByStudentId(studentId).orElse(null);
+        if (account == null) {
+            return;
+        }
+        Instant at = Instant.now();
+        String pct = percent.movePointRight(2).stripTrailingZeros().toPlainString();
+        reverse(
+                account,
+                tuitionReference(enrollmentId),
+                tuitionCreditReference(enrollmentId),
+                "Tuition credit — " + courseCode + " (withdrawal, " + pct + "% refund)",
+                at,
+                percent);
+        for (FeeCatalogItem fee : feeRepository.findAll()) {
+            reverse(
+                    account,
+                    catalogEnrolmentReference(fee.getId(), enrollmentId),
+                    catalogEnrolmentCreditReference(fee.getId(), enrollmentId),
+                    fee.getName() + " credit (withdrawal, " + pct + "% refund)",
+                    at,
+                    percent);
+            if (lastEnrolmentInTerm && academicTermId != null && fee.getAssessment() == FeeAssessment.ONCE_PER_TERM) {
+                reverse(
+                        account,
+                        catalogTermReference(fee.getId(), academicTermId),
+                        catalogTermCreditReference(fee.getId(), academicTermId),
+                        fee.getName() + " credit (withdrawal, " + pct + "% refund)",
+                        at,
+                        percent);
+            }
+        }
+        if (lastEnrolmentInTerm && academicTermId != null) {
+            reverse(
+                    account,
+                    campusFeeReference(academicTermId),
+                    campusFeeCreditReference(academicTermId),
+                    "Campus fee credit (withdrawal, " + pct + "% refund)",
+                    at,
+                    percent);
+        }
+    }
+
+    private static final BigDecimal WITHDRAWAL_TIER_1 = new BigDecimal("0.75");
+    private static final BigDecimal WITHDRAWAL_TIER_2 = new BigDecimal("0.50");
+    private static final BigDecimal WITHDRAWAL_TIER_3 = new BigDecimal("0.25");
+    private static final long WITHDRAWAL_TIER_DAYS = 7;
+
+    /**
+     * E4: a withdrawal used to earn no refund at all, no matter how soon after add/drop closed it
+     * happened. This is a conventional starting default — 75/50/25/0% tapering weekly from the
+     * no-penalty window's close — not an institution-specific policy read from configuration; there
+     * is nowhere yet for the registrar to set the institution's own dates and percentages.
+     *
+     * <p>A drop within the no-penalty window is a full refund handled separately by {@link
+     * #creditForDrop}; this only runs once a student is far enough past it that {@code
+     * EnrollmentService.requireWithdrawWindow} requires a withdrawal instead of a drop. Zero when
+     * the term has no configured add/drop close date to taper from, or when the calendar cannot be
+     * resolved at all.
+     */
+    private BigDecimal withdrawalRefundPercent(UUID academicTermId, Instant asOf) {
+        if (academicTermId == null) {
+            return BigDecimal.ZERO;
+        }
+        Optional<AcademicStructure.TermCalendar> calendar = academicStructure.findCalendar(academicTermId, asOf);
+        if (calendar.isEmpty() || calendar.get().addDropClosesAt() == null) {
+            return BigDecimal.ZERO;
+        }
+        long daysSinceAddDropClosed = Duration.between(calendar.get().addDropClosesAt(), asOf).toDays();
+        if (daysSinceAddDropClosed < 0) {
+            // Should not happen — a withdrawal is refused before add/drop closes — but a stale or
+            // unexpected calendar lookup must not manufacture a refund no tier actually grants.
+            return BigDecimal.ZERO;
+        }
+        if (daysSinceAddDropClosed < WITHDRAWAL_TIER_DAYS) {
+            return WITHDRAWAL_TIER_1;
+        }
+        if (daysSinceAddDropClosed < WITHDRAWAL_TIER_DAYS * 2) {
+            return WITHDRAWAL_TIER_2;
+        }
+        if (daysSinceAddDropClosed < WITHDRAWAL_TIER_DAYS * 3) {
+            return WITHDRAWAL_TIER_3;
+        }
+        return BigDecimal.ZERO;
+    }
+
     private void reverse(
-            StudentAccount account, String chargeRef, String creditRef, String description, Instant at) {
+            StudentAccount account,
+            String chargeRef,
+            String creditRef,
+            String description,
+            Instant at,
+            BigDecimal percent) {
         if (entryRepository.existsByAccountIdAndReference(account.getId(), creditRef)) {
             return;
         }
@@ -171,10 +282,12 @@ public class DefaultStudentBilling implements StudentBilling {
         if (charge == null) {
             return;
         }
+        BigDecimal creditAmount =
+                charge.getAmount().abs().multiply(percent).setScale(2, RoundingMode.HALF_UP).negate();
         entryRepository.save(new AccountEntry(
                 account,
                 AccountEntryType.CREDIT,
-                charge.getAmount().abs().negate(),
+                creditAmount,
                 description,
                 at,
                 creditRef));

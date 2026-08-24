@@ -919,6 +919,18 @@ public class EnrollmentService {
                         section.courseCode(),
                         !remaining);
             }
+            if (target == EnrollmentStatus.WITHDRAWN && section != null) {
+                // E4: a withdrawal used to earn no credit at all, regardless of how soon after
+                // add/drop closed it happened. studentBilling now tapers the refund by how long
+                // since the no-penalty window ended.
+                boolean remaining = hasOtherEnrolmentInTerm(enrolment.getStudentId(), section.academicTermId());
+                studentBilling.creditForWithdrawal(
+                        enrolment.getStudentId(),
+                        enrolment.getId(),
+                        section.academicTermId(),
+                        section.courseCode(),
+                        !remaining);
+            }
             promoteWaitlist(enrolment.getCourseSectionId());
         }
         String action = target == EnrollmentStatus.DROPPED

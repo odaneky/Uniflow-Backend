@@ -3,6 +3,7 @@ package com.university.lms.enrollment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -614,6 +615,21 @@ class EnrollmentServiceTest {
                         .isEqualTo(EnrollmentErrorCode.ENROLLMENT_ADD_DROP_CLOSED));
 
         verify(courseCatalog, never()).releaseSeat(any());
+    }
+
+    @Test
+    @DisplayName("E4: withdrawing after add/drop has closed credits the tapering refund, not the full drop credit")
+    void withdrawingCallsCreditForWithdrawalNotCreditForDrop() {
+        Enrollment enrolment = new Enrollment(STUDENT_ID, SECTION_ID);
+        when(repository.findById(enrolment.getId())).thenReturn(Optional.of(enrolment));
+        givenOpenSection(30, 5);
+        when(academicStructure.canDropWithoutPenalty(eq(TERM_ID), any(Instant.class))).thenReturn(false);
+
+        EnrollmentResponse response = service.withdraw(enrolment.getId());
+
+        assertThat(response.status()).isEqualTo(EnrollmentStatus.WITHDRAWN);
+        verify(studentBilling).creditForWithdrawal(eq(STUDENT_ID), eq(enrolment.getId()), eq(TERM_ID), any(), anyBoolean());
+        verify(studentBilling, never()).creditForDrop(any(), any(), any(), any(), anyBoolean());
     }
 
     @Test

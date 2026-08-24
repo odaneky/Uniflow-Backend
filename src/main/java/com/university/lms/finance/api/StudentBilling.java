@@ -51,8 +51,22 @@ public interface StudentBilling {
     /**
      * Reverses the tuition and per-enrolment catalog fees posted for this enrolment. When this was
      * the last enrolment in the term, also reverses the campus fee and once-per-term catalog fees.
+     *
+     * <p>Always a full reversal — a drop is only reachable while the no-penalty add/drop window is
+     * still open, so 100% is correct by construction, not a policy choice made here.
      */
     void creditForDrop(
+            UUID studentId, UUID enrollmentId, UUID academicTermId, String courseCode, boolean lastEnrolmentInTerm);
+
+    /**
+     * Credits the tapering share of tuition and fees a withdrawal earns back, per the institution's
+     * refund policy. A withdrawal is only reachable once add/drop has closed (see {@code
+     * EnrollmentService.requireWithdrawWindow}), so unlike {@link #creditForDrop} this is never a
+     * full reversal — the share declines the longer the student waited, down to a full charge once
+     * the refund window has lapsed. Posts nothing when the term has no configured add/drop close
+     * date to taper from.
+     */
+    void creditForWithdrawal(
             UUID studentId, UUID enrollmentId, UUID academicTermId, String courseCode, boolean lastEnrolmentInTerm);
 
     /** How much of this term's charges must already have been paid, as of {@code asOf}. */
