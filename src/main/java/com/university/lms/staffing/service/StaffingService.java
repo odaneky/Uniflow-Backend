@@ -24,7 +24,9 @@ import com.university.lms.staffing.repository.OrgUnitRepository;
 import com.university.lms.staffing.repository.StaffAppointmentRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -134,6 +136,30 @@ public class StaffingService implements StaffAppointments {
                 .map(appointment ->
                         new Appointment(appointment.getOrgUnit().getId(), appointment.getOrgUnit().getCode(), appointment.getRole()))
                 .toList();
+    }
+
+    @Override
+    public boolean isAppointedOver(UUID userId, UUID orgUnitId) {
+        Set<UUID> activeOrgUnitIds = new HashSet<>();
+        LocalDate today = LocalDate.now();
+        for (StaffAppointment appointment : appointmentRepository.findByUserId(userId)) {
+            if (appointment.isActiveOn(today)) {
+                activeOrgUnitIds.add(appointment.getOrgUnit().getId());
+            }
+        }
+        if (activeOrgUnitIds.isEmpty()) {
+            return false;
+        }
+        // Walk from the target unit up toward the root: an appointment at any ancestor covers
+        // everything beneath it, not only the exact unit named on the appointment.
+        OrgUnit current = orgUnitRepository.findById(orgUnitId).orElse(null);
+        while (current != null) {
+            if (activeOrgUnitIds.contains(current.getId())) {
+                return true;
+            }
+            current = current.getParent();
+        }
+        return false;
     }
 
     private void requireRegistry() {
