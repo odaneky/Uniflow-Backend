@@ -9,6 +9,8 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,5 +47,15 @@ public class GradeController {
     @GetMapping("/sections/{sectionId}")
     public List<GradeResponse> gradebook(@PathVariable UUID sectionId) {
         return gradeService.gradebook(sectionId);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @GetMapping(value = "/sections/{sectionId}/export", produces = "text/csv")
+    public ResponseEntity<String> exportGradebook(@PathVariable UUID sectionId) {
+        String csv = gradeService.exportGradebookCsv(sectionId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"gradebook-" + sectionId + ".csv\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
     }
 }

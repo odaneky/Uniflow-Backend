@@ -20,16 +20,19 @@ public interface SectionMeetingRepository extends JpaRepository<SectionMeeting, 
      * runs on an ordinary admin action, and scanning every meeting in the university to validate one
      * edit is how a save button becomes a performance incident.
      *
-     * <p>{@code room} must already be lower-cased by the caller. Lowering a bare parameter inside a
-     * SQL function is the shape that once left Hibernate unable to infer a type and emitted
-     * {@code lower(bytea)} at runtime.
+     * <p>{@code room} must already be lower-cased and stripped of space, hyphen, underscore and
+     * period by the caller (see {@code TeachingConflictChecker.normaliseRoom}) — the same
+     * normalization is applied to the stored value here, so "Lab 3" and "Lab-3" resolve to the same
+     * key on both sides. Lowering a bare parameter inside a SQL function is the shape that once left
+     * Hibernate unable to infer a type and emitted {@code lower(bytea)} at runtime; wrapping the
+     * column instead of the parameter avoids the question.
      */
     @Query("""
             select m from SectionMeeting m
             join fetch m.section s
             join fetch s.course
             where s.academicTermId = :academicTermId
-              and lower(m.room) = :room
+              and replace(replace(replace(replace(lower(m.room), ' ', ''), '-', ''), '_', ''), '.', '') = :room
             """)
     List<SectionMeeting> findByTermAndRoom(
             @Param("academicTermId") UUID academicTermId, @Param("room") String room);

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.exception.ValidationException;
+import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.grading.api.AcademicRecord;
@@ -16,13 +17,18 @@ import com.university.lms.grading.domain.GradingErrorCode;
 import com.university.lms.grading.repository.GradeRepository;
 import com.university.lms.grading.repository.GradeScaleBandRepository;
 import com.university.lms.grading.repository.GradeScaleRepository;
+import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -53,6 +59,9 @@ class GradeServiceTest {
 
     @Mock
     private StudentDirectory studentDirectory;
+
+    @Mock
+    private UserDirectory userDirectory;
 
     @Mock
     private CurrentUserProvider currentUserProvider;
@@ -159,5 +168,47 @@ class GradeServiceTest {
 
         assertThat(summary.creditsEarned()).isZero();
         assertThat(summary.gpa()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("D8: the gradebook export includes one CSV row per grade with the student's name")
+    void gradebookExportsAsCsv() {
+        UUID sectionId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        UUID termId = UUID.randomUUID();
+        GradeScale scale = new GradeScale("Undergraduate Standard", "test");
+        Grade grade = new Grade(
+                studentId, sectionId, scale, new BigDecimal("88.50"), "A", new BigDecimal("3.70"),
+                courseId, termId, 3, 1);
+
+        CurrentUser registrar = new CurrentUser(
+                UUID.randomUUID(), "sub", "registrar", "registrar@university.test", "Rita Registrar",
+                Optional.empty(), Set.of(SecurityRoles.REGISTRAR), Set.of());
+        when(currentUserProvider.require()).thenReturn(registrar);
+        when(courseCatalog.findSection(sectionId))
+                .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
+                        sectionId, courseId, "CMP1010", "Foundations", termId, "A", 30, 10, true, null, false)));
+        when(courseCatalog.findCourse(courseId))
+                .thenReturn(Optional.of(new CourseCatalog.CourseSummary(courseId, "CMP1010", "Foundations", 3, 1, true)));
+        when(academicStructure.findTerm(
+                        org.mockito.ArgumentMatchers.eq(termId), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new AcademicStructure.TermSummary(
+                        termId, "Fall", UUID.randomUUID(), "2026/2027", false)));
+        when(gradeRepository.findByCourseSectionId(sectionId)).thenReturn(List.of(grade));
+        when(enrollmentDirectory.attemptNumberOf(studentId, sectionId)).thenReturn(Optional.of(1));
+        when(studentDirectory.findById(studentId))
+                .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
+                        studentId, userId, "20260001", UUID.randomUUID(), true, ResidencyClassification.IN_DISTRICT)));
+        when(userDirectory.findById(userId))
+                .thenReturn(Optional.of(new UserDirectory.UserSummary(userId, "student", "Sam Student", "sam@test", true)));
+
+        String csv = service.exportGradebookCsv(sectionId);
+
+        List<String> lines = csv.lines().toList();
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0)).contains("Student Number", "Student Name", "Letter");
+        assertThat(lines.get(1)).contains("\"20260001\"", "\"Sam Student\"", "\"CMP1010\"", "\"A\"", "\"88.50\"");
     }
 }

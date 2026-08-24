@@ -111,8 +111,12 @@ class TeachingConflictChecker {
     /**
      * A room booked by another section at the same time, in the same term.
      *
-     * <p>Rooms are free text, so this matches case-insensitively and ignores surrounding spaces —
-     * "LT-3B" and "lt-3b " are the same room to everyone except a string comparison.
+     * <p>Rooms are free text, so this matches case- and whitespace-insensitively and also strips
+     * the punctuation two staff members type differently for the same room — "Lab 3", "Lab-3" and
+     * "LAB_3" are all the same room to everyone except a string comparison. This is a normalization
+     * fix, not a room registry: two genuinely different rooms whose names collide once punctuation
+     * is stripped would still be treated as one, which is why {@code G1} calls for a real
+     * {@code Room} entity as the complete fix — this is the safe, additive slice of it.
      */
     Optional<String> roomClash(CourseSection target, List<CourseCatalog.Meeting> proposed) {
         if (target.getAcademicTermId() == null) {
@@ -228,14 +232,22 @@ class TeachingConflictChecker {
         };
     }
 
+    /**
+     * G1: "Lab 3" and "Lab-3" used to be different rooms to this check, because the only
+     * normalization was case and surrounding whitespace. Stripping space, hyphen, underscore and
+     * period — the separators staff actually type — is what {@link SectionMeetingRepository
+     * #findByTermAndRoom} applies to the stored value too, so both sides of the comparison use the
+     * same key.
+     */
     private static String normaliseRoom(String room) {
         if (room == null || room.isBlank()) {
             return null;
         }
-        // Lower-cased here rather than in the query. A bare parameter inside a SQL function is
-        // exactly the shape that once left Hibernate unable to infer a type and produced
-        // `lower(bytea)` at runtime; comparing an already-lowered value avoids the question.
-        return room.trim().toLowerCase(Locale.ROOT);
+        // Lower-cased and stripped here rather than in the query. A bare parameter inside a SQL
+        // function is exactly the shape that once left Hibernate unable to infer a type and
+        // produced `lower(bytea)` at runtime; comparing an already-normalized value avoids the
+        // question entirely.
+        return room.trim().toLowerCase(Locale.ROOT).replaceAll("[ \\-_.]", "");
     }
 
     private static List<CourseCatalog.Meeting> toMeetings(List<SectionMeeting> rows) {

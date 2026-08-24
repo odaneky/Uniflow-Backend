@@ -197,6 +197,26 @@ class TeachingConflictIntegrationTest extends AbstractPostgresIntegrationTest {
                     .isInstanceOf(ApplicationException.class);
         }
 
+        /**
+         * G1: "Lab 3" and "Lab-3" used to be different rooms to this check — only case and
+         * surrounding whitespace were normalized, not the punctuation staff actually vary.
+         */
+        @Test
+        @DisplayName("is matched regardless of hyphens, underscores or periods")
+        void matchesRoomsAcrossPunctuationVariants() {
+            AcademicTerm term = fixtures.openTerm();
+            CourseSection first = sectionInSameTermAs(term);
+            CourseSection second = sectionInSameTermAs(term);
+
+            courseService.replaceMeetings(first.getId(), meetingsAt(4, "10:00", "11:00", "Lab 3", "Lecture"));
+
+            assertThatThrownBy(() -> courseService.replaceMeetings(
+                            second.getId(), meetingsAt(4, "10:00", "11:00", "Lab-3", "Lecture")))
+                    .isInstanceOf(ApplicationException.class)
+                    .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                    .isEqualTo(CourseErrorCode.SCHEDULE_CONFLICT);
+        }
+
         @Test
         @DisplayName("may be reused at a different time")
         void allowsSequentialBookings() {

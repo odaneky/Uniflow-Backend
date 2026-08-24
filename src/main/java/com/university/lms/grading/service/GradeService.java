@@ -28,6 +28,7 @@ import com.university.lms.grading.repository.GradeScaleRepository;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -61,6 +62,7 @@ public class GradeService implements AcademicRecord {
     private final EnrollmentDirectory enrollmentDirectory;
     private final AcademicStructure academicStructure;
     private final StudentDirectory studentDirectory;
+    private final UserDirectory userDirectory;
     private final CurrentUserProvider currentUserProvider;
     private final AuditTrail auditTrail;
     private final UniFlowMetrics metrics;
@@ -76,6 +78,7 @@ public class GradeService implements AcademicRecord {
             EnrollmentDirectory enrollmentDirectory,
             AcademicStructure academicStructure,
             StudentDirectory studentDirectory,
+            UserDirectory userDirectory,
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
             UniFlowMetrics metrics,
@@ -89,6 +92,7 @@ public class GradeService implements AcademicRecord {
         this.courseCatalog = courseCatalog;
         this.enrollmentDirectory = enrollmentDirectory;
         this.studentDirectory = studentDirectory;
+        this.userDirectory = userDirectory;
         this.currentUserProvider = currentUserProvider;
         this.auditTrail = auditTrail;
         this.metrics = metrics;
@@ -125,6 +129,42 @@ public class GradeService implements AcademicRecord {
                             attempt);
                 })
                 .toList();
+    }
+
+    /**
+     * D8: no export endpoint existed anywhere in the system — a registrar wanting a section's
+     * grades in a spreadsheet had no path but to transcribe the JSON gradebook by hand. Reuses
+     * {@link #gradebook} for both the data and its authorization check, so this is exactly the
+     * same rows a caller was already entitled to see, just spreadsheet-shaped.
+     */
+    public String exportGradebookCsv(UUID sectionId) {
+        List<GradeResponse> rows = gradebook(sectionId);
+        StringBuilder csv = new StringBuilder(
+                "Student Number,Student Name,Course Code,Course Title,Letter,Percentage,Grade Point,Attempt,Recorded At\n");
+        for (GradeResponse row : rows) {
+            StudentDirectory.StudentSummary student =
+                    studentDirectory.findById(row.studentId()).orElse(null);
+            String studentNumber = student == null ? "" : student.studentNumber();
+            String fullName = student == null
+                    ? ""
+                    : userDirectory.findById(student.userId()).map(UserDirectory.UserSummary::fullName).orElse("");
+            csv.append(csvField(studentNumber)).append(',')
+                    .append(csvField(fullName)).append(',')
+                    .append(csvField(row.courseCode())).append(',')
+                    .append(csvField(row.courseTitle())).append(',')
+                    .append(csvField(row.letter())).append(',')
+                    .append(csvField(row.percentage() == null ? "" : row.percentage().toPlainString())).append(',')
+                    .append(csvField(row.gradePoint() == null ? "" : row.gradePoint().toPlainString())).append(',')
+                    .append(csvField(row.attemptNumber() == null ? "" : row.attemptNumber().toString())).append(',')
+                    .append(csvField(row.recordedAt() == null ? "" : row.recordedAt().toString()))
+                    .append('\n');
+        }
+        return csv.toString();
+    }
+
+    /** RFC 4180: quote every field and double up any embedded quote. Simplest rule that is always correct. */
+    private static String csvField(String value) {
+        return "\"" + (value == null ? "" : value.replace("\"", "\"\"")) + "\"";
     }
 
     public AcademicSummaryResponse ownSummary() {
