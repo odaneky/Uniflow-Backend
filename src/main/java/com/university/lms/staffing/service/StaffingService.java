@@ -276,6 +276,14 @@ public class StaffingService implements StaffAppointments {
         return false;
     }
 
+    @Override
+    public java.util.Optional<UUID> orgUnitFor(String sourceType, UUID sourceId) {
+        if (sourceType == null || sourceId == null) {
+            return java.util.Optional.empty();
+        }
+        return orgUnitRepository.findBySourceTypeAndSourceId(sourceType, sourceId).map(OrgUnit::getId);
+    }
+
     private void requireRegistry() {
         CurrentUser caller = currentUserProvider.require();
         if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {

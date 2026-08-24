@@ -25,4 +25,11 @@ public interface StaffAppointments {
      * active appointment for this user.
      */
     boolean isAppointedOver(UUID userId, UUID orgUnitId);
+
+    /**
+     * The org unit mirroring this academic faculty or department, if one has been linked yet —
+     * empty until the registry runs the reconcile pass (or the unit was created after this wiring
+     * existed). {@code sourceType} is {@code "FACULTY"} or {@code "DEPARTMENT"}.
+     */
+    java.util.Optional<UUID> orgUnitFor(String sourceType, UUID sourceId);
 }

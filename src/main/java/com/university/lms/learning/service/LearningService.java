@@ -25,8 +25,10 @@ import com.university.lms.learning.repository.CourseContentRepository;
 import com.university.lms.learning.repository.LearningMaterialRepository;
 import com.university.lms.learning.repository.LearningModuleRepository;
 import com.university.lms.learning.repository.LessonRepository;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +52,7 @@ public class LearningService {
     private final EnrollmentDirectory enrollmentDirectory;
     private final StudentDirectory studentDirectory;
     private final CurrentUserProvider currentUserProvider;
+    private final StaffAppointments staffAppointments;
 
     public LearningService(
             CourseContentRepository contentRepository,
@@ -59,7 +62,8 @@ public class LearningService {
             CourseCatalog courseCatalog,
             EnrollmentDirectory enrollmentDirectory,
             StudentDirectory studentDirectory,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            StaffAppointments staffAppointments) {
         this.contentRepository = contentRepository;
         this.moduleRepository = moduleRepository;
         this.lessonRepository = lessonRepository;
@@ -68,6 +72,7 @@ public class LearningService {
         this.enrollmentDirectory = enrollmentDirectory;
         this.studentDirectory = studentDirectory;
         this.currentUserProvider = currentUserProvider;
+        this.staffAppointments = staffAppointments;
     }
 
     public CourseContentResponse ownContent(UUID sectionId) {
@@ -223,8 +228,11 @@ public class LearningService {
 
     private void requireEnrolledOrStaff(UUID sectionId) {
         CurrentUser caller = currentUserProvider.require();
-        requireKnownSection(sectionId);
-        if (caller.isStaff()) {
+        CourseCatalog.SectionSummary section = courseCatalog
+                .findSection(sectionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        LearningErrorCode.LEARNING_SECTION_NOT_FOUND, "No course section exists with id " + sectionId));
+        if (isAuthorizedStaff(caller, section)) {
             return;
         }
         UUID studentId = studentDirectory
@@ -235,5 +243,35 @@ public class LearningService {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
+    }
+
+    /**
+     * A5: the first guard narrowed from a blind {@code isStaff()} to an org-scoped check, without a
+     * flag day. {@code SYSTEM_ADMIN} always passes, matching every other guard's broad-role
+     * carve-out. Everyone else needs an active appointment <em>and</em> — only once the section's
+     * department has actually been mirrored as an org unit — to be appointed over it.
+     *
+     * <p>Fails open (returns {@code true}, exactly {@code isStaff()}'s old behaviour) at each
+     * "not yet provisioned" branch: caller has no appointment at all, or the section's course has
+     * no department, or that department has no linked org unit. None of those can happen mid-flight
+     * from a bug — they happen when an environment has not yet run {@code
+     * POST /staff-appointments/reconcile} and {@code POST /faculties/reconcile-org-units}, or when a
+     * department has not been individually re-appointed to. This is deliberate: restricting access
+     * ahead of that data actually existing would lock out every lecturer the day this ships.
+     */
+    private boolean isAuthorizedStaff(CurrentUser caller, CourseCatalog.SectionSummary section) {
+        if (!caller.isStaff()) {
+            return false;
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return true;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return true;
+        }
+        Optional<UUID> orgUnitId = courseCatalog
+                .departmentOfCourse(section.courseId())
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 }

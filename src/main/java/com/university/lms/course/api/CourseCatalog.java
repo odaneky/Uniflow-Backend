@@ -115,4 +115,13 @@ public interface CourseCatalog {
      * counter rather than writing {@code course_sections} itself.
      */
     void replaceEnrolledCount(UUID sectionId, int occupyingSeats);
+
+    /**
+     * The academic department (owned by the {@code academic} module) this course belongs to.
+     *
+     * <p>A plain id, not a {@code CourseSummary} field: only org-scoped authorization (A5) needs
+     * this, and adding it to the widely-constructed {@code CourseSummary} record would touch every
+     * existing caller for one narrow new consumer.
+     */
+    Optional<UUID> departmentOfCourse(UUID courseId);
 }

@@ -71,6 +71,14 @@ public class DefaultCourseCatalog implements CourseCatalog {
     }
 
     @Override
+    public Optional<UUID> departmentOfCourse(UUID courseId) {
+        if (courseId == null) {
+            return Optional.empty();
+        }
+        return courseRepository.findById(courseId).map(Course::getDepartmentId);
+    }
+
+    @Override
     public Optional<SectionSummary> findSection(UUID sectionId) {
         if (sectionId == null) {
             return Optional.empty();
