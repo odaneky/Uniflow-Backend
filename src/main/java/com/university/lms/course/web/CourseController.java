@@ -157,11 +157,9 @@ public class CourseController {
         return courseService.closeSection(sectionId);
     }
 
-    @AccessClass(STAFF_ONLY)
-    @PostMapping("/sections/{sectionId}/cancel")
-    public CourseSectionResponse cancelSection(@PathVariable UUID sectionId) {
-        return courseService.cancelSection(sectionId);
-    }
+    // Cancellation moved to enrollment.web.SectionCancellationController: cancelling a section
+    // must also release every enrolled student's seat, reverse their charges and notify them —
+    // course cannot do that without depending back on enrollment, which already depends on it.
 
     @AccessClass(STAFF_ONLY)
     @PatchMapping("/sections/{sectionId}")

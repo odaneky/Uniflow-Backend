@@ -19,7 +19,7 @@ public record ReplaceSectionMeetingsRequest(
 
 
     public record MeetingRequest(
-            @NotNull @Min(1) @Max(5) Integer dayOfWeek,
+            @NotNull @Min(1) @Max(6) Integer dayOfWeek,
             @NotNull LocalTime startTime,
             @NotNull LocalTime endTime,
             @NotBlank @Size(max = 40) String room,

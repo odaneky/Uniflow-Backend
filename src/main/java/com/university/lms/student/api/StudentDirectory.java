@@ -13,7 +13,13 @@ import java.util.UUID;
  */
 public interface StudentDirectory {
 
-    record StudentSummary(UUID id, UUID userId, String studentNumber, UUID programmeId, boolean eligibleToEnrol) {}
+    record StudentSummary(
+            UUID id,
+            UUID userId,
+            String studentNumber,
+            UUID programmeId,
+            boolean eligibleToEnrol,
+            ResidencyClassification residencyClassification) {}
 
     boolean exists(UUID studentId);
 

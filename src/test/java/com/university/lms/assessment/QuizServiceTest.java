@@ -30,6 +30,7 @@ import com.university.lms.finance.api.StudentBilling;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -130,7 +131,7 @@ class QuizServiceTest {
         when(answerRepository.findByAttemptIdWithQuestion(attemptId)).thenReturn(List.of());
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, STUDENT_USER, "202012345", null, true)));
+                        STUDENT_ID, STUDENT_USER, "202012345", null, true, ResidencyClassification.IN_DISTRICT)));
         when(userDirectory.findById(STUDENT_USER))
                 .thenReturn(Optional.of(new UserDirectory.UserSummary(
                         STUDENT_USER, "202012345", "Sam Student", "student@test", true)));

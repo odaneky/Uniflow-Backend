@@ -9,6 +9,7 @@ import com.university.lms.curriculum.domain.RequirementKind;
 import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
 import com.university.lms.curriculum.repository.CurriculumVersionRepository;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
+import com.university.lms.curriculum.repository.TransferCreditRepository;
 import com.university.lms.grading.api.AcademicRecord;
 import java.util.Comparator;
 import java.util.List;
@@ -25,6 +26,7 @@ public class DefaultCurriculumCatalog implements CurriculumCatalog {
     private final ProgrammeRequirementBlockRepository blockRepository;
     private final CurriculumVersionRepository versionRepository;
     private final CourseSubstitutionRepository substitutionRepository;
+    private final TransferCreditRepository transferCreditRepository;
     private final AcademicRecord academicRecord;
     private final CourseCatalog courseCatalog;
 
@@ -32,11 +34,13 @@ public class DefaultCurriculumCatalog implements CurriculumCatalog {
             ProgrammeRequirementBlockRepository blockRepository,
             CurriculumVersionRepository versionRepository,
             CourseSubstitutionRepository substitutionRepository,
+            TransferCreditRepository transferCreditRepository,
             AcademicRecord academicRecord,
             CourseCatalog courseCatalog) {
         this.blockRepository = blockRepository;
         this.versionRepository = versionRepository;
         this.substitutionRepository = substitutionRepository;
+        this.transferCreditRepository = transferCreditRepository;
         this.academicRecord = academicRecord;
         this.courseCatalog = courseCatalog;
     }
@@ -73,15 +77,29 @@ public class DefaultCurriculumCatalog implements CurriculumCatalog {
         if (studentId == null || courseId == null) {
             return false;
         }
-        if (passedByGrade(studentId, courseId)) {
+        if (satisfiedDirectly(studentId, courseId)) {
             return true;
         }
         // An approved substitution satisfies the required course once the substitute is itself
-        // passed — checked against grades only, never chained through another substitution.
+        // satisfied — checked directly only, never chained through another substitution.
         return substitutionRepository
                 .findByStudentIdAndRequiredCourseId(studentId, courseId)
-                .map(substitution -> passedByGrade(studentId, substitution.getSubstituteCourseId()))
+                .map(substitution -> satisfiedDirectly(studentId, substitution.getSubstituteCourseId()))
                 .orElse(false);
+    }
+
+    /**
+     * A passing grade or a transfer credit mapped to this course. G2: transfer credit appeared on
+     * the transcript but was consulted by neither this check nor degree progress, so a transfer
+     * student was blocked from courses they already qualified for.
+     */
+    private boolean satisfiedDirectly(UUID studentId, UUID courseId) {
+        return passedByGrade(studentId, courseId) || hasTransferCredit(studentId, courseId);
+    }
+
+    private boolean hasTransferCredit(UUID studentId, UUID courseId) {
+        return transferCreditRepository.findByStudentIdOrderByAwardedAtDesc(studentId).stream()
+                .anyMatch(transferCredit -> courseId.equals(transferCredit.getInternalCourseId()));
     }
 
     private boolean passedByGrade(UUID studentId, UUID courseId) {

@@ -37,6 +37,7 @@ import com.university.lms.enrollment.repository.EnrollmentRepository;
 import com.university.lms.enrollment.service.EnrollmentService;
 import com.university.lms.financialaid.api.RegistrationHolds;
 import com.university.lms.finance.api.StudentBilling;
+import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
 import java.util.List;
@@ -540,7 +541,7 @@ class EnrollmentServiceTest {
     void rejectsIneligibleStudent() {
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), false)));
+                        STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), false, ResidencyClassification.IN_DISTRICT)));
 
         assertThatThrownBy(() -> service.enrol(request))
                 .isInstanceOf(BusinessException.class)
@@ -735,7 +736,8 @@ class EnrollmentServiceTest {
     private void givenEligibleStudent() {
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(
-                        new StudentDirectory.StudentSummary(STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), true)));
+                        new StudentDirectory.StudentSummary(
+                                STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), true, ResidencyClassification.IN_DISTRICT)));
     }
 
     private void givenOpenSection(int capacity, int enrolled) {

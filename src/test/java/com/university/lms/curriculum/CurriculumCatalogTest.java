@@ -11,6 +11,7 @@ import com.university.lms.curriculum.domain.RequirementKind;
 import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
 import com.university.lms.curriculum.repository.CurriculumVersionRepository;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
+import com.university.lms.curriculum.repository.TransferCreditRepository;
 import com.university.lms.curriculum.service.DefaultCurriculumCatalog;
 import com.university.lms.grading.api.AcademicRecord;
 import java.math.BigDecimal;
@@ -42,6 +43,9 @@ class CurriculumCatalogTest {
     private CourseSubstitutionRepository substitutionRepository;
 
     @Mock
+    private TransferCreditRepository transferCreditRepository;
+
+    @Mock
     private AcademicRecord academicRecord;
 
     @Mock
@@ -52,7 +56,7 @@ class CurriculumCatalogTest {
     @BeforeEach
     void setUp() {
         catalog = new DefaultCurriculumCatalog(
-                blockRepository, versionRepository, substitutionRepository, academicRecord, courseCatalog);
+                blockRepository, versionRepository, substitutionRepository, transferCreditRepository, academicRecord, courseCatalog);
     }
 
     private CurriculumVersion publishedVersion() {
@@ -143,6 +147,18 @@ class CurriculumCatalogTest {
         when(academicRecord.publishedOverallOf(studentId)).thenReturn(List.of());
 
         assertThat(catalog.hasPassed(studentId, COURSE_ID)).isFalse();
+    }
+
+    @Test
+    @DisplayName("a transfer credit mapped to the course satisfies the prerequisite check — G2")
+    void transferCreditSatisfiesThePrerequisiteCheck() {
+        UUID studentId = UUID.randomUUID();
+        when(academicRecord.publishedOverallOf(studentId)).thenReturn(List.of());
+        when(transferCreditRepository.findByStudentIdOrderByAwardedAtDesc(studentId))
+                .thenReturn(List.of(new com.university.lms.curriculum.domain.TransferCredit(
+                        studentId, "Prior College", "INTRO-101", "Intro", COURSE_ID, 3, LocalDate.of(2024, 1, 1), null)));
+
+        assertThat(catalog.hasPassed(studentId, COURSE_ID)).isTrue();
     }
 
     @Test

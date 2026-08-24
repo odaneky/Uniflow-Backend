@@ -72,7 +72,7 @@ class StudentServiceTest {
 
     @BeforeEach
     void setUp() {
-        request = new CreateStudentRequest(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1), null);
+        request = new CreateStudentRequest(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1), null, null);
     }
 
     @Test
@@ -154,7 +154,7 @@ class StudentServiceTest {
         assertThatThrownBy(() -> service.update(
                         student.getId(),
                         new UpdateStudentRequest(
-                                null, StudentStatus.ACTIVE, null, null, null, null, null, "Requesting reinstatement")))
+                                null, StudentStatus.ACTIVE, null, null, null, null, null, null, "Requesting reinstatement")))
                 .isInstanceOf(ValidationException.class)
                 .satisfies(thrown -> assertThat(((ValidationException) thrown).getErrorCode())
                         .isEqualTo(StudentErrorCode.INVALID_STUDENT_STATE));
@@ -169,7 +169,7 @@ class StudentServiceTest {
         StudentResponse response = service.update(
                 student.getId(),
                 new UpdateStudentRequest(
-                        null, StudentStatus.ON_LEAVE, null, null, null, null, null, "Approved medical leave"));
+                        null, StudentStatus.ON_LEAVE, null, null, null, null, null, null, "Approved medical leave"));
 
         assertThat(response.status()).isEqualTo(StudentStatus.ON_LEAVE);
         assertThat(response.programmeId()).isEqualTo(PROGRAMME_ID);
@@ -184,7 +184,7 @@ class StudentServiceTest {
 
         assertThatThrownBy(() -> service.update(
                         student.getId(),
-                        new UpdateStudentRequest(null, StudentStatus.SUSPENDED, null, null, null, null, null, null)))
+                        new UpdateStudentRequest(null, StudentStatus.SUSPENDED, null, null, null, null, null, null, null)))
                 .isInstanceOf(ValidationException.class)
                 .satisfies(thrown -> assertThat(((ValidationException) thrown).getErrorCode())
                         .isEqualTo(StudentErrorCode.STUDENT_STATUS_REASON_REQUIRED));
@@ -200,7 +200,7 @@ class StudentServiceTest {
         assertThatThrownBy(() -> service.update(
                         student.getId(),
                         new UpdateStudentRequest(
-                                null, StudentStatus.ACTIVE, null, null, null, null, null, "Appeal granted")))
+                                null, StudentStatus.ACTIVE, null, null, null, null, null, null, "Appeal granted")))
                 .isInstanceOf(ValidationException.class)
                 .satisfies(thrown -> assertThat(((ValidationException) thrown).getErrorCode())
                         .isEqualTo(StudentErrorCode.INVALID_STUDENT_STATE));
@@ -216,7 +216,7 @@ class StudentServiceTest {
         StudentResponse response = service.update(
                 student.getId(),
                 new UpdateStudentRequest(
-                        null, StudentStatus.ACTIVE, null, null, null, null, null, "Readmitted after appeal"));
+                        null, StudentStatus.ACTIVE, null, null, null, null, null, null, "Readmitted after appeal"));
 
         assertThat(response.status()).isEqualTo(StudentStatus.ACTIVE);
     }

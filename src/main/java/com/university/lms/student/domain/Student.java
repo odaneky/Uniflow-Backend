@@ -1,6 +1,7 @@
 package com.university.lms.student.domain;
 
 import com.university.lms.common.audit.BaseEntity;
+import com.university.lms.student.api.ResidencyClassification;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -70,6 +71,11 @@ public class Student extends BaseEntity {
     @Column(name = "advisor_office_hours", length = 200)
     private String advisorOfficeHours;
 
+    /** Drives which tuition tier this student is charged. See {@link #reclassifyResidency}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "residency_classification", nullable = false, length = 30)
+    private ResidencyClassification residencyClassification = ResidencyClassification.IN_DISTRICT;
+
     /**
      * Owned from this side so the association can genuinely be lazy — the inverse side of a
      * {@code @OneToOne} cannot be, and would load personal data on every student read.
@@ -128,5 +134,9 @@ public class Student extends BaseEntity {
 
     public void setAdvisorOfficeHours(String officeHours) {
         this.advisorOfficeHours = officeHours;
+    }
+
+    public void reclassifyResidency(ResidencyClassification residencyClassification) {
+        this.residencyClassification = residencyClassification;
     }
 }

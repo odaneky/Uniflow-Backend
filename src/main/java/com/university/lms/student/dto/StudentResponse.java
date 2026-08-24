@@ -1,5 +1,6 @@
 package com.university.lms.student.dto;
 
+import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.domain.StudentProfile;
 import com.university.lms.student.domain.StudentStatus;
@@ -20,6 +21,7 @@ public record StudentResponse(
         String advisorName,
         String advisorEmail,
         String advisorOfficeHours,
+        ResidencyClassification residencyClassification,
         Instant createdAt,
         Instant updatedAt,
         StudentContactResponse contact) {
@@ -41,6 +43,7 @@ public record StudentResponse(
                 advisorName,
                 advisorEmail,
                 student.getAdvisorOfficeHours(),
+                student.getResidencyClassification(),
                 student.getCreatedAt(),
                 student.getUpdatedAt(),
                 fromProfile(student.getProfile()));

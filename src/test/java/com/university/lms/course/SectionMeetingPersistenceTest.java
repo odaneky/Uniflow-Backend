@@ -55,4 +55,21 @@ class SectionMeetingPersistenceTest extends AbstractPostgresIntegrationTest {
             TimeZone.setDefault(original);
         }
     }
+
+    @Test
+    @DisplayName("a Saturday class can be stored — G1: evening/continuing-ed sections meet on Saturdays")
+    void saturdayMeetingIsStored() {
+        var section = fixtures.openSection(fixtures.openTerm(), 40);
+        courseService.replaceMeetings(
+                section.getId(),
+                new ReplaceSectionMeetingsRequest(
+                        List.of(new MeetingRequest(
+                                6, LocalTime.of(9, 0), LocalTime.of(12, 0), "LAB-01", "Lab")),
+                        null));
+
+        var row = jdbcTemplate.queryForMap(
+                "select day_of_week from section_meetings where section_id = ?", section.getId());
+
+        assertThat(row.get("day_of_week")).isEqualTo(6);
+    }
 }

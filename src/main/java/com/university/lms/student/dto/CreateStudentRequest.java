@@ -1,5 +1,6 @@
 package com.university.lms.student.dto;
 
+import com.university.lms.student.api.ResidencyClassification;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
@@ -13,6 +14,8 @@ import java.util.UUID;
  *
  * <p>Only structural validation lives here. Whether the user and programme actually exist, and
  * whether the student number is already taken, are decided by the service against live data.
+ * {@code residencyClassification} defaults to {@link ResidencyClassification#IN_DISTRICT} when
+ * omitted.
  */
 public record CreateStudentRequest(
         @NotNull(message = "is required") UUID userId,
@@ -25,4 +28,5 @@ public record CreateStudentRequest(
         @NotNull(message = "is required") UUID programmeId,
         @NotNull(message = "is required") @PastOrPresent(message = "must not be in the future")
                 LocalDate admissionDate,
-        LocalDate expectedGraduationDate) {}
+        LocalDate expectedGraduationDate,
+        ResidencyClassification residencyClassification) {}

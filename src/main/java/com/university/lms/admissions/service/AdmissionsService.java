@@ -503,7 +503,7 @@ public class AdmissionsService {
             if (identityProvider.isAvailable()) {
                 UserResponse user = provisionIdentity(application, studentNumber);
                 return studentService.create(new CreateStudentRequest(
-                        user.id(), studentNumber, application.getProgrammeId(), admissionDate, null));
+                        user.id(), studentNumber, application.getProgrammeId(), admissionDate, null, null));
             }
             return studentProvisioningService.provision(new ProvisionStudentRequest(
                     studentNumber, application.getProgrammeId(), admissionDate, null));

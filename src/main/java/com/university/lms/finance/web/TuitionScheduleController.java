@@ -1,11 +1,13 @@
 package com.university.lms.finance.web;
 
 import com.university.lms.finance.dto.ReplaceProgrammeTuitionRateRequest;
+import com.university.lms.finance.dto.ReplaceResidencyTuitionRateRequest;
 import com.university.lms.finance.dto.ReplaceTuitionScheduleRequest;
 import com.university.lms.finance.dto.TuitionScheduleResponse;
 import com.university.lms.finance.service.TuitionScheduleService;
 import com.university.lms.common.security.AccessClass;
 import static com.university.lms.common.security.AccessClass.Value.*;
+import com.university.lms.student.api.ResidencyClassification;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -50,5 +52,19 @@ public class TuitionScheduleController {
     @DeleteMapping("/programmes/{programmeId}")
     public TuitionScheduleResponse clearProgrammeRate(@PathVariable UUID programmeId) {
         return tuitionScheduleService.clearProgrammeRate(programmeId);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
+    @PutMapping("/residency/{residencyClassification}")
+    public TuitionScheduleResponse replaceResidencyRate(
+            @PathVariable ResidencyClassification residencyClassification,
+            @Valid @RequestBody ReplaceResidencyTuitionRateRequest request) {
+        return tuitionScheduleService.replaceResidencyRate(residencyClassification, request);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
+    @DeleteMapping("/residency/{residencyClassification}")
+    public TuitionScheduleResponse clearResidencyRate(@PathVariable ResidencyClassification residencyClassification) {
+        return tuitionScheduleService.clearResidencyRate(residencyClassification);
     }
 }

@@ -8,6 +8,7 @@ import com.university.lms.curriculum.api.DegreeAudit;
 import com.university.lms.curriculum.domain.GraduationClearanceItem;
 import com.university.lms.curriculum.dto.DegreeProgressResponse;
 import com.university.lms.curriculum.repository.GraduationClearanceItemRepository;
+import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.util.List;
@@ -51,7 +52,8 @@ class DefaultDegreeAuditTest {
 
         when(curriculumService.progressOf(studentId)).thenReturn(fullyMetProgress(programmeId));
         when(studentDirectory.findById(studentId))
-                .thenReturn(Optional.of(new StudentDirectory.StudentSummary(studentId, UUID.randomUUID(), "20260001", programmeId, true)));
+                .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
+                        studentId, UUID.randomUUID(), "20260001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-CS", "Computer Science", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
@@ -73,7 +75,8 @@ class DefaultDegreeAuditTest {
 
         when(curriculumService.progressOf(studentId)).thenReturn(fullyMetProgress(programmeId));
         when(studentDirectory.findById(studentId))
-                .thenReturn(Optional.of(new StudentDirectory.StudentSummary(studentId, UUID.randomUUID(), "20260001", programmeId, true)));
+                .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
+                        studentId, UUID.randomUUID(), "20260001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-CS", "Computer Science", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
@@ -95,7 +98,8 @@ class DefaultDegreeAuditTest {
 
         when(curriculumService.progressOf(studentId)).thenReturn(fullyMetProgress(programmeId));
         when(studentDirectory.findById(studentId))
-                .thenReturn(Optional.of(new StudentDirectory.StudentSummary(studentId, UUID.randomUUID(), "20260001", programmeId, true)));
+                .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
+                        studentId, UUID.randomUUID(), "20260001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-CS", "Computer Science", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));

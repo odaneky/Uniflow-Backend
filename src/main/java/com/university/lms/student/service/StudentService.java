@@ -103,6 +103,9 @@ public class StudentService {
         if (request.expectedGraduationDate() != null) {
             student.expectGraduationOn(request.expectedGraduationDate());
         }
+        if (request.residencyClassification() != null) {
+            student.reclassifyResidency(request.residencyClassification());
+        }
 
         try {
             Student saved = studentRepository.saveAndFlush(student);
@@ -245,6 +248,9 @@ public class StudentService {
         }
         if (request.contact() != null) {
             applyContact(student, request.contact());
+        }
+        if (request.residencyClassification() != null) {
+            student.reclassifyResidency(request.residencyClassification());
         }
 
         return toResponse(student);

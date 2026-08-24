@@ -12,6 +12,7 @@ import java.util.Optional;
 import com.university.lms.course.dto.ScheduleCheckRequest;
 import com.university.lms.course.dto.ScheduleCheckResponse;
 import com.university.lms.course.api.CourseCatalog;
+import com.university.lms.course.api.SectionActions;
 import com.university.lms.course.api.Timetable;
 import com.university.lms.course.domain.Course;
 import com.university.lms.course.domain.CourseComponent;
@@ -66,7 +67,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** Application service for the course catalog and its offerings. */
 @Service
 @Transactional(readOnly = true)
-public class CourseService {
+public class CourseService implements SectionActions {
 
     private static final Logger log = LoggerFactory.getLogger(CourseService.class);
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
@@ -359,6 +360,18 @@ public class CourseService {
         metrics.occurrence("cancelled");
         log.info("Cancelled section {} of {}", section.getSectionCode(), section.getCourse().getCourseCode());
         return toSectionResponse(section);
+    }
+
+    /**
+     * {@link SectionActions#cancel} — cancels the section only. Enrolled students are untouched
+     * here; releasing their seats, reversing charges and notifying them is orchestrated from
+     * {@code enrollment.service.SectionCancellationService}, which is what a caller reaches this
+     * through in practice (see that class for why the split exists).
+     */
+    @Override
+    @Transactional
+    public void cancel(UUID sectionId) {
+        cancelSection(sectionId);
     }
 
     @Transactional

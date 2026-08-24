@@ -9,6 +9,7 @@ import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.request.domain.ServiceRequest;
 import com.university.lms.request.domain.ServiceRequestStatus;
 import com.university.lms.request.domain.ServiceRequestType;
+import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.util.List;
 import java.util.Optional;
@@ -67,7 +68,7 @@ class ServiceRequestWorkflowTest {
                 Set.of());
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, studentUserId, "202012345", UUID.randomUUID(), true)));
+                        studentId, studentUserId, "202012345", UUID.randomUUID(), true, ResidencyClassification.IN_DISTRICT)));
         when(studentDirectory.adviseeUserIdsOf(advisorId)).thenReturn(List.of(studentUserId));
 
         assertThatCode(() -> workflow.assertStaffAction(advisor, request, ServiceRequestStatus.IN_REVIEW))

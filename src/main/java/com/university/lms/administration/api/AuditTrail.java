@@ -40,6 +40,8 @@ public interface AuditTrail {
         public static final String ENROLMENT_CREATED = "ENROLMENT_CREATED";
         public static final String ENROLMENT_DROPPED = "ENROLMENT_DROPPED";
         public static final String ENROLMENT_WITHDRAWN = "ENROLMENT_WITHDRAWN";
+        /** A student's enrolment ended because their section was cancelled — not their choice. */
+        public static final String ENROLMENT_CANCELLED_BY_INSTITUTION = "ENROLMENT_CANCELLED_BY_INSTITUTION";
         public static final String OCCURRENCE_CREATED = "OCCURRENCE_CREATED";
         public static final String OCCURRENCE_UPDATED = "OCCURRENCE_UPDATED";
         public static final String OCCURRENCE_CANCELLED = "OCCURRENCE_CANCELLED";

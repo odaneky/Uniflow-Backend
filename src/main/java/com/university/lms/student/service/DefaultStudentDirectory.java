@@ -37,7 +37,8 @@ public class DefaultStudentDirectory implements StudentDirectory {
                         student.getUserId(),
                         student.getStudentNumber(),
                         student.getProgrammeId(),
-                        student.canEnrol()));
+                        student.canEnrol(),
+                        student.getResidencyClassification()));
     }
 
     @Override

@@ -101,12 +101,13 @@ class StudentControllerTest {
                         null,
                         null,
                         null,
+                        null,
                         Instant.now(),
                         Instant.now(),
                         null));
 
         String body = objectMapper.writeValueAsString(
-                new CreateStudentRequest(userId, "20260001", programmeId, LocalDate.of(2025, 9, 1), null));
+                new CreateStudentRequest(userId, "20260001", programmeId, LocalDate.of(2025, 9, 1), null, null));
 
         mockMvc.perform(post("/api/v1/students")
                         .with(as(SecurityRoles.REGISTRAR))
@@ -199,7 +200,7 @@ class StudentControllerTest {
     @DisplayName("a token without the required role is 403 in the standard error envelope")
     void insufficientRoleIsForbiddenInTheStandardShape() throws Exception {
         String body = objectMapper.writeValueAsString(new CreateStudentRequest(
-                UUID.randomUUID(), "20260001", UUID.randomUUID(), LocalDate.of(2025, 9, 1), null));
+                UUID.randomUUID(), "20260001", UUID.randomUUID(), LocalDate.of(2025, 9, 1), null, null));
 
         mockMvc.perform(post("/api/v1/students")
                         .with(as(SecurityRoles.STUDENT))
@@ -217,7 +218,7 @@ class StudentControllerTest {
         // The point of a filter-chain rule: rejection happens before any business code runs, so a
         // caller cannot use timing or side effects to learn anything about the data.
         String body = objectMapper.writeValueAsString(new CreateStudentRequest(
-                UUID.randomUUID(), "20260002", UUID.randomUUID(), LocalDate.of(2025, 9, 1), null));
+                UUID.randomUUID(), "20260002", UUID.randomUUID(), LocalDate.of(2025, 9, 1), null, null));
 
         mockMvc.perform(post("/api/v1/students")
                         .with(as(SecurityRoles.LECTURER))
