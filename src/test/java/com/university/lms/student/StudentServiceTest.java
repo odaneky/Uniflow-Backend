@@ -17,6 +17,7 @@ import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.domain.AdvisorOfficeHours;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.domain.StudentErrorCode;
@@ -72,6 +73,9 @@ class StudentServiceTest {
 
     @Mock
     private com.university.lms.student.repository.AdvisingNoteRepository advisingNoteRepository;
+
+    @Mock
+    private StaffAppointments staffAppointments;
 
     @InjectMocks
     private StudentService service;

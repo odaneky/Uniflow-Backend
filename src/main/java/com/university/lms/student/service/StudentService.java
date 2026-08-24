@@ -31,6 +31,7 @@ import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.dto.UpdateStudentRequest;
 import com.university.lms.student.domain.AdvisingNote;
 import com.university.lms.student.domain.AdvisorOfficeHours;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.repository.AdvisingNoteRepository;
 import com.university.lms.student.repository.AdvisorOfficeHoursRepository;
 import com.university.lms.student.repository.StudentRepository;
@@ -38,6 +39,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +71,7 @@ public class StudentService {
     private final AuditTrail auditTrail;
     private final AdvisorOfficeHoursRepository advisorOfficeHoursRepository;
     private final AdvisingNoteRepository advisingNoteRepository;
+    private final StaffAppointments staffAppointments;
 
     public StudentService(
             StudentRepository studentRepository,
@@ -79,7 +82,8 @@ public class StudentService {
             StudentProgrammeEnrolmentService programmeEnrolmentService,
             AuditTrail auditTrail,
             AdvisorOfficeHoursRepository advisorOfficeHoursRepository,
-            AdvisingNoteRepository advisingNoteRepository) {
+            AdvisingNoteRepository advisingNoteRepository,
+            StaffAppointments staffAppointments) {
         this.studentRepository = studentRepository;
         this.userDirectory = userDirectory;
         this.academicStructure = academicStructure;
@@ -89,6 +93,7 @@ public class StudentService {
         this.auditTrail = auditTrail;
         this.advisorOfficeHoursRepository = advisorOfficeHoursRepository;
         this.advisingNoteRepository = advisingNoteRepository;
+        this.staffAppointments = staffAppointments;
     }
 
     @Transactional
@@ -138,7 +143,7 @@ public class StudentService {
     public StudentResponse findById(UUID studentId) {
         Student student = require(studentId);
         CurrentUser caller = currentUserProvider.require();
-        caller.requireSelfOrStaff(student.getUserId());
+        requireSelfOrAuthorizedStaff(caller, student);
         logStaffRecordAccess(caller, student.getId(), RecordAccessLog.Action.VIEW, "Student record");
         return toResponse(student);
     }
@@ -149,9 +154,41 @@ public class StudentService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         StudentErrorCode.STUDENT_NOT_FOUND, "No student exists with number " + studentNumber));
         CurrentUser caller = currentUserProvider.require();
-        caller.requireSelfOrStaff(student.getUserId());
+        requireSelfOrAuthorizedStaff(caller, student);
         logStaffRecordAccess(caller, student.getId(), RecordAccessLog.Action.VIEW, "Student record by number");
         return toResponse(student);
+    }
+
+    /**
+     * A5: {@code CurrentUser.requireSelfOrStaff} is a blind "self or any staff role" check shared
+     * across the codebase — it cannot be narrowed in place without breaking every other caller, so
+     * this replaces its use here with an equivalent that is org-scoped for the staff branch only.
+     * Self-access is always allowed, unconditionally, exactly as before.
+     *
+     * <p>Same fail-open safety property as the other guards narrowed this session — see {@code
+     * LearningService.isAuthorizedStaff} for the full reasoning. A student record resolves to an
+     * org unit through its programme's department, the same one-hop chain {@code DocumentService}
+     * uses for a document owner.
+     */
+    private void requireSelfOrAuthorizedStaff(CurrentUser caller, Student student) {
+        if (caller.userId().equals(student.getUserId())) {
+            return;
+        }
+        if (!caller.isStaff()) {
+            throw new ForbiddenException(CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return;
+        }
+        Optional<UUID> orgUnitId = academicStructure
+                .departmentOfProgramme(student.getProgrammeId())
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        if (orgUnitId.isPresent() && !staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get())) {
+            throw new ForbiddenException(CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
+        }
     }
 
     public StudentResponse findOwn() {
