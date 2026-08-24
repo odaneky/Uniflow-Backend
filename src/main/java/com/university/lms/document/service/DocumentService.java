@@ -1,10 +1,12 @@
 package com.university.lms.document.service;
 
+import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
+import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.document.api.DocumentStore;
 import com.university.lms.document.api.DocumentStore.StoredFile;
 import com.university.lms.document.config.StorageProperties;
@@ -15,8 +17,11 @@ import com.university.lms.document.dto.CreateDocumentRequest;
 import com.university.lms.document.dto.DocumentResponse;
 import com.university.lms.document.repository.DocumentRepository;
 import com.university.lms.document.storage.BlobStore;
+import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
+import com.university.lms.student.api.StudentDirectory;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -37,18 +42,27 @@ public class DocumentService implements DocumentStore {
     private final UserDirectory userDirectory;
     private final BlobStore blobStore;
     private final StorageProperties storageProperties;
+    private final StaffAppointments staffAppointments;
+    private final StudentDirectory studentDirectory;
+    private final AcademicStructure academicStructure;
 
     public DocumentService(
             DocumentRepository documentRepository,
             CurrentUserProvider currentUserProvider,
             UserDirectory userDirectory,
             BlobStore blobStore,
-            StorageProperties storageProperties) {
+            StorageProperties storageProperties,
+            StaffAppointments staffAppointments,
+            StudentDirectory studentDirectory,
+            AcademicStructure academicStructure) {
         this.documentRepository = documentRepository;
         this.currentUserProvider = currentUserProvider;
         this.userDirectory = userDirectory;
         this.blobStore = blobStore;
         this.storageProperties = storageProperties;
+        this.staffAppointments = staffAppointments;
+        this.studentDirectory = studentDirectory;
+        this.academicStructure = academicStructure;
     }
 
     public PageResponse<DocumentResponse> own(Pageable pageable) {
@@ -69,17 +83,49 @@ public class DocumentService implements DocumentStore {
     }
 
     public Optional<byte[]> downloadForStaff(UUID documentId) {
-        if (!currentUserProvider.require().isStaff()) {
+        CurrentUser caller = currentUserProvider.require();
+        Document document = documentRepository.findById(documentId).orElse(null);
+        if (document == null || !isAuthorizedStaff(caller, document.getOwnerUserId())) {
             return Optional.empty();
         }
         return content(documentId);
     }
 
     public Optional<DocumentResponse> findMetadata(UUID documentId) {
-        if (!currentUserProvider.require().isStaff()) {
+        CurrentUser caller = currentUserProvider.require();
+        Document document = documentRepository.findById(documentId).orElse(null);
+        if (document == null || !isAuthorizedStaff(caller, document.getOwnerUserId())) {
             return Optional.empty();
         }
-        return documentRepository.findById(documentId).map(DocumentResponse::from);
+        return Optional.of(DocumentResponse.from(document));
+    }
+
+    /**
+     * A5: the same org-scoped, fail-open check as {@code LearningService.isAuthorizedStaff}, but
+     * resolved through the document's owner rather than a course section — a document has no
+     * course or department of its own. Owner &rarr; student record &rarr; programme &rarr;
+     * department; fails open (returns {@code true}, {@code isStaff()}'s old behaviour) whenever any
+     * step is unresolvable, which includes the ordinary case of an owner who is not a student at
+     * all (a staff member's own document, for instance) — that is not a data gap to route around,
+     * it is simply a document with no department to scope by.
+     */
+    private boolean isAuthorizedStaff(CurrentUser caller, UUID ownerUserId) {
+        if (!caller.isStaff()) {
+            return false;
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return true;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return true;
+        }
+        Optional<UUID> orgUnitId = studentDirectory
+                .studentIdOfUser(ownerUserId)
+                .flatMap(studentDirectory::findById)
+                .map(StudentDirectory.StudentSummary::programmeId)
+                .flatMap(academicStructure::departmentOfProgramme)
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 
     @Transactional

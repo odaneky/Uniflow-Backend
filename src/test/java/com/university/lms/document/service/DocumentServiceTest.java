@@ -10,8 +10,11 @@ import com.university.lms.document.domain.Document;
 import com.university.lms.document.domain.StorageProvider;
 import com.university.lms.document.repository.DocumentRepository;
 import com.university.lms.document.storage.BlobStore;
+import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
+import com.university.lms.student.api.StudentDirectory;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,12 +45,28 @@ class DocumentServiceTest {
     @Mock
     private BlobStore blobStore;
 
+    @Mock
+    private StaffAppointments staffAppointments;
+
+    @Mock
+    private StudentDirectory studentDirectory;
+
+    @Mock
+    private AcademicStructure academicStructure;
+
     private DocumentService service;
 
     @BeforeEach
     void setUp() {
         service = new DocumentService(
-                documentRepository, currentUserProvider, userDirectory, blobStore, new StorageProperties(null, 0));
+                documentRepository,
+                currentUserProvider,
+                userDirectory,
+                blobStore,
+                new StorageProperties(null, 0),
+                staffAppointments,
+                studentDirectory,
+                academicStructure);
         when(documentRepository.saveAndFlush(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 

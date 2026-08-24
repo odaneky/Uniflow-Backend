@@ -101,4 +101,13 @@ public interface AcademicStructure {
      * @throws com.university.lms.common.exception.ResourceNotFoundException if the term does not exist
      */
     int termOrdinal(UUID termId);
+
+    /**
+     * The department that owns this programme.
+     *
+     * <p>A plain id, not a {@code ProgrammeSummary} field: only org-scoped authorization (A5) needs
+     * this so far, and adding it to the published summary would touch every existing caller for one
+     * narrow new consumer.
+     */
+    Optional<UUID> departmentOfProgramme(UUID programmeId);
 }

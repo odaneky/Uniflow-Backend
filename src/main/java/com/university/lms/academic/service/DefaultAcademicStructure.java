@@ -142,6 +142,14 @@ public class DefaultAcademicStructure implements AcademicStructure {
         return (int) academicTermRepository.countUpToAndIncluding(term.getStartDate(), term.getSequenceNumber());
     }
 
+    @Override
+    public Optional<UUID> departmentOfProgramme(UUID programmeId) {
+        if (programmeId == null) {
+            return Optional.empty();
+        }
+        return programmeRepository.findById(programmeId).map(programme -> programme.getDepartment().getId());
+    }
+
     private static TermCalendar toCalendar(AcademicTerm term, Instant asOf) {
         return new TermCalendar(
                 term.getId(),
