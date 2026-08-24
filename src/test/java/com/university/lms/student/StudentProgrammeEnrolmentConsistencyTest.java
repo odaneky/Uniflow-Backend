@@ -2,8 +2,10 @@ package com.university.lms.student;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
@@ -14,6 +16,7 @@ import com.university.lms.student.repository.StudentProgrammeEnrolmentRepository
 import com.university.lms.support.AbstractPostgresIntegrationTest;
 import com.university.lms.support.AcademicFixtures;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -109,6 +112,91 @@ class StudentProgrammeEnrolmentConsistencyTest extends AbstractPostgresIntegrati
         assertThat(open.getProgrammeId()).isEqualTo(newProgramme.getId());
 
         assertThat(programmeEnrolmentRepository.findByStudentIdOrderByStartedOnAsc(studentId)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("G9: a minor can be added, listed and ended without touching the primary major")
+    void aMinorCanBeAddedListedAndEnded() throws Exception {
+        RequestPostProcessor registrar = asRegistrar();
+        Programme major = academicFixtures.programme();
+        Programme minor = academicFixtures.programme();
+        UUID userId = academicFixtures.user().getId();
+
+        String createBody = "{\"userId\":\"" + userId + "\",\"studentNumber\":\"" + studentNumber()
+                + "\",\"programmeId\":\"" + major.getId() + "\",\"admissionDate\":\"2020-09-01\"}";
+        String response = mockMvc.perform(post("/api/v1/students")
+                        .with(registrar)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID studentId = UUID.fromString(JsonPath.read(response, "$.id"));
+
+        String addBody = "{\"programmeId\":\"" + minor.getId() + "\",\"kind\":\"MINOR\",\"startedOn\":\"2021-09-01\"}";
+        String addResponse = mockMvc.perform(post("/api/v1/students/{id}/programmes", studentId)
+                        .with(registrar)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.kind").value("MINOR"))
+                .andExpect(jsonPath("$.primary").value(false))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID membershipId = UUID.fromString(JsonPath.read(addResponse, "$.id"));
+
+        mockMvc.perform(get("/api/v1/students/{id}/programmes", studentId).with(registrar))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        String endBody = "{\"endedOn\":\"2024-05-01\",\"endReason\":\"GRADUATED\"}";
+        mockMvc.perform(post("/api/v1/students/{id}/programmes/{membershipId}/end", studentId, membershipId)
+                        .with(registrar)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(endBody))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/students/{id}/programmes", studentId).with(registrar))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+
+        StudentProgrammeEnrolment stillPrimary = programmeEnrolmentRepository
+                .findByStudentIdAndEndedOnIsNullAndPrimaryTrue(studentId)
+                .orElseThrow();
+        assertThat(stillPrimary.getProgrammeId()).isEqualTo(major.getId());
+    }
+
+    @Test
+    @DisplayName("G9: the primary membership cannot be ended through the secondary-membership path")
+    void thePrimaryMembershipCannotBeEndedThisWay() throws Exception {
+        RequestPostProcessor registrar = asRegistrar();
+        Programme major = academicFixtures.programme();
+        UUID userId = academicFixtures.user().getId();
+
+        String createBody = "{\"userId\":\"" + userId + "\",\"studentNumber\":\"" + studentNumber()
+                + "\",\"programmeId\":\"" + major.getId() + "\",\"admissionDate\":\"2020-09-01\"}";
+        String response = mockMvc.perform(post("/api/v1/students")
+                        .with(registrar)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID studentId = UUID.fromString(JsonPath.read(response, "$.id"));
+        UUID primaryMembershipId = programmeEnrolmentRepository
+                .findByStudentIdAndEndedOnIsNullAndPrimaryTrue(studentId)
+                .orElseThrow()
+                .getId();
+
+        String endBody = "{\"endedOn\":\"2024-05-01\",\"endReason\":\"GRADUATED\"}";
+        mockMvc.perform(post("/api/v1/students/{id}/programmes/{membershipId}/end", studentId, primaryMembershipId)
+                        .with(registrar)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(endBody))
+                .andExpect(status().isBadRequest());
     }
 
     private static String studentNumber() {

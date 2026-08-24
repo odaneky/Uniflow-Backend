@@ -2,8 +2,11 @@ package com.university.lms.student.web;
 
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.student.domain.StudentStatus;
+import com.university.lms.student.dto.AddProgrammeMembershipRequest;
 import com.university.lms.student.dto.AdvisorCandidateResponse;
 import com.university.lms.student.dto.CreateStudentRequest;
+import com.university.lms.student.dto.EndProgrammeMembershipRequest;
+import com.university.lms.student.dto.ProgrammeMembershipResponse;
 import com.university.lms.student.dto.ProvisionStudentRequest;
 import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.StudentSummaryResponse;
@@ -19,6 +22,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -117,5 +122,31 @@ public class StudentController {
     @PatchMapping("/{id}")
     public StudentResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateStudentRequest request) {
         return studentService.update(id, request);
+    }
+
+    /** Every open programme membership — the primary major alongside any minors or double majors. */
+    @AccessClass(REGISTRY_ONLY)
+    @GetMapping("/{id}/programmes")
+    public List<ProgrammeMembershipResponse> programmes(@PathVariable UUID id) {
+        return studentService.listProgrammeMemberships(id);
+    }
+
+    /** Adds a minor, specialisation, or second major. Never the primary membership. */
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/{id}/programmes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProgrammeMembershipResponse addProgramme(
+            @PathVariable UUID id, @Valid @RequestBody AddProgrammeMembershipRequest request) {
+        return studentService.addProgrammeMembership(id, request);
+    }
+
+    /** Ends one secondary programme membership. */
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/{id}/programmes/{membershipId}/end")
+    public void endProgramme(
+            @PathVariable UUID id,
+            @PathVariable UUID membershipId,
+            @Valid @RequestBody EndProgrammeMembershipRequest request) {
+        studentService.endProgrammeMembership(id, membershipId, request);
     }
 }

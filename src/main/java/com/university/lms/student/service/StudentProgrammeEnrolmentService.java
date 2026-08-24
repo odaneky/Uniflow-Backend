@@ -1,10 +1,15 @@
 package com.university.lms.student.service;
 
+import com.university.lms.common.exception.ResourceAlreadyExistsException;
+import com.university.lms.common.exception.ResourceNotFoundException;
+import com.university.lms.common.exception.ValidationException;
 import com.university.lms.student.domain.ProgrammeEnrolmentEndReason;
 import com.university.lms.student.domain.ProgrammeEnrolmentKind;
+import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentProgrammeEnrolment;
 import com.university.lms.student.repository.StudentProgrammeEnrolmentRepository;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -65,6 +70,45 @@ public class StudentProgrammeEnrolmentService {
         return repository
                 .findByStudentIdAndEndedOnIsNullAndPrimaryTrue(studentId)
                 .map(StudentProgrammeEnrolment::getProgrammeId);
+    }
+
+    /** Every open membership — the primary major alongside any minors, specialisations or double majors. */
+    public List<StudentProgrammeEnrolment> openMembershipsOf(UUID studentId) {
+        return repository.findByStudentIdAndEndedOnIsNullOrderByStartedOnAsc(studentId);
+    }
+
+    /**
+     * Adds a minor, specialisation, or a second major — never the primary membership, which is only
+     * ever set by {@link #openInitial} and {@link #transfer}.
+     */
+    @Transactional
+    public StudentProgrammeEnrolment addSecondary(
+            UUID studentId, UUID programmeId, ProgrammeEnrolmentKind kind, LocalDate startedOn) {
+        if (repository.existsByStudentIdAndProgrammeIdAndKindAndEndedOnIsNull(studentId, programmeId, kind)) {
+            throw new ResourceAlreadyExistsException(
+                    StudentErrorCode.PROGRAMME_MEMBERSHIP_ALREADY_OPEN,
+                    "This student already has an open " + kind + " membership in that programme");
+        }
+        return repository.save(
+                new StudentProgrammeEnrolment(studentId, programmeId, null, kind, false, startedOn));
+    }
+
+    /** Ends one secondary membership. The primary membership can only be ended by {@link #transfer}. */
+    @Transactional
+    public void endSecondary(
+            UUID enrolmentId, LocalDate endedOn, ProgrammeEnrolmentEndReason endReason, String reason, UUID approvedBy) {
+        StudentProgrammeEnrolment membership = repository
+                .findById(enrolmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.PROGRAMME_MEMBERSHIP_NOT_FOUND,
+                        "No programme membership exists with id " + enrolmentId));
+        if (membership.isPrimary()) {
+            throw new ValidationException(
+                    StudentErrorCode.PROGRAMME_MEMBERSHIP_IS_PRIMARY,
+                    "The primary programme membership can only be ended by transferring to a new one");
+        }
+        membership.end(endedOn, endReason, reason, approvedBy);
+        repository.save(membership);
     }
 
     private void open(UUID studentId, UUID programmeId, LocalDate startedOn) {

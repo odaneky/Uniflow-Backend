@@ -1,5 +1,6 @@
 package com.university.lms.student.repository;
 
+import com.university.lms.student.domain.ProgrammeEnrolmentKind;
 import com.university.lms.student.domain.StudentProgrammeEnrolment;
 import java.util.List;
 import java.util.Optional;
@@ -12,4 +13,8 @@ public interface StudentProgrammeEnrolmentRepository extends JpaRepository<Stude
     Optional<StudentProgrammeEnrolment> findByStudentIdAndEndedOnIsNullAndPrimaryTrue(UUID studentId);
 
     List<StudentProgrammeEnrolment> findByStudentIdOrderByStartedOnAsc(UUID studentId);
+
+    List<StudentProgrammeEnrolment> findByStudentIdAndEndedOnIsNullOrderByStartedOnAsc(UUID studentId);
+
+    boolean existsByStudentIdAndProgrammeIdAndKindAndEndedOnIsNull(UUID studentId, UUID programmeId, ProgrammeEnrolmentKind kind);
 }

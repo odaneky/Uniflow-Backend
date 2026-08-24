@@ -16,10 +16,13 @@ import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentStatus;
+import com.university.lms.student.dto.AddProgrammeMembershipRequest;
 import com.university.lms.student.dto.AdviseeSummaryResponse;
 import com.university.lms.student.dto.AdvisorCandidateResponse;
 import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
 import com.university.lms.student.dto.CreateStudentRequest;
+import com.university.lms.student.dto.EndProgrammeMembershipRequest;
+import com.university.lms.student.dto.ProgrammeMembershipResponse;
 import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.StudentSummaryResponse;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
@@ -267,6 +270,36 @@ public class StudentService {
     @Transactional
     public void updateContactById(UUID studentId, UpdateOwnProfileRequest request) {
         applyContact(require(studentId), request);
+    }
+
+    /** Every open programme membership — the primary major alongside any minors or double majors. */
+    public List<ProgrammeMembershipResponse> listProgrammeMemberships(UUID studentId) {
+        require(studentId);
+        return programmeEnrolmentService.openMembershipsOf(studentId).stream()
+                .map(ProgrammeMembershipResponse::from)
+                .toList();
+    }
+
+    /** Adds a minor, specialisation, or second major — never the primary membership. */
+    @Transactional
+    public ProgrammeMembershipResponse addProgrammeMembership(UUID studentId, AddProgrammeMembershipRequest request) {
+        require(studentId);
+        if (!academicStructure.programmeExists(request.programmeId())) {
+            throw new ResourceNotFoundException(
+                    StudentErrorCode.STUDENT_PROGRAMME_NOT_FOUND,
+                    "No programme exists with id " + request.programmeId());
+        }
+        return ProgrammeMembershipResponse.from(programmeEnrolmentService.addSecondary(
+                studentId, request.programmeId(), request.kind(), request.startedOn()));
+    }
+
+    /** Ends one secondary programme membership. The primary membership can only be ended by transfer. */
+    @Transactional
+    public void endProgrammeMembership(UUID studentId, UUID membershipId, EndProgrammeMembershipRequest request) {
+        require(studentId);
+        UUID approvedBy = currentUserProvider.find().map(CurrentUser::userId).orElse(null);
+        programmeEnrolmentService.endSecondary(
+                membershipId, request.endedOn(), request.endReason(), request.reason(), approvedBy);
     }
 
     /** Office hours the caller has posted, stored once per advisor. */

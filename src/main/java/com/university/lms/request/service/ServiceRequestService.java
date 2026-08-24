@@ -126,12 +126,12 @@ public class ServiceRequestService {
     @Transactional
     public ServiceRequestResponse createOwn(CreateServiceRequestRequest request) {
         UUID studentId = requireOwnStudent();
-        if (requestRepository.existsByStudentIdAndRequestTypeAndStatusNotIn(studentId, request.type(), CLOSED)) {
+        String payloadJson = payloadValidator.validateAndNormalize(request.type(), request.payload(), studentId);
+        if (hasOpenRequestOfSameKind(request.type(), studentId, payloadJson)) {
             throw new ResourceAlreadyExistsException(
                     RequestErrorCode.REQUEST_ALREADY_OPEN,
                     "You already have an open " + request.type().displayName() + " request");
         }
-        String payloadJson = payloadValidator.validateAndNormalize(request.type(), request.payload(), studentId);
         UUID assignee = workflow.defaultAssignee(request.type(), studentId);
         ServiceRequest saved = requestRepository.save(new ServiceRequest(
                 studentId, request.type(), nextReference(request.type()), request.note(), payloadJson, assignee));
@@ -144,6 +144,19 @@ public class ServiceRequestService {
                 saved.getReference() + " " + saved.getRequestType());
         outboxPublisher.publishSubmitted(saved);
         return toResponse(saved);
+    }
+
+    /**
+     * A grade appeal is scoped to the specific grade it contests, not to the type as a whole — a
+     * student appealing grades in two different courses is two independent requests, not a
+     * duplicate. Every other type keeps the original one-open-per-type rule.
+     */
+    private boolean hasOpenRequestOfSameKind(ServiceRequestType type, UUID studentId, String normalizedPayloadJson) {
+        if (type == ServiceRequestType.APPEAL) {
+            Object gradeId = parsePayload(normalizedPayloadJson).get("gradeId");
+            return gradeId != null && requestRepository.existsOpenAppealForGrade(gradeId.toString());
+        }
+        return requestRepository.existsByStudentIdAndRequestTypeAndStatusNotIn(studentId, type, CLOSED);
     }
 
     @Transactional

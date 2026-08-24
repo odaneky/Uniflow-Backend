@@ -22,6 +22,14 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     boolean existsByReference(String reference);
 
+    /** Mirrors uk_service_requests_open_appeal_per_grade: one open appeal per grade, not per student. */
+    @Query(
+            value = "SELECT EXISTS (SELECT 1 FROM service_requests "
+                    + "WHERE request_type = 'APPEAL' AND status NOT IN ('COMPLETED', 'DENIED', 'CANCELLED') "
+                    + "AND payload ->> 'gradeId' = :gradeId)",
+            nativeQuery = true)
+    boolean existsOpenAppealForGrade(@Param("gradeId") String gradeId);
+
     @Query(
             """
             SELECT r FROM ServiceRequest r
