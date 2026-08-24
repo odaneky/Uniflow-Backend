@@ -2,6 +2,7 @@ package com.university.lms.communication.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.dto.CursorPageResponse;
 import com.university.lms.common.dto.PageResponse;
@@ -13,6 +14,7 @@ import com.university.lms.communication.api.CommsRateLimiter;
 import com.university.lms.communication.api.MessagingPolicy;
 import com.university.lms.communication.policy.InMemoryCommsRateLimiter;
 import com.university.lms.communication.domain.Announcement;
+import com.university.lms.communication.domain.AnnouncementAudience;
 import com.university.lms.communication.domain.AnnouncementRead;
 import com.university.lms.communication.domain.CommunicationErrorCode;
 import com.university.lms.communication.domain.Conversation;
@@ -33,17 +35,20 @@ import com.university.lms.communication.repository.AnnouncementRepository;
 import com.university.lms.communication.repository.ConversationParticipantRepository;
 import com.university.lms.communication.repository.ConversationRepository;
 import com.university.lms.communication.repository.MessageRepository;
+import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.notification.dispatch.AnnouncementPublishedOutboxHandler;
 import com.university.lms.notification.dispatch.MessageSentOutboxHandler;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -74,6 +79,9 @@ public class CommunicationService {
     private final AuditTrail auditTrail;
     private final OutboxWriter outboxWriter;
     private final ObjectMapper objectMapper;
+    private final CourseCatalog courseCatalog;
+    private final AcademicStructure academicStructure;
+    private final StaffAppointments staffAppointments;
 
     public CommunicationService(
             AnnouncementRepository announcementRepository,
@@ -90,7 +98,10 @@ public class CommunicationService {
             DocumentStore documentStore,
             AuditTrail auditTrail,
             OutboxWriter outboxWriter,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            CourseCatalog courseCatalog,
+            AcademicStructure academicStructure,
+            StaffAppointments staffAppointments) {
         this.announcementRepository = announcementRepository;
         this.announcementReadRepository = announcementReadRepository;
         this.conversationRepository = conversationRepository;
@@ -106,6 +117,9 @@ public class CommunicationService {
         this.auditTrail = auditTrail;
         this.outboxWriter = outboxWriter;
         this.objectMapper = objectMapper;
+        this.courseCatalog = courseCatalog;
+        this.academicStructure = academicStructure;
+        this.staffAppointments = staffAppointments;
     }
 
     public List<AnnouncementResponse> ownAnnouncements() {
@@ -163,6 +177,7 @@ public class CommunicationService {
     public AnnouncementResponse createAnnouncement(CreateAnnouncementRequest request) {
         CurrentUser caller = currentUserProvider.require();
         requireStaff(caller);
+        requireAppointedOverAudience(caller, request.audience(), request.audienceRefId());
         Announcement announcement = new Announcement(
                 request.title(), request.body(), request.audience(), request.audienceRefId(), caller.userId());
         if (Boolean.TRUE.equals(request.publish())) {
@@ -177,12 +192,14 @@ public class CommunicationService {
 
     @Transactional
     public AnnouncementResponse publishAnnouncement(UUID announcementId) {
-        requireStaff(currentUserProvider.require());
+        CurrentUser caller = currentUserProvider.require();
+        requireStaff(caller);
         Announcement announcement = announcementRepository
                 .findById(announcementId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         CommunicationErrorCode.ANNOUNCEMENT_NOT_FOUND,
                         "No announcement exists with id " + announcementId));
+        requireAppointedOverAudience(caller, announcement.getAudience(), announcement.getAudienceRefId());
         announcement.publish(Instant.now());
         enqueueAnnouncementPublished(announcement);
         return AnnouncementResponse.from(announcement, false);
@@ -449,6 +466,51 @@ public class CommunicationService {
                     com.university.lms.common.exception.CommonErrorCode.ACCESS_DENIED,
                     "You do not have permission to access this record");
         }
+    }
+
+    /**
+     * A5: any staff role could broadcast an announcement addressed to any faculty, department,
+     * programme or course section, with no relationship to it at all. {@code UNIVERSITY_WIDE} is
+     * deliberately left untouched — it has no department to scope by, and restricting who may
+     * address the whole institution is a different policy question than org-scoping, not one to
+     * fold into this narrowing.
+     *
+     * <p>Same fail-open safety property as the read guards this session — see {@code
+     * LearningService.isAuthorizedStaff} for the full reasoning. Assumes {@link #requireStaff} has
+     * already run; this only refines who among staff, not whether the caller is staff at all.
+     */
+    private void requireAppointedOverAudience(CurrentUser caller, AnnouncementAudience audience, UUID audienceRefId) {
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return;
+        }
+        Optional<UUID> orgUnitId = resolveOrgUnitForAudience(audience, audienceRefId);
+        if (orgUnitId.isPresent() && !staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get())) {
+            throw new com.university.lms.common.exception.ForbiddenException(
+                    com.university.lms.common.exception.CommonErrorCode.ACCESS_DENIED,
+                    "You are not appointed over this audience");
+        }
+    }
+
+    private Optional<UUID> resolveOrgUnitForAudience(AnnouncementAudience audience, UUID audienceRefId) {
+        if (audienceRefId == null) {
+            return Optional.empty();
+        }
+        return switch (audience) {
+            case FACULTY -> staffAppointments.orgUnitFor("FACULTY", audienceRefId);
+            case DEPARTMENT -> staffAppointments.orgUnitFor("DEPARTMENT", audienceRefId);
+            case PROGRAMME -> academicStructure
+                    .departmentOfProgramme(audienceRefId)
+                    .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+            case COURSE_SECTION -> courseCatalog
+                    .findSection(audienceRefId)
+                    .map(CourseCatalog.SectionSummary::courseId)
+                    .flatMap(courseCatalog::departmentOfCourse)
+                    .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+            case UNIVERSITY_WIDE -> Optional.empty();
+        };
     }
 
     public record SendMessageResult(boolean created, MessageResponse message) {}
