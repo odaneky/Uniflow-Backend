@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -56,6 +57,15 @@ class FinancialAidServiceTest {
             "Rita Registrar",
             Optional.empty(),
             Set.of(SecurityRoles.REGISTRAR),
+            Set.of());
+    private static final CurrentUser FINANCIAL_AID_OFFICER = new CurrentUser(
+            UUID.randomUUID(),
+            "sub-faid",
+            "financial-aid-officer",
+            "financial.aid.officer@university.test",
+            "Farah Aid",
+            Optional.empty(),
+            Set.of(SecurityRoles.FINANCIAL_AID_OFFICER),
             Set.of());
 
     @Mock
@@ -145,5 +155,22 @@ class FinancialAidServiceTest {
         assertThat(awards).extracting(FinancialAidAwardResponse::id)
                 .containsExactlyInAnyOrder(existingPell.getId(), existingInstitutional.getId());
         verify(awardRepository, never()).save(any(FinancialAidAward.class));
+    }
+
+    @Test
+    @DisplayName("A6: FINANCIAL_AID_OFFICER is additionally accepted, alongside REGISTRAR — not instead of it")
+    void financialAidOfficerCanPackageAwardsAlongsideRegistrar() {
+        lenient().when(currentUserProvider.require()).thenReturn(FINANCIAL_AID_OFFICER);
+        when(awardRepository.findByStudentIdAndAcademicTermIdAndAwardType(STUDENT_ID, TERM_ID, AwardType.PELL))
+                .thenReturn(Optional.empty());
+        when(awardRepository.findByStudentIdAndAcademicTermIdAndAwardType(
+                        STUDENT_ID, TERM_ID, AwardType.INSTITUTIONAL))
+                .thenReturn(Optional.empty());
+        when(awardRepository.save(any(FinancialAidAward.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        List<FinancialAidAwardResponse> awards = service.packageAwards(
+                STUDENT_ID, new PackageAwardsRequest(TERM_ID, null, null, new BigDecimal("1200.00")));
+
+        assertThat(awards).hasSize(2);
     }
 }

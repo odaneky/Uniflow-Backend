@@ -61,6 +61,16 @@ class FinanceServiceTest {
             Optional.empty(),
             Set.of(SecurityRoles.REGISTRAR),
             Set.of());
+    private static final UUID BURSAR_USER_ID = UUID.randomUUID();
+    private static final CurrentUser BURSAR = new CurrentUser(
+            BURSAR_USER_ID,
+            "sub-bursar",
+            "bursar",
+            "bursar@university.test",
+            "Beau Bursar",
+            Optional.empty(),
+            Set.of(SecurityRoles.BURSAR),
+            Set.of());
 
     @Mock
     private StudentAccountRepository accountRepository;
@@ -202,5 +212,17 @@ class FinanceServiceTest {
                         RecordAccessLog.RecordType.FINANCE,
                         RecordAccessLog.Action.VIEW,
                         "Student account");
+    }
+
+    @Test
+    @DisplayName("A6: BURSAR is additionally accepted for ledger access, alongside REGISTRAR — not instead of it")
+    void bursarCanAccessTheLedgerAlongsideRegistrar() {
+        when(currentUserProvider.require()).thenReturn(BURSAR);
+        when(studentDirectory.exists(STUDENT_ID)).thenReturn(true);
+        when(accountRepository.findByStudentId(STUDENT_ID)).thenReturn(Optional.empty());
+
+        var account = service.forStudent(STUDENT_ID);
+
+        assertThat(account).isNotNull();
     }
 }

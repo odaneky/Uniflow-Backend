@@ -1,7 +1,9 @@
 package com.university.lms.common.security;
 
 import static com.university.lms.common.security.SecurityRoles.ACADEMIC_ADVISOR;
+import static com.university.lms.common.security.SecurityRoles.BURSAR;
 import static com.university.lms.common.security.SecurityRoles.FACULTY_ADMIN;
+import static com.university.lms.common.security.SecurityRoles.FINANCIAL_AID_OFFICER;
 import static com.university.lms.common.security.SecurityRoles.LECTURER;
 import static com.university.lms.common.security.SecurityRoles.REGISTRAR;
 import static com.university.lms.common.security.SecurityRoles.STUDENT;
@@ -258,10 +260,17 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/conversations/**", "/api/v1/conversations")
                         .authenticated()
+                        // A6 groundwork: widened to also accept the eventual owner of each area —
+                        // BURSAR for the ledger, FINANCIAL_AID_OFFICER for aid — never narrowed to
+                        // exclude REGISTRAR, since nobody has been granted the narrower role in any
+                        // real environment yet. service-holds is deliberately left REGISTRAR-only:
+                        // HoldType spans FINANCIAL, SAP, ADVISING, ORIENTATION and PLACEMENT, so a
+                        // single blanket widening would be the wrong shape — it needs a per-type
+                        // decision, not a first pass.
                         .requestMatchers(HttpMethod.POST, "/api/v1/accounts/**", "/api/v1/accounts")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/financial-aid/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FINANCIAL_AID_OFFICER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/service-holds/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/requests/**", "/api/v1/requests")

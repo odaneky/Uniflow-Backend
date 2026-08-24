@@ -211,9 +211,17 @@ public class FinanceService {
         return type == AccountEntryType.CHARGE ? amount : amount.negate();
     }
 
+    /**
+     * A6 groundwork: widened to also accept {@code BURSAR}, the eventual owner of the ledger.
+     * {@code REGISTRAR} keeps everything it has today — nobody has been granted {@code BURSAR} in
+     * any real environment yet, so narrowing this to exclude {@code REGISTRAR} would lock out
+     * every real registrar the day it shipped.
+     */
     private CurrentUser requireRegistry() {
         CurrentUser caller = currentUserProvider.require();
-        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.BURSAR))) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }

@@ -187,14 +187,13 @@ class StaffingServiceTest {
 
         UUID alreadyAppointed = UUID.randomUUID();
         UUID needsAppointment = UUID.randomUUID();
+        // Every staff role defaults to "no holders" — only LECTURER is overridden below — so this
+        // stays correct as SecurityRoles.STAFF_ROLES grows (A6 added four more roles to it).
+        when(userDirectory.findByRealmRole(any())).thenReturn(List.of());
         when(userDirectory.findByRealmRole(SecurityRoles.LECTURER))
                 .thenReturn(List.of(
                         new UserDirectory.UserSummary(alreadyAppointed, "a", "A", "a@example.edu", true),
                         new UserDirectory.UserSummary(needsAppointment, "b", "B", "b@example.edu", true)));
-        when(userDirectory.findByRealmRole(eq(SecurityRoles.ACADEMIC_ADVISOR))).thenReturn(List.of());
-        when(userDirectory.findByRealmRole(eq(SecurityRoles.FACULTY_ADMIN))).thenReturn(List.of());
-        when(userDirectory.findByRealmRole(eq(SecurityRoles.REGISTRAR))).thenReturn(List.of());
-        when(userDirectory.findByRealmRole(eq(SecurityRoles.SYSTEM_ADMIN))).thenReturn(List.of());
         when(appointmentRepository.existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(
                         alreadyAppointed, root.getId(), SecurityRoles.LECTURER))
                 .thenReturn(true);

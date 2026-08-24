@@ -333,6 +333,22 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
         }
 
         @Test
+        @DisplayName("A6: BURSAR may also post ledger entries, alongside REGISTRAR")
+        void bursarMayPostLedgerEntries() throws Exception {
+            String path = "/api/v1/accounts/" + UUID.randomUUID() + "/entries";
+            allowed(json(post(path).with(as(SecurityRoles.BURSAR)), "{}"));
+        }
+
+        @Test
+        @DisplayName("A6: FINANCIAL_AID_OFFICER may also administer financial aid, alongside REGISTRAR")
+        void financialAidOfficerMayAdministerAid() throws Exception {
+            allowed(post("/api/v1/financial-aid/isir/import")
+                    .with(as(SecurityRoles.FINANCIAL_AID_OFFICER))
+                    .content("studentId,ssn\n")
+                    .contentType(org.springframework.http.MediaType.TEXT_PLAIN));
+        }
+
+        @Test
         @DisplayName("a student may pay their own account through /me")
         void studentsMayPayThemselves() throws Exception {
             allowed(json(post("/api/v1/me/account/payments").with(as(SecurityRoles.STUDENT)), "{}"));

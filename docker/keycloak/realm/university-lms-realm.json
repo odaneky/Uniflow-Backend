@@ -49,6 +49,30 @@
         "clientRole": false
       },
       {
+        "name": "BURSAR",
+        "description": "Owns the ledger: charges, payments, refunds and account entries",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "FINANCIAL_AID_OFFICER",
+        "description": "Owns financial aid: ISIR import, packaging and awards",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "ADMISSIONS_OFFICER",
+        "description": "Owns the admissions pipeline: applications, offers and decisions",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "EXAMS_OFFICER",
+        "description": "Owns the examinations timetable and misconduct records",
+        "composite": false,
+        "clientRole": false
+      },
+      {
         "name": "SYSTEM_ADMIN",
         "description": "Full administrative access",
         "composite": false,
@@ -252,6 +276,82 @@
       ],
       "realmRoles": [
         "REGISTRAR"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "bursar",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Beau",
+      "lastName": "Bursar",
+      "email": "bursar@university.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "BURSAR"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "financial-aid-officer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Farah",
+      "lastName": "Aid",
+      "email": "financial.aid.officer@university.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "FINANCIAL_AID_OFFICER"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "admissions-officer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ade",
+      "lastName": "Admissions",
+      "email": "admissions.officer@university.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMISSIONS_OFFICER"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "exams-officer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Emile",
+      "lastName": "Exams",
+      "email": "exams.officer@university.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "EXAMS_OFFICER"
       ],
       "requiredActions": []
     },

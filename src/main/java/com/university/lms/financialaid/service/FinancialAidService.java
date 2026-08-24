@@ -315,9 +315,17 @@ public class FinancialAidService {
         }
     }
 
+    /**
+     * A6 groundwork: widened to also accept {@code FINANCIAL_AID_OFFICER}, the eventual owner of
+     * this area. {@code REGISTRAR} keeps everything it has today — nobody has been granted {@code
+     * FINANCIAL_AID_OFFICER} in any real environment yet, so narrowing this to exclude {@code
+     * REGISTRAR} would lock out every real registrar the day it shipped.
+     */
     private void requireRegistry() {
         CurrentUser caller = currentUserProvider.require();
-        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.FINANCIAL_AID_OFFICER))) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
