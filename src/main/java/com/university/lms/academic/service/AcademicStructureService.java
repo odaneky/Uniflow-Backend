@@ -50,18 +50,21 @@ public class AcademicStructureService {
     private final ProgrammeRepository programmeRepository;
     private final UserDirectory userDirectory;
     private final AcademicPolicyService academicPolicyService;
+    private final AcademicOutboxPublisher academicOutboxPublisher;
 
     public AcademicStructureService(
             FacultyRepository facultyRepository,
             DepartmentRepository departmentRepository,
             ProgrammeRepository programmeRepository,
             UserDirectory userDirectory,
-            AcademicPolicyService academicPolicyService) {
+            AcademicPolicyService academicPolicyService,
+            AcademicOutboxPublisher academicOutboxPublisher) {
         this.facultyRepository = facultyRepository;
         this.departmentRepository = departmentRepository;
         this.programmeRepository = programmeRepository;
         this.userDirectory = userDirectory;
         this.academicPolicyService = academicPolicyService;
+        this.academicOutboxPublisher = academicOutboxPublisher;
     }
 
     // ------------------------------------------------------------------
@@ -84,6 +87,7 @@ public class AcademicStructureService {
         try {
             Faculty saved = facultyRepository.saveAndFlush(faculty);
             log.info("Created faculty {} ({})", saved.getCode(), saved.getId());
+            academicOutboxPublisher.publishOrgUnitNeeded("FACULTY", saved.getId(), saved.getCode(), saved.getName());
             return FacultyResponse.from(saved);
         } catch (DataIntegrityViolationException ex) {
             throw new ResourceAlreadyExistsException(
@@ -124,6 +128,7 @@ public class AcademicStructureService {
         try {
             Department saved = departmentRepository.saveAndFlush(department);
             log.info("Created department {} ({})", saved.getCode(), saved.getId());
+            academicOutboxPublisher.publishOrgUnitNeeded("DEPARTMENT", saved.getId(), saved.getCode(), saved.getName());
             return DepartmentResponse.from(saved);
         } catch (DataIntegrityViolationException ex) {
             throw new ResourceAlreadyExistsException(
@@ -208,6 +213,26 @@ public class AcademicStructureService {
     @Transactional
     public ProgrammeResponse replaceCreditLoad(UUID programmeId, ReplaceProgrammeCreditLoadRequest request) {
         return academicPolicyService.replaceProgrammeLoad(programmeId, request);
+    }
+
+    /**
+     * A5 groundwork: republishes the org-unit-needed event for every existing faculty and
+     * department, so ones created before this wiring existed get mirrored as {@code OrgUnit}s too.
+     * Idempotent — {@code StaffingService.ensureOrgUnitFor} is what actually dedupes, not this.
+     */
+    @Transactional
+    public int reconcileOrgUnits() {
+        int published = 0;
+        for (Faculty faculty : facultyRepository.findAll()) {
+            academicOutboxPublisher.publishOrgUnitNeeded("FACULTY", faculty.getId(), faculty.getCode(), faculty.getName());
+            published++;
+        }
+        for (Department department : departmentRepository.findAll()) {
+            academicOutboxPublisher.publishOrgUnitNeeded(
+                    "DEPARTMENT", department.getId(), department.getCode(), department.getName());
+            published++;
+        }
+        return published;
     }
 
     // ------------------------------------------------------------------

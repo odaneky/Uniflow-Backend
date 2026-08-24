@@ -217,4 +217,50 @@ class StaffingServiceTest {
                 .isInstanceOf(com.university.lms.common.exception.ForbiddenException.class);
         verify(appointmentRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("A5: ensureOrgUnitFor mirrors a faculty as a namespaced, root-parented org unit")
+    void ensureOrgUnitForCreatesANamespacedUnit() {
+        UUID facultyId = UUID.randomUUID();
+        OrgUnit root = institutionRoot();
+        when(orgUnitRepository.existsBySourceTypeAndSourceId("FACULTY", facultyId)).thenReturn(false);
+        when(orgUnitRepository.existsByCode("FAC:SCI")).thenReturn(false);
+        when(orgUnitRepository.findByCode("UNIV")).thenReturn(Optional.of(root));
+
+        service.ensureOrgUnitFor("FACULTY", facultyId, "SCI", "Science");
+
+        org.mockito.ArgumentCaptor<OrgUnit> captor = org.mockito.ArgumentCaptor.forClass(OrgUnit.class);
+        verify(orgUnitRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getCode()).isEqualTo("FAC:SCI");
+        assertThat(captor.getValue().getParent()).isEqualTo(root);
+        assertThat(captor.getValue().getUnitType()).isEqualTo(OrgUnitType.FACULTY);
+    }
+
+    @Test
+    @DisplayName("A5: ensureOrgUnitFor does not duplicate a source already linked")
+    void ensureOrgUnitForIsIdempotent() {
+        UUID facultyId = UUID.randomUUID();
+        when(orgUnitRepository.existsBySourceTypeAndSourceId("FACULTY", facultyId)).thenReturn(true);
+
+        service.ensureOrgUnitFor("FACULTY", facultyId, "SCI", "Science");
+
+        verify(orgUnitRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("A5: a faculty and a department may share a code without colliding")
+    void facultyAndDepartmentCodesAreNamespacedSeparately() {
+        UUID departmentId = UUID.randomUUID();
+        OrgUnit root = institutionRoot();
+        when(orgUnitRepository.existsBySourceTypeAndSourceId("DEPARTMENT", departmentId)).thenReturn(false);
+        when(orgUnitRepository.existsByCode("DEPT:SCI")).thenReturn(false);
+        when(orgUnitRepository.findByCode("UNIV")).thenReturn(Optional.of(root));
+
+        service.ensureOrgUnitFor("DEPARTMENT", departmentId, "SCI", "Science Department");
+
+        org.mockito.ArgumentCaptor<OrgUnit> captor = org.mockito.ArgumentCaptor.forClass(OrgUnit.class);
+        verify(orgUnitRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getCode()).isEqualTo("DEPT:SCI");
+        assertThat(captor.getValue().getUnitType()).isEqualTo(OrgUnitType.DEPARTMENT);
+    }
 }

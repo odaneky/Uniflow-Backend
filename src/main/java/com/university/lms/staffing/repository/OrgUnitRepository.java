@@ -14,4 +14,6 @@ public interface OrgUnitRepository extends JpaRepository<OrgUnit, UUID> {
     List<OrgUnit> findByParentId(UUID parentId);
 
     boolean existsByCode(String code);
+
+    boolean existsBySourceTypeAndSourceId(String sourceType, UUID sourceId);
 }

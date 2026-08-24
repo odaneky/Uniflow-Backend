@@ -46,6 +46,18 @@ public class OrgUnit extends BaseEntity {
     @Column(name = "unit_type", nullable = false, length = 30)
     private OrgUnitType unitType;
 
+    /**
+     * A plain reference back to the academic-module entity this unit mirrors — e.g. {@code
+     * "FACULTY"} + a {@code faculties.id} — never a JPA association, the same convention as every
+     * other cross-module reference in this codebase. Null for a unit with no academic counterpart,
+     * such as the seeded institution root or an administrative office.
+     */
+    @Column(name = "source_type", length = 20)
+    private String sourceType;
+
+    @Column(name = "source_id")
+    private java.util.UUID sourceId;
+
     protected OrgUnit() {
         // for JPA
     }
@@ -55,6 +67,18 @@ public class OrgUnit extends BaseEntity {
         this.code = code;
         this.name = name;
         this.unitType = unitType;
+    }
+
+    public OrgUnit(
+            OrgUnit parent,
+            String code,
+            String name,
+            OrgUnitType unitType,
+            String sourceType,
+            java.util.UUID sourceId) {
+        this(parent, code, name, unitType);
+        this.sourceType = sourceType;
+        this.sourceId = sourceId;
     }
 
     public void rename(String name) {

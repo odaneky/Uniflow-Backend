@@ -11,6 +11,7 @@ import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.staffing.domain.Employee;
 import com.university.lms.staffing.domain.OrgUnit;
+import com.university.lms.staffing.domain.OrgUnitType;
 import com.university.lms.staffing.domain.StaffAppointment;
 import com.university.lms.staffing.domain.StaffingErrorCode;
 import com.university.lms.staffing.dto.AppointStaffRequest;
@@ -181,6 +182,57 @@ public class StaffingService implements StaffAppointments {
         }
         log.info("Reconciled staff appointments: {} created", created);
         return created;
+    }
+
+    /**
+     * A5 groundwork: mirrors an academic faculty or department as a real {@link OrgUnit} staff can
+     * be appointed to, so an appointment can eventually name "this department" rather than only
+     * "the whole institution". Called both when a faculty/department is created (see {@code
+     * AcademicOrgUnitHandler}) and by a registry-triggered reconcile pass for existing ones.
+     *
+     * <p>Namespaces the mirrored code by source type ({@code "FAC:" + code}, {@code "DEPT:" +
+     * code}) — {@code org_units.code} is unique institution-wide, but a faculty and a department
+     * are free to share a code in their own module, and often will (a "SCI" faculty containing a
+     * "SCI" department is a completely ordinary structure). No-op if this source is already linked.
+     *
+     * <p>Flat under the institution root rather than nested under the faculty's own unit for a
+     * department: getting that nesting right depends on the faculty's unit already existing, which
+     * asynchronous, independently-ordered outbox delivery cannot guarantee. Flat still gives real
+     * department-level appointment granularity — nesting can follow once this proves out.
+     */
+    @Transactional
+    public void ensureOrgUnitFor(String sourceType, UUID sourceId, String code, String name) {
+        if (sourceType == null || sourceId == null || code == null) {
+            return;
+        }
+        if (orgUnitRepository.existsBySourceTypeAndSourceId(sourceType, sourceId)) {
+            return;
+        }
+        OrgUnitType unitType;
+        String codePrefix;
+        if ("FACULTY".equals(sourceType)) {
+            unitType = OrgUnitType.FACULTY;
+            codePrefix = "FAC";
+        } else if ("DEPARTMENT".equals(sourceType)) {
+            unitType = OrgUnitType.DEPARTMENT;
+            codePrefix = "DEPT";
+        } else {
+            unitType = OrgUnitType.ADMINISTRATIVE_OFFICE;
+            codePrefix = "ADMIN";
+        }
+        String namespacedCode = codePrefix + ":" + code;
+        if (orgUnitRepository.existsByCode(namespacedCode)) {
+            log.warn(
+                    "Skipped creating an org unit for {} {} — code {} is already in use",
+                    sourceType,
+                    sourceId,
+                    namespacedCode);
+            return;
+        }
+        OrgUnit root = institutionRoot();
+        OrgUnit unit = new OrgUnit(root, namespacedCode, name, unitType, sourceType, sourceId);
+        orgUnitRepository.saveAndFlush(unit);
+        log.info("Linked {} {} to a new org unit {} (A5 provisioning)", sourceType, sourceId, namespacedCode);
     }
 
     private OrgUnit institutionRoot() {

@@ -2,6 +2,7 @@ package com.university.lms.academic.web;
 
 import com.university.lms.academic.dto.CreateFacultyRequest;
 import com.university.lms.academic.dto.FacultyResponse;
+import com.university.lms.academic.dto.ReconcileOrgUnitsResponse;
 import com.university.lms.academic.service.AcademicStructureService;
 import com.university.lms.common.security.AccessClass;
 import static com.university.lms.common.security.AccessClass.Value.*;
@@ -49,5 +50,15 @@ public class FacultyController {
     @GetMapping("/{id}")
     public FacultyResponse findById(@PathVariable UUID id) {
         return service.findFaculty(id);
+    }
+
+    /**
+     * A5 groundwork: mirrors every existing faculty and department as a real {@code OrgUnit} staff
+     * can be appointed to. Idempotent — safe to re-run.
+     */
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/reconcile-org-units")
+    public ReconcileOrgUnitsResponse reconcileOrgUnits() {
+        return new ReconcileOrgUnitsResponse(service.reconcileOrgUnits());
     }
 }
