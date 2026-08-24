@@ -1,8 +1,15 @@
 package com.university.lms.staffing.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.staffing.domain.OrgUnit;
@@ -14,6 +21,7 @@ import com.university.lms.staffing.repository.StaffAppointmentRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -115,5 +123,98 @@ class StaffingServiceTest {
         when(appointmentRepository.findByUserId(userId)).thenReturn(List.of());
 
         assertThat(service.isAppointedOver(userId, orgUnitId)).isFalse();
+    }
+
+    private static OrgUnit institutionRoot() {
+        return unit(null, "UNIV", OrgUnitType.INSTITUTION, UUID.randomUUID());
+    }
+
+    private static CurrentUser callerWithRole(String role) {
+        return new CurrentUser(
+                UUID.randomUUID(),
+                "idp-subject",
+                "caller",
+                "caller@example.edu",
+                "Caller",
+                Optional.empty(),
+                Set.of(role),
+                Set.of());
+    }
+
+    @Test
+    @DisplayName("A5: granting a staff role appoints the user at the institution root")
+    void ensureAppointmentCreatesAnInstitutionRootAppointment() {
+        UUID userId = UUID.randomUUID();
+        OrgUnit root = institutionRoot();
+        when(orgUnitRepository.findByCode("UNIV")).thenReturn(Optional.of(root));
+        when(appointmentRepository.existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(userId, root.getId(), "LECTURER"))
+                .thenReturn(false);
+
+        service.ensureAppointment(userId, "LECTURER");
+
+        verify(appointmentRepository).save(any(StaffAppointment.class));
+    }
+
+    @Test
+    @DisplayName("A5: ensureAppointment is a no-op for STUDENT")
+    void ensureAppointmentIgnoresStudentRole() {
+        service.ensureAppointment(UUID.randomUUID(), SecurityRoles.STUDENT);
+
+        verify(appointmentRepository, never()).save(any());
+        verify(orgUnitRepository, never()).findByCode(any());
+    }
+
+    @Test
+    @DisplayName("A5: ensureAppointment does not duplicate an appointment that already exists")
+    void ensureAppointmentIsIdempotent() {
+        UUID userId = UUID.randomUUID();
+        OrgUnit root = institutionRoot();
+        when(orgUnitRepository.findByCode("UNIV")).thenReturn(Optional.of(root));
+        when(appointmentRepository.existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(userId, root.getId(), "LECTURER"))
+                .thenReturn(true);
+
+        service.ensureAppointment(userId, "LECTURER");
+
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A5: reconcileAppointments backfills every staff-role holder missing one, and no one else")
+    void reconcileAppointmentsBackfillsMissingAppointments() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.SYSTEM_ADMIN));
+        OrgUnit root = institutionRoot();
+        when(orgUnitRepository.findByCode("UNIV")).thenReturn(Optional.of(root));
+
+        UUID alreadyAppointed = UUID.randomUUID();
+        UUID needsAppointment = UUID.randomUUID();
+        when(userDirectory.findByRealmRole(SecurityRoles.LECTURER))
+                .thenReturn(List.of(
+                        new UserDirectory.UserSummary(alreadyAppointed, "a", "A", "a@example.edu", true),
+                        new UserDirectory.UserSummary(needsAppointment, "b", "B", "b@example.edu", true)));
+        when(userDirectory.findByRealmRole(eq(SecurityRoles.ACADEMIC_ADVISOR))).thenReturn(List.of());
+        when(userDirectory.findByRealmRole(eq(SecurityRoles.FACULTY_ADMIN))).thenReturn(List.of());
+        when(userDirectory.findByRealmRole(eq(SecurityRoles.REGISTRAR))).thenReturn(List.of());
+        when(userDirectory.findByRealmRole(eq(SecurityRoles.SYSTEM_ADMIN))).thenReturn(List.of());
+        when(appointmentRepository.existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(
+                        alreadyAppointed, root.getId(), SecurityRoles.LECTURER))
+                .thenReturn(true);
+        when(appointmentRepository.existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(
+                        needsAppointment, root.getId(), SecurityRoles.LECTURER))
+                .thenReturn(false);
+
+        int created = service.reconcileAppointments();
+
+        assertThat(created).isEqualTo(1);
+        verify(appointmentRepository, times(1)).save(any(StaffAppointment.class));
+    }
+
+    @Test
+    @DisplayName("A5: reconcileAppointments is registry-only")
+    void reconcileAppointmentsRefusesNonRegistryCallers() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.LECTURER));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.reconcileAppointments())
+                .isInstanceOf(com.university.lms.common.exception.ForbiddenException.class);
+        verify(appointmentRepository, never()).save(any());
     }
 }

@@ -6,6 +6,7 @@ import com.university.lms.staffing.dto.AppointStaffRequest;
 import com.university.lms.staffing.dto.CreateOrgUnitRequest;
 import com.university.lms.staffing.dto.EmployeeResponse;
 import com.university.lms.staffing.dto.OrgUnitResponse;
+import com.university.lms.staffing.dto.ReconcileAppointmentsResponse;
 import com.university.lms.staffing.dto.RegisterEmployeeRequest;
 import com.university.lms.staffing.dto.StaffAppointmentResponse;
 import com.university.lms.staffing.service.StaffingService;
@@ -71,5 +72,15 @@ public class StaffingController {
     @GetMapping("/api/v1/staff-appointments")
     public List<StaffAppointmentResponse> appointmentsOf(@RequestParam UUID userId) {
         return staffingService.appointmentsOf(userId);
+    }
+
+    /**
+     * A5 groundwork: backfills a default institution-wide appointment for every current holder of
+     * a staff role who lacks one. Idempotent — safe to re-run.
+     */
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/api/v1/staff-appointments/reconcile")
+    public ReconcileAppointmentsResponse reconcile() {
+        return new ReconcileAppointmentsResponse(staffingService.reconcileAppointments());
     }
 }

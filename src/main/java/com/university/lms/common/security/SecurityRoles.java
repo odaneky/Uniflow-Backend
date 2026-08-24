@@ -18,6 +18,10 @@ public final class SecurityRoles {
 
     public static final String ROLE_PREFIX = "ROLE_";
 
+    /** Every role except {@code STUDENT} — the set {@code CurrentUser.isStaff()} currently defines by exclusion. */
+    public static final java.util.Set<String> STAFF_ROLES =
+            java.util.Set.of(LECTURER, ACADEMIC_ADVISOR, FACULTY_ADMIN, REGISTRAR, SYSTEM_ADMIN);
+
     private SecurityRoles() {}
 
     public static String authority(String role) {

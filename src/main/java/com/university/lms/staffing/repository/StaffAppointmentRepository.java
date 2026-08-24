@@ -11,4 +11,6 @@ public interface StaffAppointmentRepository extends JpaRepository<StaffAppointme
     List<StaffAppointment> findByUserId(UUID userId);
 
     List<StaffAppointment> findByOrgUnitId(UUID orgUnitId);
+
+    boolean existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(UUID userId, UUID orgUnitId, String role);
 }

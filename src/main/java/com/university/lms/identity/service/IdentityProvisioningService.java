@@ -51,16 +51,19 @@ public class IdentityProvisioningService {
     private final UserRepository userRepository;
     private final AuditTrail auditTrail;
     private final CurrentUserProvider currentUserProvider;
+    private final IdentityOutboxPublisher identityOutboxPublisher;
 
     public IdentityProvisioningService(
             IdentityProvider identityProvider,
             UserRepository userRepository,
             AuditTrail auditTrail,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            IdentityOutboxPublisher identityOutboxPublisher) {
         this.identityProvider = identityProvider;
         this.userRepository = userRepository;
         this.auditTrail = auditTrail;
         this.currentUserProvider = currentUserProvider;
+        this.identityOutboxPublisher = identityOutboxPublisher;
     }
 
     /**
@@ -167,6 +170,7 @@ public class IdentityProvisioningService {
         String subject = requireLinked(require(userId));
         identityProvider.grantRealmRole(subject, role);
         auditTrail.record(actorId(), AuditTrail.Action.ROLE_GRANTED, ENTITY, userId, "Granted realm role " + role);
+        identityOutboxPublisher.publishRoleGranted(userId, role);
         log.info("Granted realm role {} to user {}", role, userId);
         return rolesOf(userId);
     }

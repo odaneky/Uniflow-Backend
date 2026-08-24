@@ -28,12 +28,19 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
 public class StaffingService implements StaffAppointments {
+
+    private static final Logger log = LoggerFactory.getLogger(StaffingService.class);
+
+    /** A5 groundwork: the default scope for an appointment nobody has assigned a real unit yet. Seeded by V82. */
+    private static final String INSTITUTION_ROOT_CODE = "UNIV";
 
     private final OrgUnitRepository orgUnitRepository;
     private final EmployeeRepository employeeRepository;
@@ -126,6 +133,61 @@ public class StaffingService implements StaffAppointments {
 
     public List<StaffAppointmentResponse> appointmentsOf(UUID userId) {
         return appointmentRepository.findByUserId(userId).stream().map(StaffAppointmentResponse::from).toList();
+    }
+
+    /**
+     * A5 groundwork: gives a staff-role holder a default institution-wide appointment if they do
+     * not already have one for this role, so {@link #isAppointedOver} has real data to consult.
+     * Called automatically whenever a role is granted (see {@code RoleGrantedAppointmentHandler});
+     * not exposed as its own endpoint since nothing outside that automatic path should be creating
+     * appointments this way — a real one, at a real unit, is what {@link #appointStaff} is for.
+     *
+     * <p>No-op for {@code STUDENT} and for a role that already has an open appointment here.
+     */
+    @Transactional
+    public void ensureAppointment(UUID userId, String role) {
+        if (userId == null || role == null || SecurityRoles.STUDENT.equals(role)) {
+            return;
+        }
+        OrgUnit root = institutionRoot();
+        if (appointmentRepository.existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(userId, root.getId(), role)) {
+            return;
+        }
+        appointmentRepository.save(new StaffAppointment(userId, root, role, LocalDate.now()));
+        log.info("Appointed user {} to the institution root with role {} (A5 provisioning)", userId, role);
+    }
+
+    /**
+     * A5 groundwork: backfills a default institution-wide appointment for every current holder of
+     * a staff role who lacks one. Idempotent — safe to re-run, e.g. after a role was granted
+     * directly at the identity provider, bypassing {@code grantRole} and its automatic appointment.
+     *
+     * <p>Preserves today's {@code isStaff()} reach exactly: an appointment at the root covers every
+     * descendant unit, so this narrows nothing on its own — it only makes narrowing possible later.
+     */
+    @Transactional
+    public int reconcileAppointments() {
+        requireRegistry();
+        OrgUnit root = institutionRoot();
+        int created = 0;
+        for (String role : SecurityRoles.STAFF_ROLES) {
+            for (UserDirectory.UserSummary user : userDirectory.findByRealmRole(role)) {
+                if (!appointmentRepository.existsByUserIdAndOrgUnitIdAndRoleAndValidToIsNull(
+                        user.id(), root.getId(), role)) {
+                    appointmentRepository.save(new StaffAppointment(user.id(), root, role, LocalDate.now()));
+                    created++;
+                }
+            }
+        }
+        log.info("Reconciled staff appointments: {} created", created);
+        return created;
+    }
+
+    private OrgUnit institutionRoot() {
+        return orgUnitRepository
+                .findByCode(INSTITUTION_ROOT_CODE)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Institution root org unit is missing — migration V82 has not run"));
     }
 
     @Override
