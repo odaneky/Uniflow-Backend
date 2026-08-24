@@ -135,6 +135,7 @@ class EnrollmentServiceTest {
         lenient().when(curriculumCatalog.allowsEnrolment(any(), any())).thenReturn(true);
         lenient().when(curriculumCatalog.hasPublishedResult(any(), any())).thenReturn(true);
         lenient().when(curriculumCatalog.hasPassed(any(), any())).thenReturn(true);
+        lenient().when(curriculumCatalog.transferCreditedCourseIds(any())).thenReturn(Set.of());
         lenient()
                 .when(courseCatalog.findCourse(COURSE_ID))
                 .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
@@ -725,6 +726,35 @@ class EnrollmentServiceTest {
         service.enrol(request);
 
         assertThat(completedCaptor.getValue()).doesNotContain(prereqCourseId);
+    }
+
+    @Test
+    @DisplayName(
+            "G2: transfer credit for a prerequisite the student never enrolled in internally still satisfies it")
+    void transferCreditWithNoEnrolmentHistorySatisfiesThePrerequisite() {
+        UUID prereqCourseId = UUID.randomUUID();
+        givenEligibleStudent();
+        givenOpenSection(30, 10);
+        givenRegistrationOpen();
+        // No enrolment history at all — the credit came from another institution, so the loop that
+        // builds "completed" from Enrollment rows has nothing to find on its own.
+        when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any())).thenReturn(List.of());
+        when(curriculumCatalog.transferCreditedCourseIds(STUDENT_ID)).thenReturn(Set.of(prereqCourseId));
+        CourseCatalog.CourseSummary prereqCourse =
+                new CourseCatalog.CourseSummary(prereqCourseId, "CMP1024", "Foundations", 3, 1, true);
+        when(courseCatalog.findCourses(any())).thenAnswer(invocation -> {
+            java.util.Collection<UUID> ids = invocation.getArgument(0);
+            return ids.contains(prereqCourseId) ? List.of(prereqCourse) : List.of();
+        });
+
+        ArgumentCaptor<Set<UUID>> completedCaptor = ArgumentCaptor.forClass(Set.class);
+        when(courseCatalog.unmetRequirements(eq(COURSE_ID), completedCaptor.capture(), any(), anyInt()))
+                .thenReturn(List.of());
+        when(repository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.enrol(request);
+
+        assertThat(completedCaptor.getValue()).contains(prereqCourseId);
     }
 
     @Test

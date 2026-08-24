@@ -642,6 +642,18 @@ public class EnrollmentService {
                 inProgress.add(course.id());
             }
         }
+
+        // A transfer student may satisfy a prerequisite with credit from another institution and
+        // never have an internal enrolment row for the course at all — the loop above cannot find
+        // that from history alone.
+        Set<UUID> transferCredited = curriculumCatalog.transferCreditedCourseIds(studentId);
+        if (!transferCredited.isEmpty()) {
+            for (CourseCatalog.CourseSummary course : courseCatalog.findCourses(transferCredited)) {
+                completed.add(course.id());
+                highestCompletedLevel = Math.max(highestCompletedLevel, course.level());
+            }
+        }
+
         List<String> unmet =
                 courseCatalog.unmetRequirements(courseId, completed, inProgress, highestCompletedLevel);
         if (!unmet.isEmpty()) {

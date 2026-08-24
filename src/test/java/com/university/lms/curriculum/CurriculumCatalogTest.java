@@ -162,6 +162,25 @@ class CurriculumCatalogTest {
     }
 
     @Test
+    @DisplayName("transferCreditedCourseIds returns only credits mapped to an internal course — G2")
+    void transferCreditedCourseIdsExcludesUnmappedCredits() {
+        UUID studentId = UUID.randomUUID();
+        UUID otherCourseId = UUID.randomUUID();
+        when(transferCreditRepository.findByStudentIdOrderByAwardedAtDesc(studentId))
+                .thenReturn(List.of(
+                        new com.university.lms.curriculum.domain.TransferCredit(
+                                studentId, "Prior College", "INTRO-101", "Intro", COURSE_ID, 3, LocalDate.of(2024, 1, 1), null),
+                        new com.university.lms.curriculum.domain.TransferCredit(
+                                studentId, "Prior College", "GEN-200", "General elective", otherCourseId, 3,
+                                LocalDate.of(2024, 1, 1), null),
+                        // Not yet mapped to a catalog course — an evaluation pending record.
+                        new com.university.lms.curriculum.domain.TransferCredit(
+                                studentId, "Prior College", "UNK-900", "Unmapped", null, 3, LocalDate.of(2024, 1, 1), null)));
+
+        assertThat(catalog.transferCreditedCourseIds(studentId)).containsExactlyInAnyOrder(COURSE_ID, otherCourseId);
+    }
+
+    @Test
     @DisplayName("the latest of two attempts decides, not the first")
     void latestAttemptDecidesOverAnEarlierOne() {
         UUID studentId = UUID.randomUUID();

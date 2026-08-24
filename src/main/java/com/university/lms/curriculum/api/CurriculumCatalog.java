@@ -1,5 +1,6 @@
 package com.university.lms.curriculum.api;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -41,4 +42,14 @@ public interface CurriculumCatalog {
      * the grade that is supposed to be what "completed" means.
      */
     boolean hasPublishedResult(UUID studentId, UUID courseSectionId);
+
+    /**
+     * Internal course ids this student holds transfer credit for.
+     *
+     * <p>A transfer student may satisfy a prerequisite without ever having an internal enrolment
+     * record for the required course — the credit came from another institution, not this catalog's
+     * enrolment history. Callers building a "courses this student has satisfied" set from enrolment
+     * history alone miss these; this is how they are added back in.
+     */
+    Set<UUID> transferCreditedCourseIds(UUID studentId);
 }

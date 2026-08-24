@@ -6,6 +6,7 @@ import com.university.lms.curriculum.domain.CurriculumVersion;
 import com.university.lms.curriculum.domain.CurriculumVersionStatus;
 import com.university.lms.curriculum.domain.ProgrammeRequirementBlock;
 import com.university.lms.curriculum.domain.RequirementKind;
+import com.university.lms.curriculum.domain.TransferCredit;
 import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
 import com.university.lms.curriculum.repository.CurriculumVersionRepository;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
@@ -13,8 +14,11 @@ import com.university.lms.curriculum.repository.TransferCreditRepository;
 import com.university.lms.grading.api.AcademicRecord;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -98,8 +102,18 @@ public class DefaultCurriculumCatalog implements CurriculumCatalog {
     }
 
     private boolean hasTransferCredit(UUID studentId, UUID courseId) {
+        return transferCreditedCourseIds(studentId).contains(courseId);
+    }
+
+    @Override
+    public Set<UUID> transferCreditedCourseIds(UUID studentId) {
+        if (studentId == null) {
+            return Set.of();
+        }
         return transferCreditRepository.findByStudentIdOrderByAwardedAtDesc(studentId).stream()
-                .anyMatch(transferCredit -> courseId.equals(transferCredit.getInternalCourseId()));
+                .map(TransferCredit::getInternalCourseId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     private boolean passedByGrade(UUID studentId, UUID courseId) {
