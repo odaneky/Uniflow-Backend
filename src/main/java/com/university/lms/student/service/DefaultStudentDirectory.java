@@ -46,6 +46,11 @@ public class DefaultStudentDirectory implements StudentDirectory {
     }
 
     @Override
+    public Optional<UUID> userIdOfStudent(UUID studentId) {
+        return studentRepository.findById(studentId).map(Student::getUserId);
+    }
+
+    @Override
     public Optional<UUID> studentIdOfUser(UUID userId) {
         return studentRepository.findByUserId(userId).map(Student::getId);
     }

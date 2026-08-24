@@ -10,6 +10,8 @@ import com.university.lms.student.dto.StudentSummaryResponse;
 import com.university.lms.student.dto.UpdateStudentRequest;
 import com.university.lms.student.service.StudentProvisioningService;
 import com.university.lms.student.service.StudentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -47,6 +49,7 @@ public class StudentController {
             this.studentProvisioningService = studentProvisioningService;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping
     public ResponseEntity<StudentResponse> create(@Valid @RequestBody CreateStudentRequest request) {
         StudentResponse created = studentService.create(request);
@@ -55,6 +58,7 @@ public class StudentController {
 
     /** Always paged — the collection grows to tens of thousands of rows. */
     @GetMapping
+    @AccessClass(STAFF_ONLY)
     public PageResponse<StudentSummaryResponse> search(
             @RequestParam(required = false) StudentStatus status,
             @RequestParam(required = false) UUID programmeId,
@@ -76,34 +80,40 @@ public class StudentController {
      * signed in first, and it verifies the number against the identity provider rather than
      * trusting the caller that such a student exists.
      */
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/provision")
     public ResponseEntity<StudentResponse> provision(@Valid @RequestBody ProvisionStudentRequest request) {
         StudentResponse created = studentProvisioningService.provision(request);
         return ResponseEntity.created(URI.create("/api/v1/students/" + created.id())).body(created);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/me")
     public StudentResponse findOwn() {
         return studentService.findOwn();
     }
 
     /** Staff picker for academic advisor assignment. Literal path before {@code /{id}}. */
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/advisor-candidates")
     public List<AdvisorCandidateResponse> advisorCandidates() {
         return studentService.listAdvisorCandidates();
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @GetMapping("/{id}")
     public StudentResponse findById(@PathVariable UUID id) {
         return studentService.findById(id);
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @GetMapping("/by-number/{studentNumber}")
     public StudentResponse findByStudentNumber(@PathVariable String studentNumber) {
         return studentService.findByStudentNumber(studentNumber);
     }
 
     /** PATCH rather than PUT: absent fields mean "unchanged", not "clear". */
+    @AccessClass(REGISTRY_ONLY)
     @PatchMapping("/{id}")
     public StudentResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateStudentRequest request) {
         return studentService.update(id, request);

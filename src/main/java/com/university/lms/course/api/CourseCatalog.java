@@ -35,6 +35,15 @@ public interface CourseCatalog {
     List<SectionSummary> findSectionsTaughtBy(UUID lecturerUserId);
 
     /**
+     * Every section running in a term.
+     *
+     * <p>Published so other modules can assemble a term-wide view without joining to this module's
+     * tables — the examinations office needs one, and a native join from {@code exam_sittings} to
+     * {@code course_sections} would bind the two schemas together for the sake of one screen.
+     */
+    List<SectionSummary> findSectionsInTerm(UUID academicTermId);
+
+    /**
      * Whether this user is the assigned lecturer of the section.
      *
      * <p>False when the section is unknown, has no lecturer, or is assigned to someone else. Callers

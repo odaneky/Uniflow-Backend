@@ -7,6 +7,8 @@ import com.university.lms.communication.dto.ForumPostResponse;
 import com.university.lms.communication.dto.ForumTopicResponse;
 import com.university.lms.communication.dto.UpdateForumTopicRequest;
 import com.university.lms.communication.service.ForumService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -33,12 +35,14 @@ public class ForumController {
         this.forumService = forumService;
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @GetMapping("/forum/topics/{topicId}")
     public ForumTopicResponse topic(@PathVariable UUID topicId) {
         return forumService.getTopic(topicId);
     }
 
     @GetMapping("/forum/topics/{topicId}/posts")
+    @AccessClass(SELF_OR_STAFF)
     public PageResponse<ForumPostResponse> posts(
             @PathVariable UUID topicId,
             @PageableDefault(size = 50, sort = "sentAt", direction = Sort.Direction.ASC) Pageable pageable) {
@@ -46,6 +50,7 @@ public class ForumController {
     }
 
     @PostMapping("/forum/topics/{topicId}/posts")
+    @AccessClass(SELF_OR_STAFF)
     public ResponseEntity<ForumPostResponse> createPost(
             @PathVariable UUID topicId, @Valid @RequestBody CreateForumPostRequest request) {
         ForumPostResponse created = forumService.createPost(topicId, request);
@@ -53,11 +58,13 @@ public class ForumController {
     }
 
     @PatchMapping("/forum/topics/{topicId}")
+    @AccessClass(STAFF_ONLY)
     public ForumTopicResponse updateTopic(
             @PathVariable UUID topicId, @Valid @RequestBody UpdateForumTopicRequest request) {
         return forumService.updateTopic(topicId, request);
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @DeleteMapping("/forum/posts/{postId}")
     public void deletePost(@PathVariable UUID postId) {
         forumService.deletePost(postId);

@@ -6,6 +6,8 @@ import com.university.lms.financialaid.dto.FinancialAidAwardResponse;
 import com.university.lms.financialaid.dto.PackageAwardsRequest;
 import com.university.lms.financialaid.dto.StaffAwardActionRequest;
 import com.university.lms.financialaid.service.FinancialAidService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -26,11 +28,13 @@ public class FinancialAidController {
         this.financialAidService = financialAidService;
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @GetMapping
     public List<FinancialAidAwardResponse> list(@PathVariable UUID studentId) {
         return financialAidService.awardsForStudent(studentId);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping
     public List<FinancialAidAwardResponse> mutate(
             @PathVariable UUID studentId, @Valid @RequestBody StaffAwardActionRequest request) {

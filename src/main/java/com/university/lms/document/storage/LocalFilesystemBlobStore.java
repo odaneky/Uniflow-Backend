@@ -2,17 +2,25 @@ package com.university.lms.document.storage;
 
 import com.university.lms.document.config.StorageProperties;
 import com.university.lms.document.domain.DocumentStoreException;
+import com.university.lms.document.domain.StorageProvider;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Writes object bytes to a local directory. Production deployments swap this for S3/MinIO without
- * changing {@code documents.storage_key}.
+ * Writes object bytes to a local directory — the default {@link BlobStore}, and the only one this
+ * codebase implements today. A remote provider (S3, MinIO, GCS, Azure Blob — {@link StorageProvider}
+ * already enumerates the candidates) is real follow-on work, not yet built: it needs a provider
+ * choice, a credentials strategy and a bucket/container naming scheme decided first, none of which
+ * this class should decide unilaterally. What this class guarantees is that adding one later is a
+ * new {@code BlobStore} implementation selected by configuration, not a rewrite of
+ * {@code DocumentService}.
  */
 @Component
-public class LocalFilesystemBlobStore {
+@ConditionalOnProperty(name = "lms.storage.provider", havingValue = "local", matchIfMissing = true)
+public class LocalFilesystemBlobStore implements BlobStore {
 
     private final Path root;
 
@@ -22,6 +30,7 @@ public class LocalFilesystemBlobStore {
                 .normalize();
     }
 
+    @Override
     public void put(String storageKey, byte[] content) {
         Path target = resolve(storageKey);
         try {
@@ -32,6 +41,7 @@ public class LocalFilesystemBlobStore {
         }
     }
 
+    @Override
     public byte[] get(String storageKey) {
         Path target = resolve(storageKey);
         try {
@@ -39,6 +49,11 @@ public class LocalFilesystemBlobStore {
         } catch (IOException ex) {
             throw new DocumentStoreException("Could not read object " + storageKey, ex);
         }
+    }
+
+    @Override
+    public StorageProvider provider() {
+        return StorageProvider.LOCAL_FILESYSTEM;
     }
 
     private Path resolve(String storageKey) {

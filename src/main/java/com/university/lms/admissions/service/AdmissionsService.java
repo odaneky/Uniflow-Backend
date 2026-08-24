@@ -7,6 +7,16 @@ import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.admissions.domain.AdmissionDecision;
 import com.university.lms.admissions.domain.AdmissionsErrorCode;
+import com.university.lms.admissions.access.ApplicationAccessGuard;
+import com.university.lms.admissions.access.ApplicationAccessToken;
+import com.university.lms.admissions.dto.ApplicationAccessResponse;
+import com.university.lms.admissions.dto.ResumeApplicationRequest;
+import com.university.lms.notification.api.EmailSender;
+import java.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import com.university.lms.admissions.domain.Application;
 import com.university.lms.admissions.domain.ApplicationDocument;
 import com.university.lms.admissions.domain.ApplicationEvent;
@@ -48,6 +58,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -58,6 +69,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true)
 public class AdmissionsService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdmissionsService.class);
 
     private static final Set<ApplicationStatus> CLOSED =
             EnumSet.of(ApplicationStatus.DENIED, ApplicationStatus.MATRICULATED);
@@ -76,6 +89,15 @@ public class AdmissionsService {
     private final IdentityProvider identityProvider;
     private final AuditTrail auditTrail;
     private final ObjectMapper objectMapper;
+    private final ProgrammeApplicationFormService applicationFormService;
+
+    private final EmailSender emailSender;
+    private final ApplicationAccessGuard accessGuard;
+
+    /** How long a resume link stays usable. Bounds the damage of one that leaks. */
+    private final Duration accessTokenTtl;
+
+    private final String portalBaseUrl;
 
     public AdmissionsService(
             ApplicationRepository applicationRepository,
@@ -91,8 +113,17 @@ public class AdmissionsService {
             IdentityProvisioningService identityProvisioningService,
             IdentityProvider identityProvider,
             AuditTrail auditTrail,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ProgrammeApplicationFormService applicationFormService,
+            EmailSender emailSender,
+            ApplicationAccessGuard accessGuard,
+            @Value("${lms.admissions.access-token-ttl:P30D}") Duration accessTokenTtl,
+            @Value("${lms.admissions.portal-base-url:http://localhost:5173}") String portalBaseUrl) {
         this.applicationRepository = applicationRepository;
+        this.emailSender = emailSender;
+        this.accessGuard = accessGuard;
+        this.accessTokenTtl = accessTokenTtl;
+        this.portalBaseUrl = portalBaseUrl;
         this.eventRepository = eventRepository;
         this.documentRepository = documentRepository;
         this.academicStructure = academicStructure;
@@ -106,9 +137,27 @@ public class AdmissionsService {
         this.identityProvider = identityProvider;
         this.auditTrail = auditTrail;
         this.objectMapper = objectMapper;
+        this.applicationFormService = applicationFormService;
     }
 
+    /**
+     * The staff view of an application by id — distinct from
+     * {@link #findByIdForApplicant(UUID, String)}, which is reachable without an account at all
+     * and is scoped by capability token instead. This one previously had no guard of its own: it
+     * relied on {@code SecurityConfig}'s catch-all {@code GET /api/v1/** -> authenticated()}, which
+     * meant any signed-in caller — a student included — could read any applicant's admissions
+     * record, including decision notes and deposit status, simply by guessing or enumerating an id.
+     */
+    /**
+     * The staff view of an application by id — distinct from
+     * {@link #findByIdForApplicant(UUID, String)}, which is reachable without an account at all
+     * and is scoped by capability token instead. This one previously had no guard of its own: it
+     * relied on {@code SecurityConfig}'s catch-all {@code GET /api/v1/** -> authenticated()}, which
+     * meant any signed-in caller — a student included — could read any applicant's admissions
+     * record, including decision notes and deposit status, simply by guessing or enumerating an id.
+     */
     public ApplicationResponse findById(UUID id) {
+        requireStaffReader();
         return toResponse(require(id));
     }
 
@@ -119,16 +168,18 @@ public class AdmissionsService {
         List<ApplicationStatus> effectiveStatuses =
                 statuses == null || statuses.isEmpty() ? defaultQueueStatuses() : statuses;
         return PageResponse.from(
-                applicationRepository.search(effectiveStatuses, assignedTo, blankToNull(reference), pageable),
+                applicationRepository.search(
+                        effectiveStatuses, assignedTo, referenceLikePattern(reference), pageable),
                 this::toResponse);
     }
 
     @Transactional
-    public ApplicationResponse createDraft(CreateApplicationRequest request) {
+    public ApplicationAccessResponse createDraft(CreateApplicationRequest request) {
         validateProgrammeAndTerm(request.programmeId(), request.academicTermId());
         assertNoOpenApplication(request.applicantEmail(), request.programmeId(), request.academicTermId());
+        Map<String, Object> validatedPayload = applicationFormService.validatePayload(request.programmeId(), request.payload());
 
-        String payloadJson = serializePayload(request.payload());
+        String payloadJson = serializePayload(validatedPayload);
         Application saved = applicationRepository.save(new Application(
                 request.applicantEmail(),
                 request.applicantName(),
@@ -144,13 +195,137 @@ public class AdmissionsService {
                 saved.getId(),
                 saved.getReference());
 
-        if (Boolean.TRUE.equals(request.submit())) {
-            return submit(saved.getId());
+        // Minted here and returned exactly once: only the hash is persisted, so it can never be
+        // shown again. Losing it is recoverable through resume(), which issues a fresh one by email.
+        String token = ApplicationAccessToken.mint();
+        Instant expiresAt = Instant.now().plus(accessTokenTtl);
+        saved.issueAccessToken(ApplicationAccessToken.hash(token), expiresAt);
+
+        ApplicationResponse body =
+                Boolean.TRUE.equals(request.submit()) ? submit(saved.getId()) : toResponse(saved);
+        return new ApplicationAccessResponse(body, token, expiresAt);
+    }
+
+    /**
+     * Issues a fresh link to the address the application belongs to.
+     *
+     * <p>Always reports success, whether or not the pair matched. Saying "no such application" would
+     * turn this into a way to test whether a given person applied to a given programme, which is
+     * itself disclosure — and because the link goes to the registered address, an attacker who
+     * guesses a valid pair still receives nothing.
+     *
+     * <p>Rotating the token invalidates every link issued earlier, so resuming doubles as a
+     * revocation for a link the applicant thinks may have leaked.
+     */
+    @Transactional
+    public void resume(ResumeApplicationRequest request) {
+        Optional<Application> match = applicationRepository.findByReferenceIgnoreCaseAndApplicantEmailIgnoreCase(
+                request.reference().trim(), request.applicantEmail().trim());
+
+        if (match.isEmpty()) {
+            log.info("Resume requested for an unknown reference/email pair; responding as though sent");
+            return;
         }
-        return toResponse(saved);
+        Application application = match.get();
+        if (application.getStatus().terminal()) {
+            // Nothing left to resume: a decided application is not editable and its outcome is
+            // communicated separately. Silence here matches the unknown-pair case.
+            log.info("Resume requested for terminal application {}; ignoring", application.getId());
+            return;
+        }
+
+        String token = ApplicationAccessToken.mint();
+        Instant expiresAt = Instant.now().plus(accessTokenTtl);
+        application.issueAccessToken(ApplicationAccessToken.hash(token), expiresAt);
+        applicationRepository.save(application);
+
+        emailSender.send(new EmailSender.EmailMessage(
+                application.getApplicantEmail(),
+                "Continue your application " + application.getReference(),
+                "Use the link below to continue your application, check its status, or upload documents."
+                        + System.lineSeparator()
+                        + System.lineSeparator()
+                        + portalBaseUrl + "/apply?application=" + application.getId() + "&token=" + token
+                        + System.lineSeparator()
+                        + System.lineSeparator()
+                        + "Reference: " + application.getReference()
+                        + System.lineSeparator()
+                        + "This link expires on " + expiresAt + "."
+                        + System.lineSeparator()
+                        + "If you did not request it, you can ignore this message."));
+
+        auditTrail.record(
+                null,
+                AuditTrail.Action.APPLICATION_ACCESS_REISSUED,
+                AuditTrail.EntityType.APPLICATION,
+                application.getId(),
+                "Resume link reissued to the registered address");
+    }
+
+    /**
+     * Applicant-facing read: requires the capability token, unless the caller is staff.
+     *
+     * <p>Separate from {@link #findById(UUID)}, which the admissions queue uses. Keeping them apart
+     * means the staff path cannot be reached by an anonymous caller through a shared method, and the
+     * guarded path cannot be bypassed by a future caller who forgets the check.
+     */
+    @Transactional
+    public ApplicationResponse findByIdForApplicant(UUID id, String accessToken) {
+        Application application = requireAccessible(id, accessToken);
+        application.recordAccess(Instant.now());
+        return toResponse(application);
+    }
+
+    /**
+     * Loads an application and refuses unless the caller is staff or holds its token.
+     *
+     * <p>A caller who is refused gets the same answer whether the application exists or not, so this
+     * cannot be used to discover which ids are real.
+     */
+    /**
+     * Retires the capability once the application reaches a terminal state.
+     *
+     * <p>A denied or matriculated application cannot be edited and its outcome is communicated by
+     * other means, so the token has nothing left to grant. Leaving it live would keep a credential
+     * in circulation for no benefit — and credentials that outlive their purpose are the ones that
+     * turn up later in a log or an inbox.
+     */
+    private void retireAccessTokenIfTerminal(Application application) {
+        if (application.getStatus().terminal()) {
+            application.revokeAccessToken();
+        }
+    }
+
+    private Application requireAccessible(UUID id, String accessToken) {
+        Application application = applicationRepository
+                .findById(id)
+                .orElseThrow(() -> new ForbiddenException(
+                        AdmissionsErrorCode.APPLICATION_ACCESS_DENIED,
+                        "You do not have access to this application. "
+                                + "Use the link emailed to you, or start a new application."));
+        accessGuard.requireAccess(application, accessToken);
+        return application;
+    }
+
+    /** Guarded entry point; the applicant must hold the token, or the caller must be staff. */
+    @Transactional
+    public ApplicationResponse update(UUID id, String accessToken, UpdateApplicationRequest request) {
+        requireAccessible(id, accessToken);
+        return update(id, request);
     }
 
     @Transactional
+    public ApplicationResponse submit(UUID id, String accessToken) {
+        requireAccessible(id, accessToken);
+        return submit(id);
+    }
+
+    @Transactional
+    public ApplicationResponse attachDocument(UUID id, String accessToken, AttachApplicationDocumentRequest body) {
+        requireAccessible(id, accessToken);
+        return attachDocument(id, body);
+    }
+
     public ApplicationResponse update(UUID id, UpdateApplicationRequest request) {
         Application application = require(id);
         if (application.getStatus() != ApplicationStatus.DRAFT) {
@@ -161,7 +336,10 @@ public class AdmissionsService {
         application.updateDraft(
                 request.applicantEmail(),
                 request.applicantName(),
-                request.payload() == null ? null : serializePayload(request.payload()));
+                request.payload() == null
+                        ? null
+                        : serializePayload(applicationFormService.validatePayload(
+                                application.getProgrammeId(), request.payload())));
         return toResponse(applicationRepository.save(application));
     }
 
@@ -173,6 +351,7 @@ public class AdmissionsService {
                     AdmissionsErrorCode.APPLICATION_INVALID_TRANSITION,
                     "Only draft applications can be submitted");
         }
+        applicationFormService.validatePayload(application.getProgrammeId(), parsePayload(application.getPayload()));
         return transition(application, ApplicationStatus.SUBMITTED, null, null, "Submitted");
     }
 
@@ -223,6 +402,7 @@ public class AdmissionsService {
         if (target == ApplicationStatus.ADMITTED && body.depositAmount() != null) {
             application.setDepositAmount(body.depositAmount());
         }
+        retireAccessTokenIfTerminal(application);
         return transition(application, target, caller.userId(), caller.fullName(), body.note());
     }
 
@@ -510,6 +690,19 @@ public class AdmissionsService {
             return null;
         }
         return value.trim();
+    }
+
+    /** Built in Java so a null filter never reaches SQL CONCAT (PostgreSQL types that as bytea). */
+    private static String referenceLikePattern(String reference) {
+        String trimmed = blankToNull(reference);
+        if (trimmed == null) {
+            return null;
+        }
+        String escaped = trimmed.toLowerCase(Locale.ROOT)
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_");
+        return "%" + escaped + "%";
     }
 
     private static String[] splitName(String fullName) {

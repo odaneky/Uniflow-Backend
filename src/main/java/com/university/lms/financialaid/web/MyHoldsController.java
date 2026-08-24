@@ -2,6 +2,8 @@ package com.university.lms.financialaid.web;
 
 import com.university.lms.financialaid.dto.ServiceHoldResponse;
 import com.university.lms.financialaid.service.ServiceHoldService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.identity.api.CurrentUserProvider;
@@ -29,6 +31,7 @@ public class MyHoldsController {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping
     public List<ServiceHoldResponse> ownActiveHolds() {
         UUID studentId = studentDirectory

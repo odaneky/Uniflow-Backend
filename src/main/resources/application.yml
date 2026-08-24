@@ -80,6 +80,12 @@ spring:
 # environment; the issuer and JWK set URI do, and are set per profile.
 lms:
   storage:
+    # "local" is the only implementation today (LocalFilesystemBlobStore) — a real deployment needs
+    # this to be durable, shared storage, not a pod's local disk, but which remote provider (S3,
+    # MinIO, GCS, Azure Blob — see StorageProvider) is a decision this file does not make. Adding one
+    # is a new document.storage.BlobStore bean selected by this property; DocumentService does not
+    # change.
+    provider: ${LMS_STORAGE_PROVIDER:local}
     local-root: ${LMS_STORAGE_ROOT:./data/blobs}
     max-upload-bytes: 12582912
   # Single-tenant white-label defaults. Admin overrides via PUT /api/v1/branding (System settings).
@@ -109,6 +115,13 @@ lms:
       enabled: false
       provider: logging
       from-address: ${LMS_EMAIL_FROM:noreply@uniflow.local}
+  finance:
+    # The self-service payment endpoint posts a PAYMENT entry directly with no card network and no
+    # payment gateway behind it — a "campus cashier stub" per FinanceService.payOwn's own javadoc.
+    # Off by default so a real deployment cannot let a student clear their own balance for free;
+    # flip on only where the stub itself is the accepted behaviour (local dev, a demo instance).
+    self-service-payment:
+      enabled: ${LMS_SELF_SERVICE_PAYMENT_ENABLED:false}
   outbox:
     poll-interval-ms: 2000
     batch-size: 25
@@ -146,6 +159,76 @@ lms:
       # follow a rename onto a different person's academic record.
       student-number: ${JWT_CLAIM_STUDENT_NUMBER:student_number}
       roles-path: ${JWT_CLAIM_ROLES_PATH:realm_access,roles}
+
+  admissions:
+    # How long a resume link stays usable. Bounds the damage of one that leaks — a link forwarded,
+    # screenshotted or left in a shared browser stops working. Extended each time the applicant
+    # legitimately resumes, so an active applicant is never cut off mid-application.
+    access-token-ttl: ${ADMISSIONS_ACCESS_TOKEN_TTL:P30D}
+    # Where the resume link points. Must be the public portal origin, not the API's.
+    portal-base-url: ${ADMISSIONS_PORTAL_BASE_URL:http://localhost:5173}
+
+  # HTTP-level rate limiting, applied before authentication. Keyed by client address, because the
+  # callers this defends against have not identified themselves — the admissions endpoints are
+  # reachable without a token. Per-user limits on authenticated actions are a separate layer and
+  # live with the services that own them.
+  #
+  # Rules are evaluated in order and the first match wins, as with the authorization rules; a
+  # request matching none is not limited here. Narrow rules must therefore come before broad ones.
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    max-tracked-clients: ${RATE_LIMIT_MAX_CLIENTS:100000}
+    # CIDR ranges whose X-Forwarded-For may be believed. EMPTY BY DEFAULT — the header is
+    # client-supplied, and trusting it unconditionally lets any caller bypass every limit below by
+    # inventing an address per request. Set this to the load balancer's range on deployment.
+    trusted-proxies: ${RATE_LIMIT_TRUSTED_PROXIES:}
+    rules:
+      # Resume sends an email to an address the caller names, so an open endpoint here is a way to
+      # flood somebody else's inbox. Tighter than submit, and listed first because /resume also
+      # matches the broader POST /applications/** rule below.
+      - name: application-resume
+        method: POST
+        path: /api/v1/applications/resume
+        limit: ${RATE_LIMIT_APPLICATION_RESUME:5}
+        window: 1h
+      # Unauthenticated writes are the sharpest edge: anyone on the internet can submit, and each
+      # one costs a database transaction. Deliberately strict — a genuine applicant submits once.
+      - name: application-submit
+        method: POST
+        path: /api/v1/applications/**
+        limit: ${RATE_LIMIT_APPLICATION_SUBMIT:10}
+        window: 1h
+      - name: application-update
+        method: PATCH
+        path: /api/v1/applications/**
+        limit: ${RATE_LIMIT_APPLICATION_UPDATE:60}
+        window: 1h
+      # Reading an application by id is unauthenticated, so the id is the only thing protecting it.
+      # A tight limit is what makes guessing one infeasible rather than merely unlikely.
+      - name: application-read
+        method: GET
+        path: /api/v1/applications/**
+        limit: ${RATE_LIMIT_APPLICATION_READ:60}
+        window: 1m
+      # The public catalog the apply wizard reads. Generous: a single applicant legitimately makes
+      # several of these while filling the form, and a stingy limit would break the page.
+      - name: public-catalog
+        method: GET
+        path: /api/v1/programmes/**
+        limit: ${RATE_LIMIT_PUBLIC_CATALOG:120}
+        window: 1m
+      - name: public-calendar
+        method: GET
+        path: /api/v1/academic-years/**
+        limit: ${RATE_LIMIT_PUBLIC_CALENDAR:120}
+        window: 1m
+      # Backstop for everything else under the API. Wide enough that no legitimate signed-in session
+      # notices, narrow enough that a single address cannot saturate the service.
+      - name: api-overall
+        method: ANY
+        path: /api/v1/**
+        limit: ${RATE_LIMIT_API_OVERALL:600}
+        window: 1m
 
 server:
   error:

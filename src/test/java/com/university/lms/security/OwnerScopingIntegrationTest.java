@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.financialaid.domain.AwardType;
 import com.university.lms.support.AbstractPostgresIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -204,6 +205,7 @@ class OwnerScopingIntegrationTest extends AbstractPostgresIntegrationTest {
             OwnerScopingFixtures.Person student = fixtures.student();
             UUID section = fixtures.openSectionTaughtBy(teacher.userId());
             UUID enrolment = fixtures.enrol(student.studentId(), section);
+            publishOverallGrade(student.studentId(), section, asLecturer(teacher.subject()));
 
             mockMvc.perform(post("/api/v1/enrollments/{id}/complete", enrolment).with(asLecturer(teacher.subject())))
                     .andExpect(status().isOk())
@@ -229,11 +231,27 @@ class OwnerScopingIntegrationTest extends AbstractPostgresIntegrationTest {
         void registrarMayCompleteAnyEnrolment() throws Exception {
             OwnerScopingFixtures.Person teacher = fixtures.lecturer();
             OwnerScopingFixtures.Person student = fixtures.student();
-            UUID enrolment = fixtures.enrol(student.studentId(), fixtures.openSectionTaughtBy(teacher.userId()));
+            UUID section = fixtures.openSectionTaughtBy(teacher.userId());
+            UUID enrolment = fixtures.enrol(student.studentId(), section);
+            publishOverallGrade(student.studentId(), section, asRegistrar());
 
             mockMvc.perform(post("/api/v1/enrollments/{id}/complete", enrolment).with(asRegistrar()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("COMPLETED"));
+        }
+
+        /**
+         * Completing an enrolment now requires a published overall result to already exist — see
+         * {@code EnrollmentService.complete}. Awarded through the real endpoint, not written
+         * directly to the repository, so this exercises the same path production traffic does.
+         */
+        private void publishOverallGrade(UUID studentId, UUID sectionId, RequestPostProcessor as) throws Exception {
+            mockMvc.perform(post("/api/v1/grades")
+                            .with(as)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"studentId\":\"" + studentId + "\",\"courseSectionId\":\"" + sectionId
+                                    + "\",\"percentage\":75.00,\"publish\":true}"))
+                    .andExpect(status().isCreated());
         }
     }
 
@@ -289,6 +307,95 @@ class OwnerScopingIntegrationTest extends AbstractPostgresIntegrationTest {
             mockMvc.perform(get("/api/v1/students/me").with(asRegistrar()))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("STUDENT_NOT_FOUND"));
+        }
+    }
+
+    /**
+     * {@code FinancialAidService.awardsForStudent} called only {@code requireStudentExists}, with no
+     * check that the caller was staff or the student themselves. Every other personal-data read in
+     * this suite is guarded; this one was not, and there was no test here to catch it.
+     */
+    @Nested
+    @DisplayName("Financial aid")
+    class FinancialAid {
+
+        @Test
+        @DisplayName("a student may read their own financial aid awards")
+        void ownAwardsAreReadable() throws Exception {
+            OwnerScopingFixtures.Person me = fixtures.student();
+            fixtures.financialAidAward(me.studentId(), AwardType.PELL, "3500.00");
+
+            mockMvc.perform(get("/api/v1/financial-aid/students/{id}/awards", me.studentId())
+                            .with(asStudent(me.subject())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].studentId").value(me.studentId().toString()))
+                    .andExpect(jsonPath("$[0].awardType").value("PELL"));
+        }
+
+        @Test
+        @DisplayName("a student may not read another student's financial aid awards")
+        void anotherStudentsAwardsAreRefused() throws Exception {
+            OwnerScopingFixtures.Person me = fixtures.student();
+            OwnerScopingFixtures.Person other = fixtures.student();
+            fixtures.financialAidAward(other.studentId(), AwardType.PELL, "3500.00");
+
+            mockMvc.perform(get("/api/v1/financial-aid/students/{id}/awards", other.studentId())
+                            .with(asStudent(me.subject())))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+
+        @Test
+        @DisplayName("staff may read any student's financial aid awards")
+        void staffAreUnrestricted() throws Exception {
+            OwnerScopingFixtures.Person student = fixtures.student();
+            fixtures.financialAidAward(student.studentId(), AwardType.INSTITUTIONAL, "1200.00");
+
+            mockMvc.perform(get("/api/v1/financial-aid/students/{id}/awards", student.studentId())
+                            .with(asRegistrar()))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    /**
+     * {@code StudentProvisioningService.provision} had no access-control check at all — neither
+     * {@code SecurityConfig} (only the literal path {@code /api/v1/students} is role-gated, not
+     * {@code /api/v1/students/provision}) nor the service layer. It fell through to the plain
+     * {@code authenticated()} catch-all, so any signed-in student could mint an academic student
+     * record for an arbitrary student number. Same shape as the financial-aid gap above.
+     */
+    @Nested
+    @DisplayName("Provisioning a student record")
+    class StudentProvisioning {
+
+        @Test
+        @DisplayName("a student may NOT provision a student record")
+        void aStudentMayNotProvision() throws Exception {
+            OwnerScopingFixtures.Person me = fixtures.student();
+            String body = """
+                    {"studentNumber":"900000123","programmeId":"%s","admissionDate":"2020-09-01"}
+                    """.formatted(fixtures.programmeId());
+
+            mockMvc.perform(post("/api/v1/students/provision")
+                            .with(asStudent(me.subject()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+
+        @Test
+        @DisplayName("the registry may reach provisioning (rejected downstream only because the test identity provider is unavailable)")
+        void theRegistryReachesProvisioning() throws Exception {
+            String body = """
+                    {"studentNumber":"900000124","programmeId":"%s","admissionDate":"2020-09-01"}
+                    """.formatted(fixtures.programmeId());
+
+            mockMvc.perform(post("/api/v1/students/provision")
+                            .with(asRegistrar())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(jsonPath("$.code").value("IDENTITY_PROVIDER_UNAVAILABLE"));
         }
     }
 }

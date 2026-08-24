@@ -7,6 +7,8 @@ import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.UpdateAdvisorOfficeHoursRequest;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.service.StudentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -35,17 +37,20 @@ public class MyStudentController {
     }
 
     /** {@code 404} when the caller has no student record — staff, or an identity not yet enrolled. */
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/profile")
     public StudentResponse profile() {
         return studentService.findOwn();
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PatchMapping("/profile")
     public StudentResponse updateProfile(@Valid @RequestBody UpdateOwnProfileRequest request) {
         return studentService.updateOwnProfile(request);
     }
 
     /** Students assigned to the caller as academic advisees. */
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/advisees")
     public PageResponse<AdviseeSummaryResponse> advisees(
             @PageableDefault(size = 50, sort = "studentNumber", direction = Sort.Direction.ASC) Pageable pageable) {
@@ -53,11 +58,13 @@ public class MyStudentController {
     }
 
     /** Office hours the caller has posted for advisees. */
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/advisor/office-hours")
     public AdvisorOfficeHoursResponse advisorOfficeHours() {
         return studentService.findOwnAdvisorOfficeHours();
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PatchMapping("/advisor/office-hours")
     public AdvisorOfficeHoursResponse updateAdvisorOfficeHours(
             @Valid @RequestBody UpdateAdvisorOfficeHoursRequest request) {

@@ -3,6 +3,8 @@ package com.university.lms.grading.web;
 import com.university.lms.grading.dto.CreateGradeRequest;
 import com.university.lms.grading.dto.GradeResponse;
 import com.university.lms.grading.service.GradeService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -26,17 +28,20 @@ public class GradeController {
         this.gradeService = gradeService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping
     public ResponseEntity<GradeResponse> award(@Valid @RequestBody CreateGradeRequest request) {
         GradeResponse created = gradeService.award(request);
         return ResponseEntity.created(URI.create("/api/v1/grades/" + created.id())).body(created);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/{id}/publish")
     public GradeResponse publish(@PathVariable UUID id) {
         return gradeService.publish(id);
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/sections/{sectionId}")
     public List<GradeResponse> gradebook(@PathVariable UUID sectionId) {
         return gradeService.gradebook(sectionId);

@@ -3,6 +3,8 @@ package com.university.lms.academic.web;
 import com.university.lms.academic.dto.CreateFacultyRequest;
 import com.university.lms.academic.dto.FacultyResponse;
 import com.university.lms.academic.service.AcademicStructureService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import com.university.lms.common.dto.PageResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -29,18 +31,21 @@ public class FacultyController {
         this.service = service;
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping
     public ResponseEntity<FacultyResponse> create(@Valid @RequestBody CreateFacultyRequest request) {
         FacultyResponse created = service.createFaculty(request);
         return ResponseEntity.created(URI.create("/api/v1/faculties/" + created.id())).body(created);
     }
 
+    @AccessClass(AUTHENTICATED)
     @GetMapping
     public PageResponse<FacultyResponse> findAll(
             @PageableDefault(size = 20, sort = "code", direction = Sort.Direction.ASC) Pageable pageable) {
         return service.findFaculties(pageable);
     }
 
+    @AccessClass(AUTHENTICATED)
     @GetMapping("/{id}")
     public FacultyResponse findById(@PathVariable UUID id) {
         return service.findFaculty(id);

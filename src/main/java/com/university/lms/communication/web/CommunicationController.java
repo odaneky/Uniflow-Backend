@@ -9,6 +9,8 @@ import com.university.lms.communication.dto.CreateMessageRequest;
 import com.university.lms.communication.dto.MessageResponse;
 import com.university.lms.communication.dto.StartConversationResult;
 import com.university.lms.communication.service.CommunicationService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -31,6 +33,7 @@ public class CommunicationController {
         this.communicationService = communicationService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/announcements")
     public ResponseEntity<AnnouncementResponse> createAnnouncement(
             @Valid @RequestBody CreateAnnouncementRequest request) {
@@ -38,11 +41,13 @@ public class CommunicationController {
         return ResponseEntity.created(URI.create("/api/v1/announcements/" + created.id())).body(created);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/announcements/{id}/publish")
     public AnnouncementResponse publishAnnouncement(@PathVariable UUID id) {
         return communicationService.publishAnnouncement(id);
     }
 
+    @AccessClass(AUTHENTICATED)
     @PostMapping("/conversations")
     public ResponseEntity<ConversationSummaryResponse> start(@Valid @RequestBody CreateConversationRequest request) {
         StartConversationResult result = communicationService.startConversation(request);
@@ -54,6 +59,7 @@ public class CommunicationController {
     }
 
     @PostMapping("/conversations/{id}/messages")
+    @AccessClass(AUTHENTICATED)
     public ResponseEntity<MessageResponse> send(
             @PathVariable UUID id,
             @Valid @RequestBody CreateMessageRequest request,
@@ -67,6 +73,7 @@ public class CommunicationController {
         return ResponseEntity.ok(body);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping("/conversations/{id}/compliance-export")
     public ConversationComplianceExport complianceExport(@PathVariable UUID id) {
         return communicationService.exportConversationCompliance(id);

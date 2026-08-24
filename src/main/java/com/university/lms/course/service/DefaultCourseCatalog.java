@@ -100,6 +100,19 @@ public class DefaultCourseCatalog implements CourseCatalog {
         return byId.values().stream().map(this::toSummary).toList();
     }
 
+
+    @Override
+    public List<SectionSummary> findSectionsInTerm(UUID academicTermId) {
+        if (academicTermId == null) {
+            return List.of();
+        }
+        List<SectionSummary> sections = new ArrayList<>();
+        for (CourseSection section : courseSectionRepository.findByAcademicTermId(academicTermId)) {
+            sections.add(toSummary(section));
+        }
+        return sections;
+    }
+
     @Override
     public boolean teaches(UUID lecturerUserId, UUID sectionId) {
         if (lecturerUserId == null || sectionId == null) {

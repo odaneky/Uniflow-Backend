@@ -3,6 +3,8 @@ package com.university.lms.attendance.web;
 import com.university.lms.attendance.dto.AttendanceDtos.AttendanceSessionDetailResponse;
 import com.university.lms.attendance.dto.AttendanceDtos.CreateAttendanceSessionRequest;
 import com.university.lms.attendance.service.AttendanceService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -26,6 +28,7 @@ public class AttendanceController {
         this.attendanceService = attendanceService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping
     public List<AttendanceSessionDetailResponse> list(
             @PathVariable UUID sectionId, @RequestParam(required = false) LocalDate sessionDate) {
@@ -35,6 +38,7 @@ public class AttendanceController {
         return attendanceService.sessionsOf(sectionId);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping
     public ResponseEntity<AttendanceSessionDetailResponse> record(
             @PathVariable UUID sectionId, @Valid @RequestBody CreateAttendanceSessionRequest request) {

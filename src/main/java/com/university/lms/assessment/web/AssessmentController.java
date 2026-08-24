@@ -4,6 +4,8 @@ import com.university.lms.assessment.dto.AssessmentResponse;
 import com.university.lms.assessment.dto.AttemptResponse;
 import com.university.lms.assessment.dto.CreateAssessmentRequest;
 import com.university.lms.assessment.service.AssessmentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -27,11 +29,13 @@ public class AssessmentController {
         this.assessmentService = assessmentService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/sections/{sectionId}")
     public List<AssessmentResponse> forSection(@PathVariable UUID sectionId) {
         return assessmentService.forSection(sectionId);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/sections/{sectionId}")
     public ResponseEntity<AssessmentResponse> create(
             @PathVariable UUID sectionId, @Valid @RequestBody CreateAssessmentRequest request) {
@@ -39,16 +43,19 @@ public class AssessmentController {
         return ResponseEntity.created(URI.create("/api/v1/assessments/" + created.id())).body(created);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/{id}/publish")
     public AssessmentResponse publish(@PathVariable UUID id) {
         return assessmentService.publish(id);
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/{id}/attempts")
     public List<AttemptResponse> attempts(@PathVariable UUID id) {
         return assessmentService.attemptsFor(id);
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/{id}/attempts/{attemptId}/file")
     public ResponseEntity<byte[]> download(@PathVariable UUID id, @PathVariable UUID attemptId) {
         return MyAttemptController.file(assessmentService.downloadForStaff(id, attemptId));

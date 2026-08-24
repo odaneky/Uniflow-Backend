@@ -40,8 +40,10 @@ class SectionMeetingPersistenceTest extends AbstractPostgresIntegrationTest {
             var section = fixtures.openSection(fixtures.openTerm(), 40);
             courseService.replaceMeetings(
                     section.getId(),
-                    new ReplaceSectionMeetingsRequest(List.of(new MeetingRequest(
-                            3, LocalTime.of(16, 0), LocalTime.of(19, 0), "LAB-01", "Lab"))));
+                    new ReplaceSectionMeetingsRequest(
+                            List.of(new MeetingRequest(
+                                    3, LocalTime.of(16, 0), LocalTime.of(19, 0), "LAB-01", "Lab")),
+                            null));
 
             var row = jdbcTemplate.queryForMap(
                     "select start_time::text as start, end_time::text as \"end\" from section_meetings where section_id = ?",

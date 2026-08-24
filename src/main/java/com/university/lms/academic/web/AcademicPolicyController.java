@@ -3,6 +3,8 @@ package com.university.lms.academic.web;
 import com.university.lms.academic.dto.AcademicPolicyResponse;
 import com.university.lms.academic.dto.ReplaceAcademicPolicyRequest;
 import com.university.lms.academic.service.AcademicPolicyService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -21,11 +23,13 @@ public class AcademicPolicyController {
         this.academicPolicyService = academicPolicyService;
     }
 
+    @AccessClass(AUTHENTICATED)
     @GetMapping
     public AcademicPolicyResponse find() {
         return academicPolicyService.institutionPolicy();
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PutMapping
     public AcademicPolicyResponse replace(@Valid @RequestBody ReplaceAcademicPolicyRequest request) {
         return academicPolicyService.replaceInstitution(request);

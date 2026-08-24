@@ -3,6 +3,8 @@ package com.university.lms.finance.web;
 import com.university.lms.finance.dto.PaymentPlanResponse;
 import com.university.lms.finance.dto.ReplacePaymentPlanRequest;
 import com.university.lms.finance.service.PaymentPlanService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,11 +25,13 @@ public class PaymentPlanController {
         this.paymentPlanService = paymentPlanService;
     }
 
+    @AccessClass(AUTHENTICATED)
     @GetMapping("/{academicTermId}")
     public PaymentPlanResponse find(@PathVariable UUID academicTermId) {
         return paymentPlanService.find(academicTermId);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PutMapping("/{academicTermId}")
     public PaymentPlanResponse replace(
             @PathVariable UUID academicTermId, @Valid @RequestBody ReplacePaymentPlanRequest request) {

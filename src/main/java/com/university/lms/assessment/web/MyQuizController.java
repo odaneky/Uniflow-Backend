@@ -6,6 +6,8 @@ import com.university.lms.assessment.dto.QuizDtos.QuizAttemptDetailResponse;
 import com.university.lms.assessment.dto.QuizDtos.QuizOverviewResponse;
 import com.university.lms.assessment.dto.QuizDtos.SaveAnswersRequest;
 import com.university.lms.assessment.service.QuizService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -30,22 +32,26 @@ public class MyQuizController {
         this.quizService = quizService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/quiz")
     public QuizOverviewResponse overview(@PathVariable UUID assessmentId) {
         return quizService.overviewForStudent(assessmentId);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PostMapping("/attempts")
     public AttemptResponse startOrResume(@PathVariable UUID assessmentId) {
         return quizService.startOrResume(assessmentId);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/attempts/{attemptId}")
     public QuizAttemptDetailResponse detail(
             @PathVariable UUID assessmentId, @PathVariable UUID attemptId) {
         return quizService.attemptDetailForStudent(assessmentId, attemptId);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PutMapping("/attempts/{attemptId}/answers")
     public QuizAttemptDetailResponse saveAnswers(
             @PathVariable UUID assessmentId,
@@ -57,6 +63,7 @@ public class MyQuizController {
     @PostMapping(
             value = "/attempts/{attemptId}/questions/{questionId}/file",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @AccessClass(OWN_RECORD_ONLY)
     public QuizAnswerView uploadFile(
             @PathVariable UUID assessmentId,
             @PathVariable UUID attemptId,
@@ -65,6 +72,7 @@ public class MyQuizController {
         return quizService.uploadAnswerFile(assessmentId, attemptId, questionId, file);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PostMapping("/attempts/{attemptId}/submit")
     public QuizAttemptDetailResponse submit(
             @PathVariable UUID assessmentId, @PathVariable UUID attemptId) {

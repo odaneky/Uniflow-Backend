@@ -4,6 +4,8 @@ import com.university.lms.request.dto.CreateServiceRequestRequest;
 import com.university.lms.request.dto.ServiceRequestResponse;
 import com.university.lms.request.dto.TransitionServiceRequestRequest;
 import com.university.lms.request.service.ServiceRequestService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -27,22 +29,26 @@ public class MyRequestController {
         this.serviceRequestService = serviceRequestService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping
     public List<ServiceRequestResponse> own() {
         return serviceRequestService.own();
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/{id}")
     public ServiceRequestResponse ownById(@PathVariable UUID id) {
         return serviceRequestService.ownById(id);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PostMapping
     public ResponseEntity<ServiceRequestResponse> create(@Valid @RequestBody CreateServiceRequestRequest request) {
         ServiceRequestResponse created = serviceRequestService.createOwn(request);
         return ResponseEntity.created(URI.create("/api/v1/me/requests/" + created.id())).body(created);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PostMapping("/{id}/cancel")
     public ServiceRequestResponse cancel(
             @PathVariable UUID id, @Valid @RequestBody(required = false) TransitionServiceRequestRequest body) {

@@ -9,6 +9,8 @@ import com.university.lms.assessment.dto.QuizDtos.ReorderQuestionsRequest;
 import com.university.lms.assessment.dto.QuizDtos.UpdateAssessmentMetaRequest;
 import com.university.lms.assessment.dto.QuizDtos.UpdateQuestionRequest;
 import com.university.lms.assessment.service.QuizService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -33,11 +35,13 @@ public class QuizController {
         this.quizService = quizService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping
     public QuizStructureResponse structure(@PathVariable UUID assessmentId) {
         return quizService.structureForStaff(assessmentId);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PutMapping
     public QuizStructureResponse updateMeta(
             @PathVariable UUID assessmentId, @Valid @RequestBody UpdateAssessmentMetaRequest request) {
@@ -46,11 +50,13 @@ public class QuizController {
 
     @PostMapping("/questions")
     @ResponseStatus(HttpStatus.CREATED)
+    @AccessClass(STAFF_ONLY)
     public QuizQuestionView addQuestion(
             @PathVariable UUID assessmentId, @Valid @RequestBody CreateQuestionRequest request) {
         return quizService.addQuestion(assessmentId, request);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PutMapping("/questions/{questionId}")
     public QuizQuestionView updateQuestion(
             @PathVariable UUID assessmentId,
@@ -61,16 +67,19 @@ public class QuizController {
 
     @DeleteMapping("/questions/{questionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @AccessClass(STAFF_ONLY)
     public void deleteQuestion(@PathVariable UUID assessmentId, @PathVariable UUID questionId) {
         quizService.deleteQuestion(assessmentId, questionId);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PutMapping("/reorder")
     public QuizStructureResponse reorder(
             @PathVariable UUID assessmentId, @Valid @RequestBody ReorderQuestionsRequest request) {
         return quizService.reorder(assessmentId, request);
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/attempts/{attemptId}")
     public QuizAttemptDetailResponse attemptDetail(
             @PathVariable UUID assessmentId, @PathVariable UUID attemptId) {
@@ -78,6 +87,7 @@ public class QuizController {
     }
 
     @PostMapping("/attempts/{attemptId}/questions/{questionId}/grade")
+    @AccessClass(STAFF_ONLY)
     public QuizAttemptDetailResponse grade(
             @PathVariable UUID assessmentId,
             @PathVariable UUID attemptId,

@@ -28,6 +28,12 @@ logging:
 # Keycloak: token validation is exercised with stubbed principals, and the administrative paths are
 # covered by tests that supply their own IdentityProvider double.
 lms:
+  # Rate limiting off for the suite. Every test calls from 127.0.0.1, so a shared allowance would
+  # make results depend on how many tests ran before them and in what order — the classic flaky
+  # suite. The limiter has its own unit tests, and RateLimitFilterIntegrationTest switches it back
+  # on for a context of its own.
+  rate-limit:
+    enabled: false
   storage:
     local-root: ./target/test-blobs
     max-upload-bytes: 12582912

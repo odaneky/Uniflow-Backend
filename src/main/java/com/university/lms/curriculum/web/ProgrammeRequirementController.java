@@ -4,6 +4,8 @@ import com.university.lms.curriculum.dto.AddRequirementCourseRequest;
 import com.university.lms.curriculum.dto.CreateRequirementBlockRequest;
 import com.university.lms.curriculum.dto.RequirementBlockResponse;
 import com.university.lms.curriculum.service.CurriculumService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -28,11 +30,13 @@ public class ProgrammeRequirementController {
         this.curriculumService = curriculumService;
     }
 
+    @AccessClass(AUTHENTICATED)
     @GetMapping
     public List<RequirementBlockResponse> list(@PathVariable UUID programmeId) {
         return curriculumService.blocksOf(programmeId);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping
     public ResponseEntity<RequirementBlockResponse> create(
             @PathVariable UUID programmeId, @Valid @RequestBody CreateRequirementBlockRequest request) {
@@ -43,6 +47,7 @@ public class ProgrammeRequirementController {
     }
 
     @PostMapping("/{blockId}/courses")
+    @AccessClass(STAFF_ONLY)
     public RequirementBlockResponse addCourse(
             @PathVariable UUID programmeId,
             @PathVariable UUID blockId,
@@ -50,9 +55,22 @@ public class ProgrammeRequirementController {
         return curriculumService.addCourse(programmeId, blockId, request);
     }
 
+    @AccessClass(STAFF_ONLY)
     @DeleteMapping("/{blockId}")
     public ResponseEntity<Void> delete(@PathVariable UUID programmeId, @PathVariable UUID blockId) {
         curriculumService.deleteBlock(programmeId, blockId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Publishes the programme's current draft curriculum version. From this moment its requirement
+     * blocks are immutable, which is why this is registry-only rather than the general curriculum
+     * editor scope the other endpoints here use.
+     */
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/publish")
+    public ResponseEntity<Void> publish(@PathVariable UUID programmeId) {
+        curriculumService.publishVersion(programmeId);
         return ResponseEntity.noContent().build();
     }
 }

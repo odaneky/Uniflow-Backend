@@ -16,6 +16,8 @@ public enum CourseErrorCode implements ErrorCode {
     REQUIREMENT_COURSE_UNKNOWN,
     INVALID_REQUIREMENT_GROUP,
     INVALID_MEETING,
+    /** A lecturer or a room is already committed elsewhere at the same time in this term. */
+    SCHEDULE_CONFLICT,
     INVALID_SECTION_STATE,
     COURSE_SECTION_IN_USE;
 

@@ -104,13 +104,15 @@ class GradeServiceTest {
         UUID termId = UUID.randomUUID();
         GradeScale scale = new GradeScale("Undergraduate Standard", "test");
 
-        Grade fail = new Grade(studentId, failSection, scale, new BigDecimal("40.00"), "F", new BigDecimal("0.00"));
+        Grade fail = new Grade(
+                studentId, failSection, scale, new BigDecimal("40.00"), "F", new BigDecimal("0.00"),
+                courseId, termId, 3, 1);
         fail.publish();
-        ReflectionTestUtils.setField(fail, "createdAt", Instant.parse("2024-01-01T00:00:00Z"));
 
-        Grade pass = new Grade(studentId, passSection, scale, new BigDecimal("85.00"), "A", new BigDecimal("4.00"));
+        Grade pass = new Grade(
+                studentId, passSection, scale, new BigDecimal("85.00"), "A", new BigDecimal("4.00"),
+                courseId, termId, 3, 2);
         pass.publish();
-        ReflectionTestUtils.setField(pass, "createdAt", Instant.parse("2025-01-01T00:00:00Z"));
 
         when(gradeRepository.findAllByStudentIdAndPublishedTrue(studentId)).thenReturn(List.of(fail, pass));
         when(courseCatalog.findSection(failSection))
@@ -139,9 +141,10 @@ class GradeServiceTest {
         UUID termId = UUID.randomUUID();
         GradeScale scale = new GradeScale("Undergraduate Standard", "test");
 
-        Grade fail = new Grade(studentId, sectionId, scale, new BigDecimal("35.00"), "F", new BigDecimal("0.00"));
+        Grade fail = new Grade(
+                studentId, sectionId, scale, new BigDecimal("35.00"), "F", new BigDecimal("0.00"),
+                courseId, termId, 3, 1);
         fail.publish();
-        ReflectionTestUtils.setField(fail, "createdAt", Instant.parse("2024-06-01T00:00:00Z"));
 
         when(gradeRepository.findAllByStudentIdAndPublishedTrue(studentId)).thenReturn(List.of(fail));
         when(courseCatalog.findSection(sectionId))

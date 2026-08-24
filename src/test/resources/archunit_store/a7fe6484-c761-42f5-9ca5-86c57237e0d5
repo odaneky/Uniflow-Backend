@@ -1,0 +1,4 @@
+Method <com.university.lms.grading.service.TranscriptService.officialTranscript(java.util.UUID)> calls method <com.university.lms.curriculum.domain.TransferCredit.getCreditsAwarded()> in (TranscriptService.java:122)
+Method <com.university.lms.grading.service.TranscriptService.officialTranscript(java.util.UUID)> calls method <com.university.lms.curriculum.domain.TransferCredit.getExternalCourseCode()> in (TranscriptService.java:118)
+Method <com.university.lms.grading.service.TranscriptService.officialTranscript(java.util.UUID)> calls method <com.university.lms.curriculum.domain.TransferCredit.getExternalInstitution()> in (TranscriptService.java:120)
+Method <com.university.lms.grading.service.TranscriptService.officialTranscript(java.util.UUID)> calls method <com.university.lms.curriculum.repository.TransferCreditRepository.findByStudentIdOrderByAwardedAtDesc(java.util.UUID)> in (TranscriptService.java:112)

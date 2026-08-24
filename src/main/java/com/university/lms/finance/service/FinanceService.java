@@ -6,6 +6,7 @@ import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.finance.api.PaymentStanding;
+import com.university.lms.finance.config.FinanceProperties;
 import com.university.lms.finance.domain.AccountEntry;
 import com.university.lms.finance.domain.AccountEntryType;
 import com.university.lms.finance.domain.FinanceErrorCode;
@@ -38,18 +39,21 @@ public class FinanceService {
     private final StudentDirectory studentDirectory;
     private final CurrentUserProvider currentUserProvider;
     private final PaymentPlanService paymentPlanService;
+    private final FinanceProperties financeProperties;
 
     public FinanceService(
             StudentAccountRepository accountRepository,
             AccountEntryRepository entryRepository,
             StudentDirectory studentDirectory,
             CurrentUserProvider currentUserProvider,
-            PaymentPlanService paymentPlanService) {
+            PaymentPlanService paymentPlanService,
+            FinanceProperties financeProperties) {
         this.accountRepository = accountRepository;
         this.entryRepository = entryRepository;
         this.studentDirectory = studentDirectory;
         this.currentUserProvider = currentUserProvider;
         this.paymentPlanService = paymentPlanService;
+        this.financeProperties = financeProperties;
     }
 
     public AccountResponse own() {
@@ -106,6 +110,11 @@ public class FinanceService {
      */
     @Transactional
     public PaymentResponse payOwn(CreatePaymentRequest request) {
+        if (!financeProperties.selfServicePaymentEnabled()) {
+            throw new BusinessException(
+                    FinanceErrorCode.SELF_SERVICE_PAYMENT_DISABLED,
+                    "Self-service payment is not available. Please contact the bursar's office to make a payment.");
+        }
         CurrentUser caller = currentUserProvider.require();
         UUID studentId = studentDirectory
                 .studentIdOfUser(caller.userId())

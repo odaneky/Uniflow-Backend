@@ -31,4 +31,7 @@ public interface GradeRepository extends JpaRepository<Grade, UUID> {
             UUID studentId, UUID courseSectionId, UUID assessmentId);
 
     Optional<Grade> findByStudentIdAndCourseSectionIdAndAssessmentIdIsNull(UUID studentId, UUID courseSectionId);
+
+    /** Overall (non-assessment) published results for a term — what term close locks and totals. */
+    List<Grade> findByAcademicTermIdAndAssessmentIdIsNullAndPublishedTrue(UUID academicTermId);
 }

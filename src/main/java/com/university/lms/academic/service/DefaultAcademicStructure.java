@@ -6,6 +6,8 @@ import com.university.lms.academic.domain.AcademicTerm;
 import com.university.lms.academic.repository.AcademicTermRepository;
 import com.university.lms.academic.repository.DepartmentRepository;
 import com.university.lms.academic.repository.ProgrammeRepository;
+import com.university.lms.common.exception.CommonErrorCode;
+import com.university.lms.common.exception.ResourceNotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -34,6 +36,15 @@ public class DefaultAcademicStructure implements AcademicStructure {
         this.programmeRepository = programmeRepository;
         this.academicTermRepository = academicTermRepository;
         this.academicPolicyService = academicPolicyService;
+    }
+
+
+    @Override
+    public Optional<ExamPeriod> examPeriod(UUID termId, LocalDate on) {
+        return academicTermRepository
+                .findById(termId)
+                .filter(term -> term.getExamStartsOn() != null && term.getExamEndsOn() != null)
+                .map(term -> new ExamPeriod(term.getExamStartsOn(), term.getExamEndsOn(), term.inExamPeriod(on)));
     }
 
     @Override
@@ -120,6 +131,15 @@ public class DefaultAcademicStructure implements AcademicStructure {
     @Override
     public int checkoutCorrectionHours() {
         return academicPolicyService.institutionPolicy().checkoutCorrectionHours();
+    }
+
+    @Override
+    public int termOrdinal(UUID termId) {
+        AcademicTerm term = academicTermRepository
+                .findById(termId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        CommonErrorCode.RESOURCE_NOT_FOUND, "No academic term exists with id " + termId));
+        return (int) academicTermRepository.countUpToAndIncluding(term.getStartDate(), term.getSequenceNumber());
     }
 
     private static TermCalendar toCalendar(AcademicTerm term, Instant asOf) {

@@ -281,6 +281,15 @@ public class EnrollmentService {
         Enrollment enrolment = require(enrollmentId);
         requireTeacherOrRegistry(enrolment.getCourseSectionId());
         transition(enrolment, EnrollmentStatus.COMPLETED);
+        // Checked after the transition, not before: transitionTo() already carries the correct
+        // same-state-is-a-no-op and terminal-state rules, and re-deriving those here would drift.
+        // Throwing here still rolls back the whole transaction, so an unpublished completion is
+        // never persisted — this only changes which check reports first when both would fail.
+        if (!curriculumCatalog.hasPublishedResult(enrolment.getStudentId(), enrolment.getCourseSectionId())) {
+            throw new BusinessException(
+                    EnrollmentErrorCode.ENROLLMENT_NO_PUBLISHED_RESULT,
+                    "Cannot complete an enrolment with no published overall grade for this section");
+        }
         return toResponse(enrolment);
     }
 
@@ -596,8 +605,12 @@ public class EnrollmentService {
                 continue;
             }
             if (row.getStatus() == EnrollmentStatus.COMPLETED) {
-                completed.add(course.get().id());
-                highestCompletedLevel = Math.max(highestCompletedLevel, course.get().level());
+                // A COMPLETED enrolment with a failing published grade satisfies no prerequisite —
+                // "completed" records that the course was sat, not that it was passed.
+                if (curriculumCatalog.hasPassed(studentId, course.get().id())) {
+                    completed.add(course.get().id());
+                    highestCompletedLevel = Math.max(highestCompletedLevel, course.get().level());
+                }
             } else if (row.getStatus() == EnrollmentStatus.ENROLLED) {
                 inProgress.add(course.get().id());
             }

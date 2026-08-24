@@ -4,6 +4,8 @@ import com.university.lms.administration.domain.RecordAccessEvent;
 import com.university.lms.administration.dto.RecordAccessEventResponse;
 import com.university.lms.administration.repository.RecordAccessEventRepository;
 import com.university.lms.common.dto.PageResponse;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -23,6 +25,7 @@ public class RecordAccessEventController {
         this.repository = repository;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping("/students/{studentId}")
     public PageResponse<RecordAccessEventResponse> forStudent(
             @PathVariable UUID studentId,

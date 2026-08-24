@@ -3,6 +3,8 @@ package com.university.lms.document.web;
 import com.university.lms.document.dto.CreateDocumentRequest;
 import com.university.lms.document.dto.DocumentResponse;
 import com.university.lms.document.service.DocumentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ public class DocumentController {
         this.documentService = documentService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping
     public ResponseEntity<DocumentResponse> register(@Valid @RequestBody CreateDocumentRequest request) {
         DocumentResponse created = documentService.register(request);

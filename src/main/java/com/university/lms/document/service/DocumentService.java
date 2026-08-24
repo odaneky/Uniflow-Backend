@@ -11,11 +11,10 @@ import com.university.lms.document.config.StorageProperties;
 import com.university.lms.document.domain.Document;
 import com.university.lms.document.domain.DocumentErrorCode;
 import com.university.lms.document.domain.DocumentType;
-import com.university.lms.document.domain.StorageProvider;
 import com.university.lms.document.dto.CreateDocumentRequest;
 import com.university.lms.document.dto.DocumentResponse;
 import com.university.lms.document.repository.DocumentRepository;
-import com.university.lms.document.storage.LocalFilesystemBlobStore;
+import com.university.lms.document.storage.BlobStore;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
 import java.nio.file.Paths;
@@ -36,14 +35,14 @@ public class DocumentService implements DocumentStore {
     private final DocumentRepository documentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final UserDirectory userDirectory;
-    private final LocalFilesystemBlobStore blobStore;
+    private final BlobStore blobStore;
     private final StorageProperties storageProperties;
 
     public DocumentService(
             DocumentRepository documentRepository,
             CurrentUserProvider currentUserProvider,
             UserDirectory userDirectory,
-            LocalFilesystemBlobStore blobStore,
+            BlobStore blobStore,
             StorageProperties storageProperties) {
         this.documentRepository = documentRepository;
         this.currentUserProvider = currentUserProvider;
@@ -129,8 +128,8 @@ public class DocumentService implements DocumentStore {
         String safeName = safeFileName(fileName);
         String key = "uploads/" + ownerUserId + "/" + UUID.randomUUID();
         blobStore.put(key, content);
-        Document document = new Document(
-                type, safeName, contentType, content.length, key, StorageProvider.LOCAL_FILESYSTEM, ownerUserId);
+        Document document =
+                new Document(type, safeName, contentType, content.length, key, blobStore.provider(), ownerUserId);
         document.recordChecksum(sha256(content));
         Document saved = documentRepository.saveAndFlush(document);
         return toStored(saved);

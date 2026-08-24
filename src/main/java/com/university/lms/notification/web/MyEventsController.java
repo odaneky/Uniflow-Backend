@@ -5,6 +5,8 @@ import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.notification.dto.NotificationPreferenceResponse;
 import com.university.lms.notification.dto.UpdateNotificationPreferencesRequest;
 import com.university.lms.notification.service.NotificationPreferenceService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,16 +38,19 @@ public class MyEventsController {
         this.sseTimeoutMs = sseTimeoutMs;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping(value = "/events/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
         return sseEventPublisher.subscribe(currentUserProvider.require().userId(), sseTimeoutMs);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/notification-preferences")
     public List<NotificationPreferenceResponse> preferences() {
         return preferenceService.listForUser(currentUserProvider.require().userId());
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PutMapping("/notification-preferences")
     public List<NotificationPreferenceResponse> updatePreferences(
             @Valid @RequestBody UpdateNotificationPreferencesRequest request) {

@@ -2,6 +2,8 @@ package com.university.lms.learning.web;
 
 import com.university.lms.learning.dto.CourseContentResponse;
 import com.university.lms.learning.service.LearningService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +21,7 @@ public class MyLearningController {
         this.learningService = learningService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/{sectionId}/content")
     public CourseContentResponse content(@PathVariable UUID sectionId) {
         return learningService.ownContent(sectionId);

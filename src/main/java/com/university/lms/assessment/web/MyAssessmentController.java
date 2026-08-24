@@ -2,6 +2,8 @@ package com.university.lms.assessment.web;
 
 import com.university.lms.assessment.dto.AssessmentResponse;
 import com.university.lms.assessment.service.AssessmentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +22,7 @@ public class MyAssessmentController {
         this.assessmentService = assessmentService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/{sectionId}/assessments")
     public List<AssessmentResponse> assessments(@PathVariable UUID sectionId) {
         return assessmentService.own(sectionId);

@@ -2,6 +2,8 @@ package com.university.lms.financialaid.web;
 
 import com.university.lms.financialaid.dto.IsirImportResponse;
 import com.university.lms.financialaid.service.FinancialAidService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +19,7 @@ public class IsirImportController {
         this.financialAidService = financialAidService;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/import")
     public IsirImportResponse importCsv(@RequestBody String csv) {
         return financialAidService.importIsir(csv);

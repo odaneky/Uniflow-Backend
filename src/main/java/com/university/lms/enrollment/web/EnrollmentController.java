@@ -8,6 +8,8 @@ import com.university.lms.enrollment.dto.CreateEnrollmentRequest;
 import com.university.lms.enrollment.dto.EnrollmentOverrideRequest;
 import com.university.lms.enrollment.dto.EnrollmentResponse;
 import com.university.lms.enrollment.service.EnrollmentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -43,6 +45,7 @@ public class EnrollmentController {
     }
 
     /** 201 on success; waitlisted when the occurrence is full. */
+    @AccessClass(SELF_OR_STAFF)
     @PostMapping
     public ResponseEntity<EnrollmentResponse> enrol(@Valid @RequestBody CreateEnrollmentRequest request) {
         EnrollmentResponse created = enrollmentService.enrol(request);
@@ -51,6 +54,7 @@ public class EnrollmentController {
 
     /** Confirms a registration cart: min/max load, clashes, then enrol or waitlist each occurrence. */
     @PostMapping("/checkout")
+    @AccessClass(SELF_OR_STAFF)
     public ResponseEntity<CheckoutEnrollmentsResponse> checkout(
             @Valid @RequestBody CheckoutEnrollmentsRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
@@ -58,6 +62,7 @@ public class EnrollmentController {
         return ResponseEntity.status(201).body(created);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/override")
     public ResponseEntity<EnrollmentResponse> override(@Valid @RequestBody EnrollmentOverrideRequest request) {
         EnrollmentResponse created = enrollmentService.overrideEnrol(request);
@@ -65,6 +70,7 @@ public class EnrollmentController {
     }
 
     @GetMapping
+    @AccessClass(SELF_OR_STAFF)
     public PageResponse<EnrollmentResponse> search(
             @RequestParam(required = false) UUID studentId,
             @RequestParam(required = false) UUID courseSectionId,
@@ -73,36 +79,43 @@ public class EnrollmentController {
         return enrollmentService.search(studentId, courseSectionId, status, pageable);
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @GetMapping("/{id}")
     public EnrollmentResponse findById(@PathVariable UUID id) {
         return enrollmentService.findById(id);
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @PostMapping("/{id}/drop")
     public EnrollmentResponse drop(@PathVariable UUID id) {
         return enrollmentService.drop(id);
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @PostMapping("/{id}/withdraw")
     public EnrollmentResponse withdraw(@PathVariable UUID id) {
         return enrollmentService.withdraw(id);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/{id}/complete")
     public EnrollmentResponse complete(@PathVariable UUID id) {
         return enrollmentService.complete(id);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/{id}/approve")
     public EnrollmentResponse approve(@PathVariable UUID id) {
         return enrollmentService.approvePending(id);
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @PostMapping("/{id}/accept-waitlist-offer")
     public EnrollmentResponse acceptWaitlistOffer(@PathVariable UUID id) {
         return enrollmentService.acceptWaitlistOffer(id);
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @PostMapping("/{id}/decline-waitlist-offer")
     public EnrollmentResponse declineWaitlistOffer(@PathVariable UUID id) {
         return enrollmentService.declineWaitlistOffer(id);

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.university.lms.common.outbox.DomainOutbox;
 import com.university.lms.common.outbox.OutboxEventHandler;
+import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.notification.domain.Notification;
 import com.university.lms.notification.domain.NotificationChannel;
 import com.university.lms.notification.domain.NotificationType;
@@ -13,6 +15,8 @@ import com.university.lms.request.domain.ServiceRequestStatus;
 import com.university.lms.request.domain.ServiceRequestType;
 import com.university.lms.request.service.ServiceRequestOutboxPublisher;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -23,14 +27,17 @@ public class ServiceRequestOutboxHandler implements OutboxEventHandler {
     private final ObjectMapper objectMapper;
     private final RequestDirectory requestDirectory;
     private final NotificationDeliveryService notificationDeliveryService;
+    private final UserDirectory userDirectory;
 
     public ServiceRequestOutboxHandler(
             ObjectMapper objectMapper,
             RequestDirectory requestDirectory,
-            NotificationDeliveryService notificationDeliveryService) {
+            NotificationDeliveryService notificationDeliveryService,
+            UserDirectory userDirectory) {
         this.objectMapper = objectMapper;
         this.requestDirectory = requestDirectory;
         this.notificationDeliveryService = notificationDeliveryService;
+        this.userDirectory = userDirectory;
     }
 
     @Override
@@ -38,6 +45,14 @@ public class ServiceRequestOutboxHandler implements OutboxEventHandler {
         return ServiceRequestOutboxPublisher.EVENT_SUBMITTED;
     }
 
+    /**
+     * Every submission reaches a reviewer, not just the ten request types that happen to end up
+     * with a specific assignee. {@code assigned_to} used to be the only recipient this notified,
+     * and it is null for every type but WITHDRAWAL — so ten of eleven request types notified
+     * nobody on staff when a student filed one. REGISTRAR can review every type
+     * ({@code ServiceRequestWorkflow.assertCanReview}), so it is the broadcast pool here; the
+     * specific assignee, when there is one, is notified in addition, deduplicated against it.
+     */
     @Override
     public void handle(DomainOutbox row) throws Exception {
         JsonNode payload = objectMapper.readTree(row.getPayload());
@@ -49,15 +64,19 @@ public class ServiceRequestOutboxHandler implements OutboxEventHandler {
                 .orElseThrow(() -> new IllegalStateException("Request not found: " + requestId));
 
         Instant now = Instant.now();
+        String title = "New " + type.displayName() + " request";
+        String body = reference + " is waiting for your review";
+        String actionUrl = "/admin/requests/" + requestId;
+
+        Set<UUID> notified = new HashSet<>();
         if (request.assignedTo() != null) {
-            deliver(
-                    request.assignedTo(),
-                    "New " + type.displayName() + " request",
-                    reference + " is waiting for your review",
-                    "/admin/requests/" + requestId,
-                    requestId,
-                    row.getId(),
-                    now);
+            deliver(request.assignedTo(), title, body, actionUrl, requestId, row.getId(), now);
+            notified.add(request.assignedTo());
+        }
+        for (UserDirectory.UserSummary registrar : userDirectory.findByRealmRole(SecurityRoles.REGISTRAR)) {
+            if (notified.add(registrar.id())) {
+                deliver(registrar.id(), title, body, actionUrl, requestId, row.getId(), now);
+            }
         }
     }
 

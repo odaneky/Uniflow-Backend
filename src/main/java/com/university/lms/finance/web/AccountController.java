@@ -3,6 +3,8 @@ package com.university.lms.finance.web;
 import com.university.lms.finance.dto.AccountResponse;
 import com.university.lms.finance.dto.CreateAccountEntryRequest;
 import com.university.lms.finance.service.FinanceService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,11 +24,13 @@ public class AccountController {
         this.financeService = financeService;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping("/{studentId}")
     public AccountResponse forStudent(@PathVariable UUID studentId) {
         return financeService.forStudent(studentId);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/{studentId}/entries")
     public AccountResponse addEntry(
             @PathVariable UUID studentId, @Valid @RequestBody CreateAccountEntryRequest request) {

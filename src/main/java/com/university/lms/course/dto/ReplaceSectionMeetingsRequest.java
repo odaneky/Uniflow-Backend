@@ -9,7 +9,14 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
 import java.util.List;
 
-public record ReplaceSectionMeetingsRequest(@NotNull @Valid List<MeetingRequest> meetings) {
+public record ReplaceSectionMeetingsRequest(
+        @NotNull @Valid List<MeetingRequest> meetings, Boolean allowConflicts) {
+
+    /** See {@code AssignLecturerRequest#allowConflicts} — same reasoning, same audit. */
+    public boolean overrideRequested() {
+        return Boolean.TRUE.equals(allowConflicts);
+    }
+
 
     public record MeetingRequest(
             @NotNull @Min(1) @Max(5) Integer dayOfWeek,

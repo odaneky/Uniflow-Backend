@@ -3,6 +3,8 @@ package com.university.lms.assessment.web;
 import com.university.lms.assessment.dto.AttemptResponse;
 import com.university.lms.assessment.service.AssessmentService;
 import com.university.lms.assessment.service.AssessmentService.StoredAttemptFile;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
@@ -29,17 +31,20 @@ public class MyAttemptController {
         this.assessmentService = assessmentService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/{assessmentId}/attempts")
     public List<AttemptResponse> attempts(@PathVariable UUID assessmentId) {
         return assessmentService.ownAttempts(assessmentId);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PostMapping(value = "/{assessmentId}/submissions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AttemptResponse submit(
             @PathVariable UUID assessmentId, @RequestParam("file") MultipartFile file) {
         return assessmentService.submitOwn(assessmentId, file);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/{assessmentId}/attempts/{attemptId}/file")
     public ResponseEntity<byte[]> download(@PathVariable UUID assessmentId, @PathVariable UUID attemptId) {
         return file(assessmentService.downloadOwn(assessmentId, attemptId));

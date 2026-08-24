@@ -5,15 +5,19 @@ import static org.mockito.Mockito.when;
 
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.course.api.CourseCatalog;
+import com.university.lms.curriculum.domain.CurriculumVersion;
+import com.university.lms.curriculum.domain.CurriculumVersionStatus;
 import com.university.lms.curriculum.domain.ProgrammeRequirementBlock;
 import com.university.lms.curriculum.domain.RequirementKind;
 import com.university.lms.curriculum.dto.DegreeProgressResponse;
+import com.university.lms.curriculum.repository.CurriculumVersionRepository;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
 import com.university.lms.grading.api.AcademicRecord;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +33,9 @@ class CurriculumProgressTest {
 
     @Mock
     private ProgrammeRequirementBlockRepository blockRepository;
+
+    @Mock
+    private CurriculumVersionRepository versionRepository;
 
     @Mock
     private AcademicStructure academicStructure;
@@ -66,7 +73,7 @@ class CurriculumProgressTest {
                 .thenReturn(new AcademicRecord.Summary(new BigDecimal("0.00"), 3, 0, 1));
         when(academicRecord.publishedOverallOf(studentId))
                 .thenReturn(List.of(new AcademicRecord.PublishedOverall(
-                        sectionId, "F", new BigDecimal("0.00"), Instant.parse("2024-01-01T00:00:00Z"))));
+                        sectionId, "F", new BigDecimal("0.00"), false, Instant.parse("2024-01-01T00:00:00Z"))));
         when(courseCatalog.findSection(sectionId))
                 .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
                         sectionId, courseId, "HTM1001", "Intro", UUID.randomUUID(), "A", 30, 10, true, null, false)));
@@ -74,11 +81,15 @@ class CurriculumProgressTest {
                 .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
                         courseId, "HTM1001", "Intro", 3, 1, true)));
 
-        ProgrammeRequirementBlock block =
-                new ProgrammeRequirementBlock(programmeId, "Core", RequirementKind.CORE, 3, 0);
+        CurriculumVersion version = new CurriculumVersion(programmeId, "2026/2027", LocalDate.now());
+        when(versionRepository.findByProgrammeIdAndStatus(programmeId, CurriculumVersionStatus.PUBLISHED))
+                .thenReturn(Optional.of(version));
+
+        ProgrammeRequirementBlock block = new ProgrammeRequirementBlock(version, "Core", RequirementKind.CORE, 3, 0);
         ReflectionTestUtils.setField(block, "id", blockId);
         block.addCourse(courseId);
-        when(blockRepository.findByProgrammeIdOrderByPositionAsc(programmeId)).thenReturn(List.of(block));
+        when(blockRepository.findByCurriculumVersionIdOrderByPositionAsc(version.getId()))
+                .thenReturn(List.of(block));
 
         DegreeProgressResponse progress = service.progressOf(studentId);
 

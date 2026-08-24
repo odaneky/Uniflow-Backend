@@ -2,6 +2,7 @@ package com.university.lms.identity.api;
 
 import java.net.URI;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Resolves the authenticated caller to a domain identity.
@@ -25,6 +26,19 @@ public interface CurrentUserProvider {
 
     /** Empty when the caller is unauthenticated. Never provisions, so it is safe to call anywhere. */
     Optional<CurrentUser> find();
+
+    /**
+     * The caller's roles, read straight from the token.
+     *
+     * <p>Needs no local user row and never provisions one, which matters: a member of staff acting
+     * for the first time has no row yet, and a check based on {@link #find()} would treat them as
+     * anonymous. Role is a property of the token; identity is a property of the database. Conflating
+     * the two makes authorization depend on whether someone happens to have signed in before.
+     */
+    Set<String> callerRoles();
+
+    /** True when the caller holds any role other than {@code STUDENT}. */
+    boolean isStaffCaller();
 
     /**
      * Where to send someone who wants to change their password or manage their credentials.

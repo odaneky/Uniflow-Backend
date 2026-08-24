@@ -8,6 +8,8 @@ import com.university.lms.request.dto.DecideServiceRequestRequest;
 import com.university.lms.request.dto.ServiceRequestResponse;
 import com.university.lms.request.dto.TransitionServiceRequestRequest;
 import com.university.lms.request.service.ServiceRequestService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +36,7 @@ public class ServiceRequestController {
     }
 
     @GetMapping
+    @AccessClass(STAFF_ONLY)
     public PageResponse<ServiceRequestResponse> search(
             @RequestParam(required = false) List<ServiceRequestStatus> status,
             @RequestParam(required = false) ServiceRequestType type,
@@ -43,35 +46,41 @@ public class ServiceRequestController {
         return serviceRequestService.search(status, type, mine, reference, pageable);
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/{id}")
     public ServiceRequestResponse byId(@PathVariable UUID id) {
         return serviceRequestService.staffById(id);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/{id}/claim")
     public ServiceRequestResponse claim(@PathVariable UUID id) {
         return serviceRequestService.claim(id);
     }
 
     @PostMapping("/{id}/review")
+    @AccessClass(STAFF_ONLY)
     public ServiceRequestResponse startReview(
             @PathVariable UUID id, @Valid @RequestBody(required = false) TransitionServiceRequestRequest body) {
         return serviceRequestService.startReview(id, body);
     }
 
     @PostMapping("/{id}/approve")
+    @AccessClass(STAFF_ONLY)
     public ServiceRequestResponse approve(
             @PathVariable UUID id, @Valid @RequestBody(required = false) TransitionServiceRequestRequest body) {
         return serviceRequestService.approve(id, body);
     }
 
     @PostMapping("/{id}/deny")
+    @AccessClass(STAFF_ONLY)
     public ServiceRequestResponse deny(
             @PathVariable UUID id, @Valid @RequestBody(required = false) TransitionServiceRequestRequest body) {
         return serviceRequestService.deny(id, body);
     }
 
     @PostMapping("/{id}/complete")
+    @AccessClass(STAFF_ONLY)
     public ServiceRequestResponse complete(
             @PathVariable UUID id, @Valid @RequestBody(required = false) CompleteServiceRequestRequest body) {
         return serviceRequestService.complete(id, body);
@@ -79,6 +88,7 @@ public class ServiceRequestController {
 
     /** @deprecated prefer explicit transition endpoints */
     @PostMapping("/{id}/decide")
+    @AccessClass(STAFF_ONLY)
     public ServiceRequestResponse decide(
             @PathVariable UUID id, @Valid @RequestBody DecideServiceRequestRequest request) {
         return serviceRequestService.decide(id, request);

@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /** Internal to the curriculum module. */
 public interface ProgrammeRequirementBlockRepository extends JpaRepository<ProgrammeRequirementBlock, UUID> {
 
-    List<ProgrammeRequirementBlock> findByProgrammeIdOrderByPositionAsc(UUID programmeId);
+    List<ProgrammeRequirementBlock> findByCurriculumVersionIdOrderByPositionAsc(UUID curriculumVersionId);
 
-    boolean existsByProgrammeIdAndNameIgnoreCase(UUID programmeId, String name);
+    boolean existsByCurriculumVersionIdAndNameIgnoreCase(UUID curriculumVersionId, String name);
 }

@@ -7,6 +7,8 @@ import com.university.lms.enrollment.dto.MyCourseResponse;
 import com.university.lms.enrollment.dto.RegistrationContextResponse;
 import com.university.lms.enrollment.service.EnrollmentService;
 import com.university.lms.enrollment.service.MyEnrolmentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +40,7 @@ public class MyEnrolmentController {
     }
 
     /** Everything the caller has ever been enrolled in, including dropped and completed records. */
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/registration")
     public PageResponse<EnrollmentResponse> registration(@PageableDefault(size = 20) Pageable pageable) {
         return myEnrolmentService.ownEnrolments(pageable);
@@ -48,6 +51,7 @@ public class MyEnrolmentController {
      *
      * @param academicTermId optional filter; a portal usually wants the current term only
      */
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/courses")
     public List<MyCourseResponse> courses(@RequestParam(required = false) UUID academicTermId) {
         return myEnrolmentService.ownCourses(academicTermId);
@@ -57,6 +61,7 @@ public class MyEnrolmentController {
      * Term, phase, and which registration actions the caller may take right now. The student is
      * never named — this is the portal's source of truth for add/drop vs withdraw.
      */
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/registration-context")
     public RegistrationContextResponse registrationContext() {
         return myEnrolmentService.ownRegistrationContext();
@@ -67,6 +72,7 @@ public class MyEnrolmentController {
      * hours are both still open. The student is never named.
      */
     @PostMapping("/registration/checkouts/{batchId}/undo")
+    @AccessClass(OWN_RECORD_ONLY)
     public CheckoutEnrollmentsResponse undoCheckout(@PathVariable UUID batchId) {
         return enrollmentService.undoOwnCheckout(batchId);
     }

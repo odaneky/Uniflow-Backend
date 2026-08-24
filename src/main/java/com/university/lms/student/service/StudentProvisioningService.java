@@ -2,8 +2,11 @@ package com.university.lms.student.service;
 
 import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.BusinessException;
+import com.university.lms.common.exception.CommonErrorCode;
+import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.exception.ResourceNotFoundException;
+import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.domain.IdentityErrorCode;
@@ -53,22 +56,26 @@ public class StudentProvisioningService {
     private final IdentityProvider identityProvider;
     private final AuditTrail auditTrail;
     private final CurrentUserProvider currentUserProvider;
+    private final StudentProgrammeEnrolmentService programmeEnrolmentService;
 
     public StudentProvisioningService(
             StudentRepository studentRepository,
             UserRepository userRepository,
             IdentityProvider identityProvider,
             AuditTrail auditTrail,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            StudentProgrammeEnrolmentService programmeEnrolmentService) {
         this.studentRepository = studentRepository;
         this.userRepository = userRepository;
         this.identityProvider = identityProvider;
         this.auditTrail = auditTrail;
         this.currentUserProvider = currentUserProvider;
+        this.programmeEnrolmentService = programmeEnrolmentService;
     }
 
     @Transactional
     public StudentResponse provision(ProvisionStudentRequest request) {
+        requireRegistry();
         String studentNumber = request.studentNumber().trim();
 
         if (studentRepository.existsByStudentNumber(studentNumber)) {
@@ -99,6 +106,7 @@ public class StudentProvisioningService {
 
         try {
             Student saved = studentRepository.saveAndFlush(student);
+            programmeEnrolmentService.openInitial(saved.getId(), request.programmeId(), request.admissionDate());
             auditTrail.record(
                     actorId(),
                     AuditTrail.Action.STUDENT_PROVISIONED,
@@ -144,5 +152,13 @@ public class StudentProvisioningService {
 
     private UUID actorId() {
         return currentUserProvider.find().map(CurrentUser::userId).orElse(null);
+    }
+
+    private void requireRegistry() {
+        CurrentUser caller = currentUserProvider.require();
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
+            throw new ForbiddenException(
+                    CommonErrorCode.ACCESS_DENIED, "You do not have permission to provision student records");
+        }
     }
 }

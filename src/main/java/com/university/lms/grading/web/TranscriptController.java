@@ -1,6 +1,8 @@
 package com.university.lms.grading.web;
 
 import com.university.lms.grading.service.TranscriptService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -20,11 +22,13 @@ public class TranscriptController {
         this.transcriptService = transcriptService;
     }
 
+    @AccessClass(SELF_OR_STAFF)
     @GetMapping(value = "/students/{studentId}/transcript.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> studentTranscript(@PathVariable UUID studentId) {
         return pdfResponse(transcriptService.officialTranscript(studentId));
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping(value = "/me/transcript/official", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> ownTranscript() {
         return pdfResponse(transcriptService.ownOfficialTranscript());

@@ -100,6 +100,17 @@ public class DefaultCurrentUserProvider implements CurrentUserProvider {
     }
 
     @Override
+    public Set<String> callerRoles() {
+        return currentRoles();
+    }
+
+    @Override
+    public boolean isStaffCaller() {
+        Set<String> roles = currentRoles();
+        return roles.stream().anyMatch(role -> !SecurityRoles.STUDENT.equals(role));
+    }
+
+    @Override
     public URI accountManagementUri() {
         return identityProvider.accountManagementUri();
     }
@@ -142,7 +153,11 @@ public class DefaultCurrentUserProvider implements CurrentUserProvider {
      */
     private static Set<String> currentRoles() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
+        // Only a real bearer token carries roles. Spring installs an AnonymousAuthenticationToken on
+        // permitAll routes, complete with a ROLE_ANONYMOUS authority — and a naive "any role that is
+        // not STUDENT means staff" test reads that as staff, handing every anonymous caller
+        // administrative access to the public endpoints. Requiring a JWT is what closes it.
+        if (!(authentication instanceof JwtAuthenticationToken token) || !token.isAuthenticated()) {
             return Set.of();
         }
         return authentication.getAuthorities().stream()

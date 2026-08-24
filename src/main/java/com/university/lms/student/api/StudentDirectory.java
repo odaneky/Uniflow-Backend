@@ -29,6 +29,15 @@ public interface StudentDirectory {
      */
     Optional<UUID> studentIdOfUser(UUID userId);
 
+    /**
+     * The account behind a student record — the mirror of {@link #studentIdOfUser}.
+     *
+     * <p>Needed to reach a student through anything addressed by user rather than by enrolment,
+     * notifications chiefly. Without it a module holding a roster of student ids has no way to tell
+     * those people anything.
+     */
+    Optional<UUID> userIdOfStudent(UUID studentId);
+
     /** The assigned academic advisor's user id, when the caller is a student with an advisor. */
     Optional<UUID> advisorUserIdOf(UUID studentUserId);
 

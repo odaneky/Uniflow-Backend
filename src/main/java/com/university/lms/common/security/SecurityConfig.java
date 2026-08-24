@@ -129,6 +129,20 @@ public class SecurityConfig {
                         // it sits with the registry rather than with faculty administration.
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/registration-window")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        // Publishing exam dates is the registry's call, like registration. Without
+                        // this it would fall through to the broad authenticated rule and any signed-in
+                        // student could move the examination period.
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/exam-window")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        // The office's view of a section's exams includes UNPUBLISHED drafts. Students
+                        // read their own timetable through /me/exams, which returns published rows
+                        // only; without this rule the broad GET fallback would hand them the drafts.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/courses/sections/*/exams",
+                                "/api/v1/courses/sections/exams",
+                                "/api/v1/courses/sections")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/add-drop-window")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/payment-plans/**")
@@ -216,6 +230,19 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/applications/*")
                         .permitAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/applications/*")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/programmes/*/application-form")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/programmes/*/application-form")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/programmes", "/api/v1/programmes/*")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/academic-years", "/api/v1/academic-years/*")
+                        .permitAll()
+                        // The entry terms an applicant chooses from. Listed explicitly rather than
+                        // widening the rule above to /**, which would also publish every future
+                        // sub-resource of an academic year without anyone deciding to.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/academic-years/*/terms")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/admissions/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)

@@ -29,6 +29,45 @@ chain, before any business code runs. An **ownership** rule refuses in the servi
 record has been loaded — so a caller who owns nothing gets `403 ACCESS_DENIED`, never a `404` that
 would let them enumerate which ids are real.
 
+### Applicants
+
+An applicant has no university identity — that is what they are applying for — so the admissions
+endpoints are reachable without a bearer token. Access to a single application is granted by a
+**capability token** issued when it is created and sent in `X-Application-Token` on every later call.
+
+It is a capability, not an authentication credential: it names no one, grants access to exactly one
+application, and expires. It travels in a header rather than the URL because a path parameter is
+treated as non-secret by the whole stack — browser history, `Referer`, access and CDN logs, and
+anything the applicant pastes into a support ticket.
+
+| Endpoint | Access |
+|---|---|
+| `POST /api/v1/applications` | open; returns the token **once** |
+| `POST /api/v1/applications/resume` | open; emails a fresh link. Always `202`, matched or not — any other answer would reveal whether a given person applied |
+| `GET|PATCH /api/v1/applications/{id}`, `/submit`, `/documents` | the capability token, **or** signed-in admissions staff |
+
+Refusals are always `403 APPLICATION_ACCESS_DENIED`, identical whether the token was absent, wrong,
+expired, or the application does not exist — otherwise the response becomes an oracle for
+discovering which ids are real. Resuming rotates the token, so it doubles as a way to revoke a link
+the applicant thinks has leaked.
+
+Endpoints are rate limited per client address, **before** authentication — a flood aimed at a public
+endpoint is turned away before token parsing or a database connection is involved. Over the limit is
+`429 RATE_LIMIT_EXCEEDED` with a `Retry-After` header, in the same envelope as every other error. The
+body names neither the rule nor the remaining allowance, so a caller cannot map the thresholds and
+pace themselves just underneath.
+
+Limits are configured under `lms.rate-limit`, evaluated first-match-wins like the authorization
+rules. The unauthenticated admissions endpoints are the tightest (10 submissions per hour per
+address); `/actuator` is never limited, because throttling a liveness probe turns a traffic spike
+into a restart. Per-user limits on authenticated actions are a separate layer that lives with the
+services owning them — the two use different keys because they answer different questions: "is this
+address abusing us" versus "is this person abusing us".
+
+**Behind a load balancer, set `lms.rate-limit.trusted-proxies`** to the balancer's CIDR range.
+`X-Forwarded-For` is ignored by default; without that setting every user shares one bucket, and with
+it set too widely a caller can forge the header and bypass the limits entirely.
+
 Current endpoints — 45 across ten controllers:
 
 ```

@@ -47,6 +47,18 @@ public interface AcademicStructure {
             LocalDate tuitionDueOn,
             String phase) {}
 
+    /**
+     * The examination period of a term.
+     *
+     * <p>Added as its own accessor rather than more fields on {@code TermCalendar}: whether the
+     * university is in exams is asked by one screen, and widening a record every consumer already
+     * destructures is how unrelated code starts breaking.
+     */
+    record ExamPeriod(LocalDate startsOn, LocalDate endsOn, boolean active) {}
+
+    /** Empty when the term has no examination period set. */
+    Optional<ExamPeriod> examPeriod(UUID termId, LocalDate on);
+
     boolean departmentExists(UUID departmentId);
 
     boolean programmeExists(UUID programmeId);
@@ -77,4 +89,16 @@ public interface AcademicStructure {
      * is still open. {@code 0} disables the action.
      */
     int checkoutCorrectionHours();
+
+    /**
+     * The term's 1-based position in institutional chronological order — the first term the
+     * institution ever ran is {@code 1}, the next is {@code 2}, and so on across academic years.
+     *
+     * <p>Ranked by {@code start_date}, with {@code sequence_number} as a tiebreak. Snapshotted onto
+     * a grade at award so a transcript can be sorted correctly forever, without a join back to this
+     * module and without depending on {@code created_at}, which a later correction can reorder.
+     *
+     * @throws com.university.lms.common.exception.ResourceNotFoundException if the term does not exist
+     */
+    int termOrdinal(UUID termId);
 }

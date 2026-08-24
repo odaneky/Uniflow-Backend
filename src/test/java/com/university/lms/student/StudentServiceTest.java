@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.exception.ResourceNotFoundException;
@@ -24,6 +25,7 @@ import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.UpdateStudentRequest;
 import com.university.lms.student.repository.StudentRepository;
+import com.university.lms.student.service.StudentProgrammeEnrolmentService;
 import com.university.lms.student.service.StudentService;
 import java.time.LocalDate;
 import java.util.List;
@@ -56,6 +58,12 @@ class StudentServiceTest {
 
     @Mock
     private CurrentUserProvider currentUserProvider;
+
+    @Mock
+    private StudentProgrammeEnrolmentService programmeEnrolmentService;
+
+    @Mock
+    private AuditTrail auditTrail;
 
     @InjectMocks
     private StudentService service;
@@ -143,10 +151,10 @@ class StudentServiceTest {
         student.changeStatus(StudentStatus.GRADUATED);
         when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
 
-        assertThatThrownBy(() ->
-                        service.update(
-                                student.getId(),
-                                new UpdateStudentRequest(null, StudentStatus.ACTIVE, null, null, null, null, null)))
+        assertThatThrownBy(() -> service.update(
+                        student.getId(),
+                        new UpdateStudentRequest(
+                                null, StudentStatus.ACTIVE, null, null, null, null, null, "Requesting reinstatement")))
                 .isInstanceOf(ValidationException.class)
                 .satisfies(thrown -> assertThat(((ValidationException) thrown).getErrorCode())
                         .isEqualTo(StudentErrorCode.INVALID_STUDENT_STATE));
@@ -159,11 +167,58 @@ class StudentServiceTest {
         when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
 
         StudentResponse response = service.update(
-                student.getId(), new UpdateStudentRequest(null, StudentStatus.ON_LEAVE, null, null, null, null, null));
+                student.getId(),
+                new UpdateStudentRequest(
+                        null, StudentStatus.ON_LEAVE, null, null, null, null, null, "Approved medical leave"));
 
         assertThat(response.status()).isEqualTo(StudentStatus.ON_LEAVE);
         assertThat(response.programmeId()).isEqualTo(PROGRAMME_ID);
         assertThat(response.expectedGraduationDate()).isNull();
+    }
+
+    @Test
+    @DisplayName("a status change without a reason is refused")
+    void statusChangeWithoutReasonIsRefused() {
+        Student student = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
+
+        assertThatThrownBy(() -> service.update(
+                        student.getId(),
+                        new UpdateStudentRequest(null, StudentStatus.SUSPENDED, null, null, null, null, null, null)))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(thrown -> assertThat(((ValidationException) thrown).getErrorCode())
+                        .isEqualTo(StudentErrorCode.STUDENT_STATUS_REASON_REQUIRED));
+    }
+
+    @Test
+    @DisplayName("a dismissed record is terminal — even reinstatement is refused")
+    void dismissedIsTerminal() {
+        Student student = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        student.changeStatus(StudentStatus.DISMISSED);
+        when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
+
+        assertThatThrownBy(() -> service.update(
+                        student.getId(),
+                        new UpdateStudentRequest(
+                                null, StudentStatus.ACTIVE, null, null, null, null, null, "Appeal granted")))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(thrown -> assertThat(((ValidationException) thrown).getErrorCode())
+                        .isEqualTo(StudentErrorCode.INVALID_STUDENT_STATE));
+    }
+
+    @Test
+    @DisplayName("a withdrawn student may be readmitted")
+    void withdrawnStudentMayBeReadmitted() {
+        Student student = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        student.changeStatus(StudentStatus.WITHDRAWN);
+        when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
+
+        StudentResponse response = service.update(
+                student.getId(),
+                new UpdateStudentRequest(
+                        null, StudentStatus.ACTIVE, null, null, null, null, null, "Readmitted after appeal"));
+
+        assertThat(response.status()).isEqualTo(StudentStatus.ACTIVE);
     }
 
     @Test

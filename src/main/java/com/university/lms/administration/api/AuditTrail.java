@@ -22,6 +22,12 @@ public interface AuditTrail {
     /** Actions worth reconstructing after the fact. */
     final class Action {
         public static final String IDENTITY_PROVISIONED = "IDENTITY_PROVISIONED";
+        /** An exam was moved, withdrawn or cancelled — students may have planned around it. */
+        public static final String EXAM_RESCHEDULED = "EXAM_RESCHEDULED";
+        public static final String EXAM_UNPUBLISHED = "EXAM_UNPUBLISHED";
+        public static final String EXAM_CANCELLED = "EXAM_CANCELLED";
+        /** Somebody knowingly scheduled a lecturer or a room into a clash. */
+        public static final String SCHEDULE_CONFLICT_OVERRIDDEN = "SCHEDULE_CONFLICT_OVERRIDDEN";
         public static final String IDENTITY_LINKED = "IDENTITY_LINKED";
         public static final String IDENTITY_LINK_REFUSED = "IDENTITY_LINK_REFUSED";
         public static final String IDENTITY_SYNC_FAILED = "IDENTITY_SYNC_FAILED";
@@ -30,6 +36,7 @@ public interface AuditTrail {
         public static final String ROLE_GRANTED = "ROLE_GRANTED";
         public static final String ROLE_REVOKED = "ROLE_REVOKED";
         public static final String STUDENT_PROVISIONED = "STUDENT_PROVISIONED";
+        public static final String STUDENT_STATUS_CHANGED = "STUDENT_STATUS_CHANGED";
         public static final String ENROLMENT_CREATED = "ENROLMENT_CREATED";
         public static final String ENROLMENT_DROPPED = "ENROLMENT_DROPPED";
         public static final String ENROLMENT_WITHDRAWN = "ENROLMENT_WITHDRAWN";
@@ -43,6 +50,8 @@ public interface AuditTrail {
         public static final String SERVICE_REQUEST_TRANSITIONED = "SERVICE_REQUEST_TRANSITIONED";
         public static final String SERVICE_REQUEST_FULFILLED = "SERVICE_REQUEST_FULFILLED";
         public static final String APPLICATION_CREATED = "APPLICATION_CREATED";
+        /** A resume link was reissued; the previous capability token stopped working. */
+        public static final String APPLICATION_ACCESS_REISSUED = "APPLICATION_ACCESS_REISSUED";
         public static final String APPLICATION_TRANSITIONED = "APPLICATION_TRANSITIONED";
         public static final String APPLICATION_MATRICULATED = "APPLICATION_MATRICULATED";
 
@@ -79,6 +88,36 @@ public interface AuditTrail {
      *     resolved later: the trail must remain readable after the actor's account is renamed or
      *     removed, and administration must not depend on identity to render a row.
      */
+    default void record(
+            UUID actorUserId, String actorLabel, String action, String entityType, UUID entityId, String details) {
+        record(actorUserId, actorLabel, action, entityType, entityId, details, null, null, null);
+    }
+
+    /**
+     * The full form. Prefer this over the shorter overloads for any write that corrects, reverses,
+     * or overrides a prior value — a grade change, a manual ledger entry, a status override — since
+     * {@code reason} and the before/after snapshot are exactly what turns "this changed" into
+     * "this changed, to this, because of this, and here is what it looked like before".
+     *
+     * <p>{@code sourceIp} and {@code correlationId} are deliberately absent from this signature:
+     * they are resolved by the implementation from the current request, the same way
+     * {@code created_by} is resolved by {@code AuditorAwareImpl} rather than passed in. A caller
+     * that could fabricate its own IP or correlation id would make the column worthless as evidence.
+     *
+     * @param reason why, in the actor's own words. Should be non-blank for a correction; may be
+     *     {@code null} for a routine creation with nothing to explain.
+     * @param beforeValue pre-serialized JSON snapshot of the affected fields before the change, or
+     *     {@code null} when there was no prior state (a first creation).
+     * @param afterValue pre-serialized JSON snapshot of the affected fields after the change.
+     */
     void record(
-            UUID actorUserId, String actorLabel, String action, String entityType, UUID entityId, String details);
+            UUID actorUserId,
+            String actorLabel,
+            String action,
+            String entityType,
+            UUID entityId,
+            String details,
+            String reason,
+            String beforeValue,
+            String afterValue);
 }

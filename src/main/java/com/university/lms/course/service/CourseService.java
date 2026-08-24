@@ -8,6 +8,9 @@ import com.university.lms.common.dto.PageResponse;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.exception.ResourceNotFoundException;
+import java.util.Optional;
+import com.university.lms.course.dto.ScheduleCheckRequest;
+import com.university.lms.course.dto.ScheduleCheckResponse;
 import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.course.api.Timetable;
 import com.university.lms.course.domain.Course;
@@ -79,6 +82,8 @@ public class CourseService {
     private final AuditTrail auditTrail;
     private final UniFlowMetrics metrics;
 
+    private final TeachingConflictChecker conflictChecker;
+
     public CourseService(
             CourseRepository courseRepository,
             CourseSectionRepository courseSectionRepository,
@@ -89,7 +94,8 @@ public class CourseService {
             UserDirectory userDirectory,
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
-            UniFlowMetrics metrics) {
+            UniFlowMetrics metrics,
+            TeachingConflictChecker conflictChecker) {
         this.courseRepository = courseRepository;
         this.courseSectionRepository = courseSectionRepository;
         this.requirementGroupRepository = requirementGroupRepository;
@@ -100,6 +106,7 @@ public class CourseService {
         this.currentUserProvider = currentUserProvider;
         this.auditTrail = auditTrail;
         this.metrics = metrics;
+            this.conflictChecker = conflictChecker;
     }
 
     @Transactional
@@ -401,15 +408,115 @@ public class CourseService {
         log.info("Deleted section {} of {}", section.getSectionCode(), section.getCourse().getCourseCode());
     }
 
+    /**
+     * Reports what would clash, without writing anything.
+     *
+     * <p>Deliberately the same checker the write path uses. A preview that computed conflicts
+     * independently would eventually disagree with the rule it previews, and the disagreement shows
+     * up as a save that fails with no warning beforehand — the worst of both.
+     */
+    @Transactional(readOnly = true)
+    public ScheduleCheckResponse checkSchedule(UUID sectionId, ScheduleCheckRequest request) {
+        CourseSection section = requireSection(sectionId);
+
+        List<CourseCatalog.Meeting> proposed = request.meetings() == null
+                ? toCatalogMeetings(sectionMeetingRepository.findBySectionIdOrderByPositionAsc(sectionId))
+                : request.meetings().stream().map(CourseService::toCatalogMeeting).toList();
+
+        List<ScheduleCheckResponse.Conflict> conflicts = new ArrayList<>();
+
+        if (request.lecturerUserId() != null) {
+            // Asked about a specific person: they would take the whole section, so every proposed
+            // meeting is theirs. This mirrors assignLecturer.
+            conflictChecker
+                    .lecturerClash(request.lecturerUserId(), section, proposed)
+                    .ifPresent(message ->
+                            conflicts.add(new ScheduleCheckResponse.Conflict(ScheduleCheckResponse.Kind.LECTURER, message)));
+        } else {
+            // No one named: check whoever is already attached, each against what they actually take.
+            for (UUID lecturerUserId : conflictChecker.lecturersOf(section)) {
+                conflictChecker
+                        .lecturerClash(
+                                lecturerUserId,
+                                section,
+                                conflictChecker.meetingsTaughtBy(lecturerUserId, section, proposed))
+                        .ifPresent(message -> conflicts.add(new ScheduleCheckResponse.Conflict(
+                                ScheduleCheckResponse.Kind.LECTURER, message)));
+            }
+        }
+
+        conflictChecker
+                .roomClash(section, proposed)
+                .ifPresent(message ->
+                        conflicts.add(new ScheduleCheckResponse.Conflict(ScheduleCheckResponse.Kind.ROOM, message)));
+
+        return ScheduleCheckResponse.of(conflicts);
+    }
+
+
+    /** Every section running in a term, for staff tools that work across the whole term. */
+    @Transactional(readOnly = true)
+    public List<CourseSectionResponse> sectionsInTerm(UUID academicTermId) {
+        return courseSectionRepository.findByAcademicTermId(academicTermId).stream()
+                .map(this::toSectionResponse)
+                .toList();
+    }
+
     @Transactional
     public CourseSectionResponse assignLecturer(UUID sectionId, UUID lecturerUserId) {
+        return assignLecturer(sectionId, lecturerUserId, false);
+    }
+
+    /**
+     * Assigns a lecturer, refusing if that would double-book them.
+     *
+     * <p>Checked against everything they already teach in the same term — on a whole section or on
+     * one component of one. Existence of the user was already checked; being free was not, so the
+     * same person could be put in two rooms at nine on Monday and nothing objected.
+     */
+    @Transactional
+    public CourseSectionResponse assignLecturer(UUID sectionId, UUID lecturerUserId, boolean allowConflicts) {
         CourseSection section = requireSection(sectionId);
         if (!userDirectory.exists(lecturerUserId)) {
             throw new ResourceNotFoundException(
                     CourseErrorCode.COURSE_SECTION_NOT_FOUND, "No user exists with id " + lecturerUserId);
         }
+
+        // Assigning a lecturer to the section makes every one of its meetings theirs. Deriving the
+        // set from the section instead would find nothing — it does not name them yet — and pass.
+        List<CourseCatalog.Meeting> meetings =
+                toCatalogMeetings(sectionMeetingRepository.findBySectionIdOrderByPositionAsc(sectionId));
+        Optional<String> clash = conflictChecker.lecturerClash(lecturerUserId, section, meetings);
+        if (clash.isPresent()) {
+            if (!allowConflicts) {
+                throw new BusinessException(CourseErrorCode.SCHEDULE_CONFLICT, clash.get());
+            }
+            recordConflictOverride(section, "lecturer", clash.get());
+        }
+
         section.assignLecturer(lecturerUserId);
         return toSectionResponse(section);
+    }
+
+    /**
+     * Records that somebody knowingly scheduled a clash.
+     *
+     * <p>The override exists because timetabling has real exceptions; the audit exists because an
+     * override that leaves no trace is indistinguishable from a bug when someone asks later why two
+     * classes are in one room.
+     */
+    private void recordConflictOverride(CourseSection section, String kind, String detail) {
+        log.warn(
+                "Schedule conflict overridden on section {} ({}): {}",
+                section.getId(),
+                kind,
+                detail);
+        auditTrail.record(
+                currentUserProvider.find().map(CurrentUser::userId).orElse(null),
+                AuditTrail.Action.SCHEDULE_CONFLICT_OVERRIDDEN,
+                "CourseSection",
+                section.getId(),
+                kind + " conflict overridden: " + detail);
     }
 
     @Transactional
@@ -454,6 +561,26 @@ public class CourseService {
                 .ifPresent(message -> {
                     throw new BusinessException(CourseErrorCode.INVALID_MEETING, message);
                 });
+        // Re-checked here, not only when a lecturer is assigned. Otherwise the check is bypassable
+        // by ordering: assign cleanly first, then move the sessions on top of another class.
+        for (UUID lecturerUserId : conflictChecker.lecturersOf(section)) {
+            Optional<String> clash = conflictChecker.lecturerClash(
+                    lecturerUserId, section, conflictChecker.meetingsTaughtBy(lecturerUserId, section, incoming));
+            if (clash.isPresent()) {
+                if (!request.overrideRequested()) {
+                    throw new BusinessException(CourseErrorCode.SCHEDULE_CONFLICT, clash.get());
+                }
+                recordConflictOverride(section, "lecturer", clash.get());
+            }
+        }
+        Optional<String> roomClash = conflictChecker.roomClash(section, incoming);
+        if (roomClash.isPresent()) {
+            if (!request.overrideRequested()) {
+                throw new BusinessException(CourseErrorCode.SCHEDULE_CONFLICT, roomClash.get());
+            }
+            recordConflictOverride(section, "room", roomClash.get());
+        }
+
         sectionMeetingRepository.deleteBySectionId(sectionId);
         sectionMeetingRepository.flush();
         try {

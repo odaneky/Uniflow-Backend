@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 
@@ -41,6 +42,35 @@ public class Grade extends BaseEntity {
     @Column(name = "course_section_id", nullable = false)
     private UUID courseSectionId;
 
+    /**
+     * Cross-module reference into course — snapshotted at award, alongside {@link #credits} and
+     * {@link #termOrder} below. Never revised: a later correction to the mark does not mean the
+     * course, term or credit value it was awarded for changed.
+     */
+    @Column(name = "course_id", nullable = false)
+    private UUID courseId;
+
+    /** Cross-module reference into academic. Snapshotted at award; see {@link #courseId}. */
+    @Column(name = "academic_term_id", nullable = false)
+    private UUID academicTermId;
+
+    /**
+     * The course's credit value at the moment this grade was awarded. GPA is computed from this,
+     * not from a live lookup — editing {@code courses.credits} later must not silently rewrite
+     * every historic GPA that counted it.
+     */
+    @Column(name = "credits", nullable = false)
+    private int credits;
+
+    /**
+     * The term's institutional chronological position at award — see
+     * {@code AcademicStructure.termOrdinal}. A transcript sorts by this, not by
+     * {@code created_at}, so a mark entered late does not appear to have happened earlier or later
+     * than it was actually for.
+     */
+    @Column(name = "term_order", nullable = false)
+    private int termOrder;
+
     /** Cross-module reference into assessment; null for an overall section result. */
     @Column(name = "assessment_id")
     private UUID assessmentId;
@@ -65,6 +95,14 @@ public class Grade extends BaseEntity {
     @Column(name = "under_appeal", nullable = false)
     private boolean underAppeal;
 
+    /** Set at term close; once locked, {@link #revise} refuses until the grade is unlocked. */
+    @Column(name = "locked_at")
+    private Instant lockedAt;
+
+    /** Cross-module reference into identity. */
+    @Column(name = "locked_by")
+    private UUID lockedBy;
+
     /**
      * Grade changes are the single most contended and most consequential write in the system —
      * a lost update here silently alters an academic record.
@@ -83,13 +121,21 @@ public class Grade extends BaseEntity {
             GradeScale gradeScale,
             BigDecimal percentage,
             String letter,
-            BigDecimal gradePoint) {
+            BigDecimal gradePoint,
+            UUID courseId,
+            UUID academicTermId,
+            int credits,
+            int termOrder) {
         this.studentId = studentId;
         this.courseSectionId = courseSectionId;
         this.gradeScale = gradeScale;
         this.percentage = percentage;
         this.letter = letter;
         this.gradePoint = gradePoint;
+        this.courseId = courseId;
+        this.academicTermId = academicTermId;
+        this.credits = credits;
+        this.termOrder = termOrder;
     }
 
     public void forAssessment(UUID assessmentId) {
@@ -101,6 +147,9 @@ public class Grade extends BaseEntity {
     }
 
     public void revise(BigDecimal percentage, String letter, BigDecimal gradePoint) {
+        if (isLocked()) {
+            throw new IllegalStateException("This grade is locked and cannot be revised directly");
+        }
         this.percentage = percentage;
         this.letter = letter;
         this.gradePoint = gradePoint;
@@ -112,5 +161,14 @@ public class Grade extends BaseEntity {
 
     public void clearUnderAppeal() {
         this.underAppeal = false;
+    }
+
+    public boolean isLocked() {
+        return lockedAt != null;
+    }
+
+    public void lock(UUID lockedBy) {
+        this.lockedAt = Instant.now();
+        this.lockedBy = lockedBy;
     }
 }

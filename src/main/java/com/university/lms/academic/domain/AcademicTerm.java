@@ -70,6 +70,16 @@ public class AcademicTerm extends BaseEntity {
     @Column(name = "add_drop_closes_at")
     private Instant addDropClosesAt;
 
+    /**
+     * The examination period. Both ends or neither — a half-open window is ambiguous exactly when a
+     * student is asking whether exams have started.
+     */
+    @Column(name = "exam_starts_on")
+    private LocalDate examStartsOn;
+
+    @Column(name = "exam_ends_on")
+    private LocalDate examEndsOn;
+
     @Column(name = "tuition_due_on")
     private LocalDate tuitionDueOn;
 
@@ -90,6 +100,20 @@ public class AcademicTerm extends BaseEntity {
         this.sequenceNumber = sequenceNumber;
         this.startDate = startDate;
         this.endDate = endDate;
+    }
+
+
+    public void setExamWindow(LocalDate startsOn, LocalDate endsOn) {
+        this.examStartsOn = startsOn;
+        this.examEndsOn = endsOn;
+    }
+
+    /** True on any day within the examination period, inclusive of both ends. */
+    public boolean inExamPeriod(LocalDate on) {
+        return examStartsOn != null
+                && examEndsOn != null
+                && !on.isBefore(examStartsOn)
+                && !on.isAfter(examEndsOn);
     }
 
     public void openRegistration(Instant opensAt, Instant closesAt) {

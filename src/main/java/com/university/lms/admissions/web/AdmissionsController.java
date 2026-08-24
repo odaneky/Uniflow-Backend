@@ -7,6 +7,8 @@ import com.university.lms.admissions.dto.MatriculateApplicationRequest;
 import com.university.lms.admissions.dto.TransitionApplicationRequest;
 import com.university.lms.admissions.service.AdmissionsService;
 import com.university.lms.common.dto.PageResponse;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +34,7 @@ public class AdmissionsController {
         this.admissionsService = admissionsService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/queue")
     public PageResponse<ApplicationResponse> queue(
             @RequestParam(required = false) List<ApplicationStatus> status,
@@ -41,32 +44,38 @@ public class AdmissionsController {
         return admissionsService.queue(status, mine, reference, pageable);
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/applications/{id}")
     public ApplicationResponse byId(@PathVariable UUID id) {
         return admissionsService.findById(id);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/applications/{id}/claim")
     public ApplicationResponse claim(@PathVariable UUID id) {
         return admissionsService.staffClaim(id);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/applications/{id}/review")
     public ApplicationResponse review(
             @PathVariable UUID id, @Valid @RequestBody(required = false) TransitionApplicationRequest body) {
         return admissionsService.review(id, body);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/applications/{id}/decide")
     public ApplicationResponse decide(@PathVariable UUID id, @Valid @RequestBody DecideApplicationRequest body) {
         return admissionsService.decide(id, body);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/applications/{id}/deposit")
     public ApplicationResponse recordDeposit(@PathVariable UUID id) {
         return admissionsService.recordDeposit(id);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/applications/{id}/matriculate")
     public ApplicationResponse matriculate(
             @PathVariable UUID id, @Valid @RequestBody MatriculateApplicationRequest body) {

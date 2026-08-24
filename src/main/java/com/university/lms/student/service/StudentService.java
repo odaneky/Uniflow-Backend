@@ -1,5 +1,6 @@
 package com.university.lms.student.service;
 
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.dto.PageResponse;
@@ -24,6 +25,7 @@ import com.university.lms.student.dto.StudentSummaryResponse;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.dto.UpdateStudentRequest;
 import com.university.lms.student.repository.StudentRepository;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -54,18 +56,24 @@ public class StudentService {
 
     private final CurrentUserProvider currentUserProvider;
     private final RecordAccessLog recordAccessLog;
+    private final StudentProgrammeEnrolmentService programmeEnrolmentService;
+    private final AuditTrail auditTrail;
 
     public StudentService(
             StudentRepository studentRepository,
             UserDirectory userDirectory,
             AcademicStructure academicStructure,
             CurrentUserProvider currentUserProvider,
-            RecordAccessLog recordAccessLog) {
+            RecordAccessLog recordAccessLog,
+            StudentProgrammeEnrolmentService programmeEnrolmentService,
+            AuditTrail auditTrail) {
         this.studentRepository = studentRepository;
         this.userDirectory = userDirectory;
         this.academicStructure = academicStructure;
         this.currentUserProvider = currentUserProvider;
         this.recordAccessLog = recordAccessLog;
+        this.programmeEnrolmentService = programmeEnrolmentService;
+        this.auditTrail = auditTrail;
     }
 
     @Transactional
@@ -98,6 +106,7 @@ public class StudentService {
 
         try {
             Student saved = studentRepository.saveAndFlush(student);
+            programmeEnrolmentService.openInitial(saved.getId(), request.programmeId(), request.admissionDate());
             log.info("Created student {} ({})", saved.getStudentNumber(), saved.getId());
             return toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
@@ -212,9 +221,15 @@ public class StudentService {
                         "No programme exists with id " + request.programmeId());
             }
             student.transferToProgramme(request.programmeId());
+            programmeEnrolmentService.transfer(
+                    student.getId(),
+                    request.programmeId(),
+                    LocalDate.now(),
+                    null,
+                    currentUserProvider.find().map(CurrentUser::userId).orElse(null));
         }
         if (request.status() != null) {
-            applyStatusChange(student, request.status());
+            applyStatusChange(student, request.status(), request.reason());
         }
         if (request.expectedGraduationDate() != null) {
             student.expectGraduationOn(request.expectedGraduationDate());
@@ -302,17 +317,40 @@ public class StudentService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private void applyStatusChange(Student student, StudentStatus target) {
+    private void applyStatusChange(Student student, StudentStatus target, String reason) {
         StudentStatus current = student.getStatus();
         if (current == target) {
             return;
         }
-        if (current == StudentStatus.GRADUATED || current == StudentStatus.WITHDRAWN) {
+        if (!current.canTransitionTo(target)) {
             throw new ValidationException(
                     StudentErrorCode.INVALID_STUDENT_STATE,
                     "A " + current + " student record cannot be changed to " + target);
         }
+        if (reason == null || reason.isBlank()) {
+            throw new ValidationException(
+                    StudentErrorCode.STUDENT_STATUS_REASON_REQUIRED,
+                    "A reason is required to change a student's status");
+        }
         student.changeStatus(target);
+        CurrentUser actor = currentUserProvider.find().orElse(null);
+        auditTrail.record(
+                actor == null ? null : actor.userId(),
+                actor == null ? null : actorLabel(actor),
+                AuditTrail.Action.STUDENT_STATUS_CHANGED,
+                AuditTrail.EntityType.STUDENT,
+                student.getId(),
+                student.getStudentNumber() + ": " + current + " → " + target,
+                reason,
+                current.name(),
+                target.name());
+    }
+
+    private static String actorLabel(CurrentUser actor) {
+        if (actor.fullName() != null && !actor.fullName().isBlank()) {
+            return actor.fullName();
+        }
+        return actor.username();
     }
 
     private static void applyContact(Student student, UpdateOwnProfileRequest request) {

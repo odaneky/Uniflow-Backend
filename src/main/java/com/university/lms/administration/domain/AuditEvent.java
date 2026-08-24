@@ -8,6 +8,8 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * An immutable record that something consequential happened — a student was enrolled, a grade was
@@ -57,6 +59,28 @@ public class AuditEvent extends BaseEntity {
     @Column(name = "details", length = 4000)
     private String details;
 
+    /** Why, in the actor's own words — mandatory on a correction, optional elsewhere. */
+    @Column(name = "reason", length = 1000)
+    private String reason;
+
+    /** Pre-serialized JSON snapshot of the affected fields before the change. Null on first creation. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "before_value", columnDefinition = "jsonb")
+    private String beforeValue;
+
+    /** Pre-serialized JSON snapshot of the affected fields after the change. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "after_value", columnDefinition = "jsonb")
+    private String afterValue;
+
+    /** Resolved by {@code DefaultAuditTrail} from the current request; never supplied by a caller. */
+    @Column(name = "source_ip", length = 45)
+    private String sourceIp;
+
+    /** Resolved by {@code DefaultAuditTrail} from {@code CorrelationIdFilter}; never supplied by a caller. */
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
+
     protected AuditEvent() {
         // for JPA
     }
@@ -67,11 +91,33 @@ public class AuditEvent extends BaseEntity {
 
     public AuditEvent(
             UUID actorUserId, String actorLabel, String action, String entityType, UUID entityId, String details) {
+        this(actorUserId, actorLabel, action, entityType, entityId, details, null, null, null);
+    }
+
+    public AuditEvent(
+            UUID actorUserId,
+            String actorLabel,
+            String action,
+            String entityType,
+            UUID entityId,
+            String details,
+            String reason,
+            String beforeValue,
+            String afterValue) {
         this.actorUserId = actorUserId;
         this.actorLabel = actorLabel;
         this.action = action;
         this.entityType = entityType;
         this.entityId = entityId;
         this.details = details;
+        this.reason = reason;
+        this.beforeValue = beforeValue;
+        this.afterValue = afterValue;
+    }
+
+    /** Set once, immediately after construction, by {@code DefaultAuditTrail} alone. */
+    public void resolvedFrom(String sourceIp, String correlationId) {
+        this.sourceIp = sourceIp;
+        this.correlationId = correlationId;
     }
 }

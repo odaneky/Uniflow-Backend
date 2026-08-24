@@ -1,0 +1,1 @@
+Method <com.university.lms.grading.service.GradeService.computeWeightedOverall(java.util.UUID, java.util.UUID)> calls method <com.university.lms.assessment.domain.Assessment.getWeightPercent()> in (GradeService.java:326)

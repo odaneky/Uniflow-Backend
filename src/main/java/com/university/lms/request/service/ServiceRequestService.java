@@ -32,6 +32,7 @@ import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -58,6 +59,7 @@ public class ServiceRequestService {
     private final GradeAppealActions gradeAppealActions;
     private final AuditTrail auditTrail;
     private final ObjectMapper objectMapper;
+    private final ServiceRequestFulfillmentFailureRecorder fulfillmentFailureRecorder;
 
     public ServiceRequestService(
             ServiceRequestRepository requestRepository,
@@ -71,7 +73,8 @@ public class ServiceRequestService {
             ServiceRequestOutboxPublisher outboxPublisher,
             GradeAppealActions gradeAppealActions,
             AuditTrail auditTrail,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ServiceRequestFulfillmentFailureRecorder fulfillmentFailureRecorder) {
         this.requestRepository = requestRepository;
         this.eventRepository = eventRepository;
         this.studentDirectory = studentDirectory;
@@ -84,6 +87,7 @@ public class ServiceRequestService {
         this.gradeAppealActions = gradeAppealActions;
         this.auditTrail = auditTrail;
         this.objectMapper = objectMapper;
+        this.fulfillmentFailureRecorder = fulfillmentFailureRecorder;
     }
 
     public List<ServiceRequestResponse> own() {
@@ -114,7 +118,8 @@ public class ServiceRequestService {
         List<ServiceRequestStatus> effectiveStatuses =
                 statuses == null || statuses.isEmpty() ? List.of(ServiceRequestStatus.values()) : statuses;
         return PageResponse.from(
-                requestRepository.search(effectiveStatuses, type, assignedTo, blankToNull(reference), pageable),
+                requestRepository.search(
+                        effectiveStatuses, type, assignedTo, referenceLikePattern(reference), pageable),
                 this::toResponse);
     }
 
@@ -204,8 +209,10 @@ public class ServiceRequestService {
                     outboxPublisher.publishDelivered(request);
                 }
             } catch (BusinessException ex) {
-                request.markFulfillmentFailed(ex.getMessage());
-                requestRepository.save(request);
+                // Recorded in its own transaction — this one is about to roll back because of the
+                // exception we are re-throwing, and a save made against this same transaction would
+                // roll back with it, exactly as before this fix.
+                fulfillmentFailureRecorder.record(request.getId(), ex.getMessage());
                 throw ex;
             }
         }
@@ -373,5 +380,17 @@ public class ServiceRequestService {
             return null;
         }
         return value.trim();
+    }
+
+    private static String referenceLikePattern(String reference) {
+        String trimmed = blankToNull(reference);
+        if (trimmed == null) {
+            return null;
+        }
+        String escaped = trimmed.toLowerCase(Locale.ROOT)
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_");
+        return "%" + escaped + "%";
     }
 }

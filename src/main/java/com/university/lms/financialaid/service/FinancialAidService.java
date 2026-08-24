@@ -74,6 +74,7 @@ public class FinancialAidService {
 
     public List<FinancialAidAwardResponse> awardsForStudent(UUID studentId) {
         requireStudentExists(studentId);
+        requireOwnStudentOrStaff(studentId);
         return awardRepository.findByStudentIdOrderByCreatedAtDesc(studentId).stream()
                 .map(FinancialAidAwardResponse::from)
                 .toList();
@@ -148,21 +149,30 @@ public class FinancialAidService {
                         FinancialAidErrorCode.ISIR_INVALID_ROW,
                         "No ISIR snapshot exists for student " + studentId + " aid year " + aidYear));
 
-        List<FinancialAidAward> created = new ArrayList<>();
+        List<FinancialAidAward> awards = new ArrayList<>();
         if (isir.isPellEligible()) {
             BigDecimal pellAmount = request.pellAmount() == null ? DEFAULT_PELL_CAP : request.pellAmount();
-            created.add(awardRepository.save(new FinancialAidAward(
-                    studentId, request.academicTermId(), AwardType.PELL, pellAmount, AwardStatus.OFFERED)));
+            awards.add(packageOne(studentId, request.academicTermId(), AwardType.PELL, pellAmount));
         }
         if (request.institutionalAmount() != null) {
-            created.add(awardRepository.save(new FinancialAidAward(
-                    studentId,
-                    request.academicTermId(),
-                    AwardType.INSTITUTIONAL,
-                    request.institutionalAmount(),
-                    AwardStatus.OFFERED)));
+            awards.add(packageOne(
+                    studentId, request.academicTermId(), AwardType.INSTITUTIONAL, request.institutionalAmount()));
         }
-        return created.stream().map(FinancialAidAwardResponse::from).toList();
+        return awards.stream().map(FinancialAidAwardResponse::from).toList();
+    }
+
+    /**
+     * At most one award per student, per term, per type. A retried packaging call — a client
+     * timeout, a double submit — must not create a second award for the same type; it returns the
+     * one already on offer instead. {@code uk_financial_aid_awards_student_term_type} is the actual
+     * guarantee against a concurrent double-create; this check is what keeps the common,
+     * non-concurrent retry from tripping it in the first place.
+     */
+    private FinancialAidAward packageOne(UUID studentId, UUID academicTermId, AwardType type, BigDecimal amount) {
+        return awardRepository
+                .findByStudentIdAndAcademicTermIdAndAwardType(studentId, academicTermId, type)
+                .orElseGet(() -> awardRepository.save(
+                        new FinancialAidAward(studentId, academicTermId, type, amount, AwardStatus.OFFERED)));
     }
 
     @Transactional

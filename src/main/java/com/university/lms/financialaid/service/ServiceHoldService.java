@@ -5,6 +5,7 @@ import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.financialaid.api.HoldActions;
 import com.university.lms.financialaid.domain.FinancialAidErrorCode;
 import com.university.lms.financialaid.domain.HoldType;
 import com.university.lms.financialaid.domain.ServiceHold;
@@ -21,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
-public class ServiceHoldService {
+public class ServiceHoldService implements HoldActions {
 
     private final ServiceHoldRepository repository;
     private final StudentDirectory studentDirectory;
@@ -77,6 +78,12 @@ public class ServiceHoldService {
             throw new BusinessException(FinancialAidErrorCode.HOLD_ALREADY_CLEARED, ex.getMessage());
         }
         return ServiceHoldResponse.from(hold);
+    }
+
+    @Override
+    @Transactional
+    public void clearSapHold(UUID studentId) {
+        clearActiveHoldsOfType(studentId, HoldType.SAP);
     }
 
     /** Clears all active holds of a type — e.g. SAP appeal waiver. */

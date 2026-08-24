@@ -9,6 +9,8 @@ import com.university.lms.learning.dto.LearningModuleResponse;
 import com.university.lms.learning.dto.LessonResponse;
 import com.university.lms.learning.dto.UpsertContentRequest;
 import com.university.lms.learning.service.LearningService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -32,16 +34,19 @@ public class LearningController {
         this.learningService = learningService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/sections/{sectionId}")
     public CourseContentResponse staffContent(@PathVariable UUID sectionId) {
         return learningService.staffContent(sectionId);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PutMapping("/sections/{sectionId}/content")
     public CourseContentResponse upsert(@PathVariable UUID sectionId, @Valid @RequestBody UpsertContentRequest request) {
         return learningService.upsertContent(sectionId, request);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/sections/{sectionId}/modules")
     public ResponseEntity<LearningModuleResponse> addModule(
             @PathVariable UUID sectionId, @Valid @RequestBody CreateModuleRequest request) {
@@ -49,11 +54,13 @@ public class LearningController {
         return ResponseEntity.created(URI.create("/api/v1/learning/modules/" + created.id())).body(created);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/modules/{moduleId}/publish")
     public LearningModuleResponse publish(@PathVariable UUID moduleId) {
         return learningService.publishModule(moduleId);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/modules/{moduleId}/lessons")
     public ResponseEntity<LessonResponse> addLesson(
             @PathVariable UUID moduleId, @Valid @RequestBody CreateLessonRequest request) {
@@ -61,6 +68,7 @@ public class LearningController {
         return ResponseEntity.created(URI.create("/api/v1/learning/lessons/" + created.id())).body(created);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping("/lessons/{lessonId}/materials")
     public ResponseEntity<LearningMaterialResponse> addMaterial(
             @PathVariable UUID lessonId, @Valid @RequestBody CreateMaterialRequest request) {

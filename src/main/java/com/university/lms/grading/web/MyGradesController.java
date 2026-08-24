@@ -5,6 +5,8 @@ import com.university.lms.grading.dto.AcademicSummaryResponse;
 import com.university.lms.grading.dto.GradeResponse;
 import com.university.lms.grading.service.GradeService;
 import com.university.lms.grading.service.MyGradesService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -25,12 +27,14 @@ public class MyGradesController {
         this.gradeService = gradeService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/grades")
     public PageResponse<GradeResponse> grades(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return myGradesService.ownGrades(pageable);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/academic-summary")
     public AcademicSummaryResponse academicSummary() {
         return gradeService.ownSummary();

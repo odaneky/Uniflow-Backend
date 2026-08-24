@@ -1,6 +1,7 @@
 package com.university.lms.student.dto;
 
 import com.university.lms.student.domain.StudentStatus;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -12,6 +13,10 @@ import java.util.UUID;
  * assigns (or reassigns) when non-null. Office hours are posted by the assigned advisor via
  * {@code PATCH /me/advisor/office-hours}; {@code advisorOfficeHours} is ignored here.
  * {@code contact} applies demographic/contact corrections directly when present.
+ *
+ * <p>{@code reason} is required whenever {@code status} names a status transition (not required
+ * when omitted, or when it repeats the student's current status) — {@code StudentService} enforces
+ * this so every academic-standing change carries a stated reason in the audit trail.
  */
 public record UpdateStudentRequest(
         UUID programmeId,
@@ -20,4 +25,5 @@ public record UpdateStudentRequest(
         UUID advisorUserId,
         Boolean clearAdvisor,
         String advisorOfficeHours,
-        UpdateOwnProfileRequest contact) {}
+        UpdateOwnProfileRequest contact,
+        @Size(max = 1000, message = "must be at most 1000 characters") String reason) {}

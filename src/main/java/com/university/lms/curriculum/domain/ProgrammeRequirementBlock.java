@@ -11,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.util.LinkedHashSet;
@@ -19,22 +20,32 @@ import java.util.UUID;
 import lombok.Getter;
 
 /**
- * A named slice of a programme's curriculum, e.g. "Core Computer Science".
+ * A named slice of one {@link CurriculumVersion}'s curriculum, e.g. "Core Computer Science".
  *
- * <p>{@code kind} says whether listed courses are core or elective <em>for this programme</em>.
+ * <p>{@code kind} says whether listed courses are core or elective <em>for this version</em>.
  * Course ids are opaque references into the catalog — this module never reads the courses table.
+ *
+ * <p>Belongs to a version, not directly to a programme: {@code CurriculumService} refuses to write
+ * to a block whose version {@link CurriculumVersion#isEditable()} returns false, which is what
+ * makes a published curriculum year immutable.
  */
 @Entity
 @Table(
         name = "programme_requirement_blocks",
         uniqueConstraints =
-                @UniqueConstraint(name = "uk_requirement_blocks_programme_name", columnNames = {"programme_id", "name"}),
-        indexes = @Index(name = "idx_requirement_blocks_programme", columnList = "programme_id"))
+                @UniqueConstraint(
+                        name = "uk_requirement_blocks_version_name",
+                        columnNames = {"curriculum_version_id", "name"}),
+        indexes = @Index(name = "idx_requirement_blocks_version", columnList = "curriculum_version_id"))
 @Getter
 public class ProgrammeRequirementBlock extends BaseEntity {
 
-    @Column(name = "programme_id", nullable = false)
-    private UUID programmeId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(
+            name = "curriculum_version_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_requirement_blocks_version"))
+    private CurriculumVersion curriculumVersion;
 
     @Column(name = "name", nullable = false, length = 200)
     private String name;
@@ -65,8 +76,12 @@ public class ProgrammeRequirementBlock extends BaseEntity {
     }
 
     public ProgrammeRequirementBlock(
-            UUID programmeId, String name, RequirementKind kind, int requiredCredits, int position) {
-        this.programmeId = programmeId;
+            CurriculumVersion curriculumVersion,
+            String name,
+            RequirementKind kind,
+            int requiredCredits,
+            int position) {
+        this.curriculumVersion = curriculumVersion;
         this.name = name;
         this.kind = kind;
         this.requiredCredits = requiredCredits;
@@ -75,5 +90,10 @@ public class ProgrammeRequirementBlock extends BaseEntity {
 
     public void addCourse(UUID courseId) {
         this.courseIds.add(courseId);
+    }
+
+    /** Convenience: the programme this block ultimately belongs to, through its version. */
+    public UUID getProgrammeId() {
+        return curriculumVersion.getProgrammeId();
     }
 }

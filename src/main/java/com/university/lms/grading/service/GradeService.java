@@ -14,6 +14,7 @@ import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.grading.api.AcademicRecord;
 import com.university.lms.grading.domain.Grade;
 import com.university.lms.grading.domain.GradeResult;
+import com.university.lms.grading.domain.GradeRevision;
 import com.university.lms.grading.domain.GradeScale;
 import com.university.lms.grading.domain.GradeScaleBand;
 import com.university.lms.grading.domain.GradingErrorCode;
@@ -21,8 +22,10 @@ import com.university.lms.grading.dto.AcademicSummaryResponse;
 import com.university.lms.grading.dto.CreateGradeRequest;
 import com.university.lms.grading.dto.GradeResponse;
 import com.university.lms.grading.repository.GradeRepository;
+import com.university.lms.grading.repository.GradeRevisionRepository;
 import com.university.lms.grading.repository.GradeScaleBandRepository;
 import com.university.lms.grading.repository.GradeScaleRepository;
+import com.university.lms.common.exception.BusinessException;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.student.api.StudentDirectory;
@@ -51,6 +54,7 @@ public class GradeService implements AcademicRecord {
     static final String DEFAULT_SCALE_NAME = "Undergraduate Standard";
 
     private final GradeRepository gradeRepository;
+    private final GradeRevisionRepository gradeRevisionRepository;
     private final GradeScaleRepository gradeScaleRepository;
     private final GradeScaleBandRepository gradeScaleBandRepository;
     private final CourseCatalog courseCatalog;
@@ -65,6 +69,7 @@ public class GradeService implements AcademicRecord {
 
     public GradeService(
             GradeRepository gradeRepository,
+            GradeRevisionRepository gradeRevisionRepository,
             GradeScaleRepository gradeScaleRepository,
             GradeScaleBandRepository gradeScaleBandRepository,
             CourseCatalog courseCatalog,
@@ -77,6 +82,7 @@ public class GradeService implements AcademicRecord {
             GradeOutboxPublisher gradeOutboxPublisher,
             AssessmentRepository assessmentRepository) {
         this.gradeRepository = gradeRepository;
+        this.gradeRevisionRepository = gradeRevisionRepository;
         this.gradeScaleRepository = gradeScaleRepository;
         this.gradeScaleBandRepository = gradeScaleBandRepository;
         this.academicStructure = academicStructure;
@@ -138,31 +144,21 @@ public class GradeService implements AcademicRecord {
         List<Grade> overall = published.stream().filter(grade -> grade.getAssessmentId() == null).toList();
 
         // Most recent published overall per course counts for GPA; credits only if that sit is PASS.
+        // "Most recent" is by term_order — the institutional chronological position snapshotted at
+        // award — not created_at, which a late-entered correction would otherwise put out of order.
         Map<UUID, Grade> latestByCourse = new LinkedHashMap<>();
-        Map<UUID, Integer> creditsByCourse = new LinkedHashMap<>();
         List<Grade> chronological = overall.stream()
-                .sorted(Comparator.comparing(Grade::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .sorted(Comparator.comparingInt(Grade::getTermOrder))
                 .toList();
         for (Grade grade : chronological) {
-            Optional<CourseCatalog.SectionSummary> section = courseCatalog.findSection(grade.getCourseSectionId());
-            if (section.isEmpty()) {
-                continue;
-            }
-            UUID courseId = section.get().courseId();
-            int credits = courseCatalog
-                    .findCourse(courseId)
-                    .map(CourseCatalog.CourseSummary::credits)
-                    .orElse(0);
-            latestByCourse.put(courseId, grade);
-            creditsByCourse.put(courseId, credits);
+            latestByCourse.put(grade.getCourseId(), grade);
         }
 
         int creditsEarned = 0;
         BigDecimal weightedPoints = BigDecimal.ZERO;
         int weightedCredits = 0;
-        for (Map.Entry<UUID, Grade> entry : latestByCourse.entrySet()) {
-            Grade grade = entry.getValue();
-            int credits = creditsByCourse.getOrDefault(entry.getKey(), 0);
+        for (Grade grade : latestByCourse.values()) {
+            int credits = grade.getCredits();
             weightedPoints = weightedPoints.add(grade.getGradePoint().multiply(BigDecimal.valueOf(credits)));
             weightedCredits += credits;
             if (GradeResult.fromLetter(grade.getLetter()).isPass()) {
@@ -193,6 +189,7 @@ public class GradeService implements AcademicRecord {
                         grade.getCourseSectionId(),
                         grade.getLetter(),
                         grade.getGradePoint(),
+                        GradeResult.fromLetter(grade.getLetter()).isPass(),
                         grade.getCreatedAt()))
                 .toList();
     }
@@ -211,14 +208,40 @@ public class GradeService implements AcademicRecord {
         Optional<Grade> existing =
                 findExisting(request.studentId(), request.courseSectionId(), request.assessmentId());
         boolean wasPublished = existing.map(Grade::isPublished).orElse(false);
-        Grade grade = existing.orElseGet(() -> new Grade(
-                request.studentId(),
-                request.courseSectionId(),
-                scale,
-                request.percentage(),
-                band.getLetter(),
-                band.getGradePoint()));
-        grade.revise(request.percentage(), band.getLetter(), band.getGradePoint());
+        Grade grade = existing.orElseGet(() -> {
+            CourseCatalog.SectionSummary section = courseCatalog
+                    .findSection(request.courseSectionId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            GradingErrorCode.GRADE_SECTION_NOT_FOUND,
+                            "No course section exists with id " + request.courseSectionId()));
+            int credits = courseCatalog
+                    .findCourse(section.courseId())
+                    .map(CourseCatalog.CourseSummary::credits)
+                    .orElse(0);
+            return new Grade(
+                    request.studentId(),
+                    request.courseSectionId(),
+                    scale,
+                    request.percentage(),
+                    band.getLetter(),
+                    band.getGradePoint(),
+                    section.courseId(),
+                    section.academicTermId(),
+                    credits,
+                    academicStructure.termOrdinal(section.academicTermId()));
+        });
+
+        BigDecimal beforePercentage = existing.map(Grade::getPercentage).orElse(null);
+        String beforeLetter = existing.map(Grade::getLetter).orElse(null);
+        BigDecimal beforeGradePoint = existing.map(Grade::getGradePoint).orElse(null);
+        if (existing.isPresent() && (request.reason() == null || request.reason().isBlank())) {
+            throw new ValidationException(
+                    GradingErrorCode.GRADE_REVISION_REASON_REQUIRED,
+                    "A reason is required to change a grade that was already awarded");
+        }
+        String reason = existing.isPresent() ? request.reason() : orDefault(request.reason(), "Initial award");
+
+        revise(grade, request.percentage(), band.getLetter(), band.getGradePoint());
         if (request.assessmentId() != null) {
             grade.forAssessment(request.assessmentId());
         }
@@ -226,6 +249,7 @@ public class GradeService implements AcademicRecord {
             grade.publish();
         }
         Grade saved = gradeRepository.save(grade);
+        recordRevision(saved, beforePercentage, beforeLetter, beforeGradePoint, reason);
         if (saved.isPublished()) {
             String action = wasPublished ? AuditTrail.Action.GRADE_CHANGED : AuditTrail.Action.GRADE_PUBLISHED;
             recordGrade(action, saved);
@@ -252,6 +276,41 @@ public class GradeService implements AcademicRecord {
             gradeOutboxPublisher.publishPublished(grade);
         }
         return GradeResponse.from(grade);
+    }
+
+    /** Translates the domain's lock guard into the API's error contract. */
+    private void revise(Grade grade, BigDecimal percentage, String letter, BigDecimal gradePoint) {
+        try {
+            grade.revise(percentage, letter, gradePoint);
+        } catch (IllegalStateException ex) {
+            throw new BusinessException(GradingErrorCode.GRADE_LOCKED, ex.getMessage());
+        }
+    }
+
+    private void recordRevision(
+            Grade grade,
+            BigDecimal beforePercentage,
+            String beforeLetter,
+            BigDecimal beforeGradePoint,
+            String reason) {
+        int revisionNumber = gradeRevisionRepository.countByGradeId(grade.getId()) + 1;
+        UUID changedBy = currentUserProvider.require().userId();
+        gradeRevisionRepository.save(new GradeRevision(
+                grade,
+                revisionNumber,
+                beforePercentage,
+                beforeLetter,
+                beforeGradePoint,
+                grade.getPercentage(),
+                grade.getLetter(),
+                grade.getGradePoint(),
+                reason,
+                changedBy,
+                null));
+    }
+
+    private static String orDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private Optional<Grade> findExisting(UUID studentId, UUID sectionId, UUID assessmentId) {

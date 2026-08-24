@@ -4,6 +4,8 @@ import com.university.lms.finance.dto.CreateFeeRequest;
 import com.university.lms.finance.dto.FeeResponse;
 import com.university.lms.finance.dto.UpdateFeeRequest;
 import com.university.lms.finance.service.FeeCatalogService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -29,22 +31,26 @@ public class FeeCatalogController {
         this.feeCatalogService = feeCatalogService;
     }
 
+    @AccessClass(AUTHENTICATED)
     @GetMapping
     public List<FeeResponse> findAll() {
         return feeCatalogService.findAll();
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping
     public ResponseEntity<FeeResponse> create(@Valid @RequestBody CreateFeeRequest request) {
         FeeResponse created = feeCatalogService.create(request);
         return ResponseEntity.created(URI.create("/api/v1/fee-catalog/" + created.id())).body(created);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PatchMapping("/{feeId}")
     public FeeResponse update(@PathVariable UUID feeId, @Valid @RequestBody UpdateFeeRequest request) {
         return feeCatalogService.update(feeId, request);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @DeleteMapping("/{feeId}")
     public void deactivate(@PathVariable UUID feeId) {
         feeCatalogService.deactivate(feeId);

@@ -5,6 +5,8 @@ import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.document.domain.DocumentErrorCode;
 import com.university.lms.document.dto.DocumentResponse;
 import com.university.lms.document.service.DocumentService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -27,12 +29,14 @@ public class MyDocumentController {
         this.documentService = documentService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/documents")
     public PageResponse<DocumentResponse> documents(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return documentService.own(pageable);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/documents/{id}/download")
     public ResponseEntity<byte[]> download(@PathVariable UUID id) {
         var meta = documentService

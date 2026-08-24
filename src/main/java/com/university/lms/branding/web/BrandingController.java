@@ -3,6 +3,8 @@ package com.university.lms.branding.web;
 import com.university.lms.branding.dto.BrandingResponse;
 import com.university.lms.branding.dto.ReplaceBrandingRequest;
 import com.university.lms.branding.service.BrandingService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,16 +27,19 @@ public class BrandingController {
         this.brandingService = brandingService;
     }
 
+    @AccessClass(PUBLIC)
     @GetMapping
     public BrandingResponse find() {
         return brandingService.effective();
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PutMapping
     public BrandingResponse replace(@Valid @RequestBody ReplaceBrandingRequest request) {
         return brandingService.replace(request);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @DeleteMapping
     public BrandingResponse reset() {
         return brandingService.resetToDefaults();

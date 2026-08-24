@@ -3,6 +3,8 @@ package com.university.lms.administration.web;
 import com.university.lms.administration.dto.AuditEventResponse;
 import com.university.lms.administration.service.AuditEventService;
 import com.university.lms.common.dto.PageResponse;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -28,6 +30,7 @@ public class AuditEventController {
         this.auditEventService = auditEventService;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping
     public PageResponse<AuditEventResponse> search(
             @RequestParam(required = false) String action,

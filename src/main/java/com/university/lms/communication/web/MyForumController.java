@@ -4,6 +4,8 @@ import com.university.lms.common.dto.PageResponse;
 import com.university.lms.communication.dto.CreateForumTopicRequest;
 import com.university.lms.communication.dto.ForumTopicResponse;
 import com.university.lms.communication.service.ForumService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -29,6 +31,7 @@ public class MyForumController {
     }
 
     @GetMapping("/{sectionId}/forum/topics")
+    @AccessClass(SELF_OR_STAFF)
     public PageResponse<ForumTopicResponse> topics(
             @PathVariable UUID sectionId,
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -36,6 +39,7 @@ public class MyForumController {
     }
 
     @PostMapping("/{sectionId}/forum/topics")
+    @AccessClass(SELF_OR_STAFF)
     public ResponseEntity<ForumTopicResponse> createTopic(
             @PathVariable UUID sectionId, @Valid @RequestBody CreateForumTopicRequest request) {
         ForumTopicResponse created = forumService.createTopic(sectionId, request);

@@ -3,6 +3,8 @@ package com.university.lms.notification.web;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.notification.dto.NotificationResponse;
 import com.university.lms.notification.service.MyNotificationsService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -23,21 +25,25 @@ public class MyNotificationsController {
         this.myNotificationsService = myNotificationsService;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/notifications")
     public PageResponse<NotificationResponse> notifications(@PageableDefault(size = 20) Pageable pageable) {
         return myNotificationsService.own(pageable);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/notifications/unread-count")
     public UnreadCountResponse unreadCount() {
         return new UnreadCountResponse(myNotificationsService.unreadCount());
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PostMapping("/notifications/{id}/read")
     public NotificationResponse markRead(@PathVariable UUID id) {
         return myNotificationsService.markRead(id);
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @PostMapping("/notifications/read-all")
     public void markAllRead() {
         myNotificationsService.markAllRead();

@@ -6,11 +6,16 @@ import com.university.lms.course.domain.CourseSection;
 import com.university.lms.course.repository.CourseSectionRepository;
 import com.university.lms.enrollment.domain.Enrollment;
 import com.university.lms.enrollment.repository.EnrollmentRepository;
+import com.university.lms.financialaid.domain.AwardStatus;
+import com.university.lms.financialaid.domain.AwardType;
+import com.university.lms.financialaid.domain.FinancialAidAward;
+import com.university.lms.financialaid.repository.FinancialAidAwardRepository;
 import com.university.lms.identity.domain.User;
 import com.university.lms.identity.repository.UserRepository;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.repository.StudentRepository;
 import com.university.lms.support.AcademicFixtures;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,6 +41,7 @@ public class OwnerScopingFixtures {
     private final EnrollmentRepository enrollmentRepository;
     private final CourseSectionRepository courseSectionRepository;
     private final AcademicFixtures academicFixtures;
+    private final FinancialAidAwardRepository financialAidAwardRepository;
 
     // Cached because they are shared scenery, not the thing under test. Each is created by its own
     // committed call, so a later rollback cannot leave this field pointing at a row that no longer
@@ -48,12 +54,14 @@ public class OwnerScopingFixtures {
             StudentRepository studentRepository,
             EnrollmentRepository enrollmentRepository,
             CourseSectionRepository courseSectionRepository,
-            AcademicFixtures academicFixtures) {
+            AcademicFixtures academicFixtures,
+            FinancialAidAwardRepository financialAidAwardRepository) {
         this.userRepository = userRepository;
         this.studentRepository = studentRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.courseSectionRepository = courseSectionRepository;
         this.academicFixtures = academicFixtures;
+        this.financialAidAwardRepository = financialAidAwardRepository;
     }
 
     /** A student who can authenticate: a subject, a user row linked to it, and a student record. */
@@ -99,6 +107,21 @@ public class OwnerScopingFixtures {
         return enrollmentRepository
                 .saveAndFlush(new Enrollment(studentId, sectionId))
                 .getId();
+    }
+
+    /** A financial-aid award for a student, in the current open term. */
+    public UUID financialAidAward(UUID studentId, AwardType type, String amount) {
+        FinancialAidAward award = financialAidAwardRepository.saveAndFlush(new FinancialAidAward(
+                studentId, term().getId(), type, new BigDecimal(amount), AwardStatus.OFFERED));
+        return award.getId();
+    }
+
+    public UUID openTermId() {
+        return term().getId();
+    }
+
+    public UUID programmeId() {
+        return programme().getId();
     }
 
     private Programme programme() {

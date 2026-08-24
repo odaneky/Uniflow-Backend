@@ -4,6 +4,7 @@ import com.university.lms.academic.domain.AcademicErrorCode;
 import com.university.lms.academic.domain.AcademicTerm;
 import com.university.lms.academic.domain.AcademicYear;
 import com.university.lms.academic.dto.AcademicTermResponse;
+import com.university.lms.academic.dto.ExamWindowRequest;
 import com.university.lms.academic.dto.AcademicYearResponse;
 import com.university.lms.academic.dto.AddDropWindowRequest;
 import com.university.lms.academic.dto.CreateAcademicTermRequest;
@@ -163,6 +164,26 @@ public class AcademicCalendarService {
         }
         term.openAddDrop(request.opensAt(), request.closesAt(), request.tuitionDueOn());
         log.info("Add/drop window for term {} set to {} .. {}", termId, request.opensAt(), request.closesAt());
+        return AcademicTermResponse.from(term, Instant.now());
+    }
+
+
+    /**
+     * Sets the examination period.
+     *
+     * <p>Its own action rather than a field on a general term update, for the same reason the
+     * registration window is: publishing exam dates is a consequential, individually auditable
+     * moment in the academic year.
+     */
+    @Transactional
+    public AcademicTermResponse setExamWindow(UUID termId, ExamWindowRequest request) {
+        AcademicTerm term = requireTerm(termId);
+        if (request.endsOn().isBefore(request.startsOn())) {
+            throw new ValidationException(
+                    AcademicErrorCode.INVALID_DATE_RANGE, "endsOn must not be before startsOn");
+        }
+        term.setExamWindow(request.startsOn(), request.endsOn());
+        log.info("Exam window for term {} set to {} .. {}", termId, request.startsOn(), request.endsOn());
         return AcademicTermResponse.from(term, Instant.now());
     }
 

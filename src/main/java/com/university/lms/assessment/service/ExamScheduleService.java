@@ -1,0 +1,295 @@
+package com.university.lms.assessment.service;
+
+import com.university.lms.assessment.domain.ExamSitting;
+import com.university.lms.assessment.dto.ExamSittingResponse;
+import com.university.lms.assessment.dto.ScheduleExamRequest;
+import com.university.lms.assessment.repository.ExamSittingRepository;
+import com.university.lms.common.exception.BusinessException;
+import com.university.lms.common.exception.ResourceNotFoundException;
+import com.university.lms.administration.api.AuditTrail;
+import com.university.lms.enrollment.api.EnrollmentDirectory;
+import com.university.lms.identity.api.CurrentUser;
+import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.notification.api.Notifier;
+import com.university.lms.notification.domain.NotificationType;
+import com.university.lms.student.api.StudentDirectory;
+import com.university.lms.course.api.CourseCatalog;
+import com.university.lms.course.domain.CourseErrorCode;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.List;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Scheduling exams, for the examinations office.
+ *
+ * <p>Sittings are created unpublished. A draft timetable is worked on for weeks and is wrong for
+ * most of that time; releasing it is a separate, deliberate act.
+ *
+ * <p>Room double-booking is refused here as it is for teaching sessions — the same hall cannot hold
+ * two exams at once, and discovering that on the morning is not recoverable.
+ */
+@Service
+public class ExamScheduleService {
+
+    private static final Logger log = LoggerFactory.getLogger(ExamScheduleService.class);
+
+    private static final String ENTITY = "ExamSitting";
+
+    private final ExamSittingRepository examSittingRepository;
+    private final CourseCatalog courseCatalog;
+    private final EnrollmentDirectory enrollmentDirectory;
+    private final StudentDirectory studentDirectory;
+    private final Notifier notifier;
+    private final AuditTrail auditTrail;
+    private final CurrentUserProvider currentUserProvider;
+
+    public ExamScheduleService(
+            ExamSittingRepository examSittingRepository,
+            CourseCatalog courseCatalog,
+            EnrollmentDirectory enrollmentDirectory,
+            StudentDirectory studentDirectory,
+            Notifier notifier,
+            AuditTrail auditTrail,
+            CurrentUserProvider currentUserProvider) {
+        this.examSittingRepository = examSittingRepository;
+        this.courseCatalog = courseCatalog;
+        this.enrollmentDirectory = enrollmentDirectory;
+        this.studentDirectory = studentDirectory;
+        this.notifier = notifier;
+        this.auditTrail = auditTrail;
+        this.currentUserProvider = currentUserProvider;
+    }
+
+    @Transactional
+    public ExamSittingResponse schedule(UUID sectionId, ScheduleExamRequest request) {
+        CourseCatalog.SectionSummary section = courseCatalog
+                .findSection(sectionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        CourseErrorCode.COURSE_SECTION_NOT_FOUND, "No course section exists with id " + sectionId));
+
+        ExamSitting sitting = new ExamSitting(
+                sectionId,
+                request.title().trim(),
+                request.startsAt(),
+                request.durationMinutes(),
+                request.room().trim(),
+                request.seating() == null || request.seating().isBlank() ? null : request.seating().trim());
+        if (request.assessmentId() != null) {
+            sitting.linkAssessment(request.assessmentId());
+        }
+
+        requireRoomFree(sitting, null);
+
+        ExamSitting saved = examSittingRepository.saveAndFlush(sitting);
+        log.info("Scheduled exam {} for section {} at {}", saved.getId(), sectionId, saved.getStartsAt());
+        return toResponse(saved, section);
+    }
+
+    /**
+     * Moves a sitting.
+     *
+     * <p>If it was already published, the students sitting it are told. That is the whole point of
+     * the operation being distinct from a create: an exam nobody knew about can be moved freely,
+     * while one people have planned around cannot be moved quietly.
+     */
+    @Transactional
+    public ExamSittingResponse reschedule(UUID sittingId, ScheduleExamRequest request) {
+        ExamSitting sitting = require(sittingId);
+        if (sitting.isCancelled()) {
+            throw new BusinessException(
+                    CourseErrorCode.INVALID_SECTION_STATE, "A cancelled sitting cannot be rescheduled.");
+        }
+
+        String previous = describe(sitting);
+        sitting.reschedule(
+                request.startsAt(),
+                request.durationMinutes(),
+                request.room().trim(),
+                request.seating() == null || request.seating().isBlank() ? null : request.seating().trim());
+        // Checked after the change and ignoring itself, so a sitting can be moved within its own hall.
+        requireRoomFree(sitting, sitting.getId());
+
+        auditTrail.record(
+                actorId(),
+                AuditTrail.Action.EXAM_RESCHEDULED,
+                ENTITY,
+                sittingId,
+                "Moved from " + previous + " to " + describe(sitting));
+
+        if (sitting.isPublished()) {
+            notifyCandidates(
+                    sitting,
+                    "Exam moved: " + sitting.getTitle(),
+                    "Your exam has been moved to " + describe(sitting) + ". It was " + previous + ".");
+        }
+        log.info("Rescheduled exam sitting {} from {} to {}", sittingId, previous, describe(sitting));
+        return toResponse(sitting, courseCatalog.findSection(sitting.getCourseSectionId()).orElse(null));
+    }
+
+    /**
+     * Withdraws a published sitting back to draft.
+     *
+     * <p>No notification: this is the office taking the timetable back to correct it, and telling
+     * students an exam has vanished — before telling them where it went — causes more alarm than it
+     * resolves. The reschedule that follows is what they hear about.
+     */
+    @Transactional
+    public ExamSittingResponse unpublish(UUID sittingId) {
+        ExamSitting sitting = require(sittingId);
+        sitting.unpublish();
+        auditTrail.record(actorId(), AuditTrail.Action.EXAM_UNPUBLISHED, ENTITY, sittingId, "Withdrawn to draft");
+        log.info("Unpublished exam sitting {}", sittingId);
+        return toResponse(sitting, courseCatalog.findSection(sitting.getCourseSectionId()).orElse(null));
+    }
+
+    /**
+     * Cancels a sitting without deleting it.
+     *
+     * <p>Students are told if they could see it. A paper disappearing from a timetable with no
+     * explanation is exactly the situation that fills the examinations office's inbox.
+     */
+    @Transactional
+    public ExamSittingResponse cancel(UUID sittingId, String reason) {
+        ExamSitting sitting = require(sittingId);
+        boolean wasVisible = sitting.isPublished();
+        String was = describe(sitting);
+        sitting.cancel(reason == null || reason.isBlank() ? null : reason.trim());
+
+        auditTrail.record(
+                actorId(),
+                AuditTrail.Action.EXAM_CANCELLED,
+                ENTITY,
+                sittingId,
+                "Cancelled (" + was + ")" + (reason == null || reason.isBlank() ? "" : ": " + reason.trim()));
+
+        if (wasVisible) {
+            notifyCandidates(
+                    sitting,
+                    "Exam cancelled: " + sitting.getTitle(),
+                    "Your exam scheduled for " + was + " has been cancelled."
+                            + (reason == null || reason.isBlank() ? "" : " Reason: " + reason.trim()));
+        }
+        log.info("Cancelled exam sitting {}", sittingId);
+        return toResponse(sitting, courseCatalog.findSection(sitting.getCourseSectionId()).orElse(null));
+    }
+
+    /**
+     * Tells everyone sitting this paper.
+     *
+     * <p>Best-effort per student: one unreachable recipient must not stop the rest being told, and
+     * must not undo the change that prompted the message.
+     */
+    private void notifyCandidates(ExamSitting sitting, String title, String body) {
+        for (EnrollmentDirectory.SectionEnrolment enrolment :
+                enrollmentDirectory.rosterOf(sitting.getCourseSectionId())) {
+            studentDirectory
+                    .userIdOfStudent(enrolment.studentId())
+                    .ifPresent(userId -> notifier.notifyUser(
+                            userId, NotificationType.SYSTEM, title, body, "schedule"));
+        }
+    }
+
+    private static String describe(ExamSitting sitting) {
+        return "%s in %s".formatted(sitting.getStartsAt(), sitting.getRoom());
+    }
+
+    private UUID actorId() {
+        return currentUserProvider.find().map(CurrentUser::userId).orElse(null);
+    }
+
+    /** Releases a sitting to students. Until this happens they see nothing. */
+    @Transactional
+    public ExamSittingResponse publish(UUID sittingId) {
+        ExamSitting sitting = require(sittingId);
+        sitting.publish();
+        log.info("Published exam sitting {}", sittingId);
+        return toResponse(sitting, courseCatalog.findSection(sitting.getCourseSectionId()).orElse(null));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ExamSittingResponse> forSection(UUID sectionId) {
+        CourseCatalog.SectionSummary section = courseCatalog.findSection(sectionId).orElse(null);
+        List<ExamSittingResponse> responses = new ArrayList<>();
+        for (ExamSitting sitting : examSittingRepository.findByCourseSectionIdOrderByStartsAtAsc(sectionId)) {
+            responses.add(toResponse(sitting, section));
+        }
+        return responses;
+    }
+
+
+    /**
+     * Every sitting in a term, drafts included — the examinations office plans against the whole
+     * picture, and a draft still occupies its hall in that plan.
+     *
+     * <p>Assembled from the section list rather than a join across module tables, so the exam
+     * schema and the course schema stay independent.
+     */
+    @Transactional(readOnly = true)
+    public List<ExamSittingResponse> forTerm(UUID academicTermId) {
+        Map<UUID, CourseCatalog.SectionSummary> sections = new LinkedHashMap<>();
+        for (CourseCatalog.SectionSummary section : courseCatalog.findSectionsInTerm(academicTermId)) {
+            sections.put(section.id(), section);
+        }
+        if (sections.isEmpty()) {
+            return List.of();
+        }
+        List<ExamSittingResponse> responses = new ArrayList<>();
+        for (ExamSitting sitting : examSittingRepository.findByCourseSectionIdInOrderByStartsAtAsc(sections.keySet())) {
+            responses.add(toResponse(sitting, sections.get(sitting.getCourseSectionId())));
+        }
+        return responses;
+    }
+
+    /**
+     * Refuses a hall that is already hosting an exam then.
+     *
+     * <p>Compared against every published or draft sitting in the same room — a draft still occupies
+     * the hall in the office's plan, and letting two drafts collide silently only defers the problem
+     * to the day the second one is published.
+     */
+    private void requireRoomFree(ExamSitting incoming, UUID ignoringId) {
+        String room = incoming.getRoom().trim();
+        for (ExamSitting existing : examSittingRepository.findByRoomIgnoreCase(room)) {
+            // A cancelled sitting no longer holds its hall — otherwise a withdrawn exam would block
+            // its own replacement from being scheduled in the same room.
+            if (existing.getId().equals(ignoringId) || existing.isCancelled()) {
+                continue;
+            }
+            if (overlaps(incoming.getStartsAt(), incoming.endsAt(), existing.getStartsAt(), existing.endsAt())) {
+                throw new BusinessException(
+                        CourseErrorCode.SCHEDULE_CONFLICT,
+                        "%s is already hosting %s from %s to %s."
+                                .formatted(room, existing.getTitle(), existing.getStartsAt(), existing.endsAt()));
+            }
+        }
+    }
+
+    private static boolean overlaps(Instant startA, Instant endA, Instant startB, Instant endB) {
+        return startA.isBefore(endB) && startB.isBefore(endA);
+    }
+
+    private ExamSitting require(UUID sittingId) {
+        return examSittingRepository
+                .findById(sittingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        CourseErrorCode.COURSE_SECTION_NOT_FOUND, "No exam sitting exists with id " + sittingId));
+    }
+
+    private ExamSittingResponse toResponse(ExamSitting sitting, CourseCatalog.SectionSummary section) {
+        if (section == null) {
+            return ExamSittingResponse.from(sitting, "—", "—", "—");
+        }
+        String title = courseCatalog
+                .findCourse(section.courseId())
+                .map(CourseCatalog.CourseSummary::title)
+                .orElse(section.courseCode());
+        return ExamSittingResponse.from(sitting, section.courseCode(), title, section.sectionCode());
+    }
+}

@@ -6,6 +6,8 @@ import com.university.lms.identity.dto.UserResponse;
 import com.university.lms.identity.dto.UserSummaryResponse;
 import com.university.lms.identity.service.IdentityProvisioningService;
 import com.university.lms.identity.service.UserService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.net.URI;
@@ -52,18 +54,21 @@ public class UserController {
     }
 
     /** Privileged provisioning. The account is created requiring a credential reset. */
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping
     public ResponseEntity<UserResponse> provision(@Valid @RequestBody ProvisionIdentityRequest request) {
         UserResponse created = provisioningService.provision(request);
         return ResponseEntity.created(URI.create("/api/v1/users/" + created.id())).body(created);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping
     public PageResponse<UserSummaryResponse> findAll(
             @PageableDefault(size = 20, sort = "username", direction = Sort.Direction.ASC) Pageable pageable) {
         return userService.findAll(pageable);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping("/{id}")
     public UserResponse findById(@PathVariable UUID id) {
         return userService.findById(id);
@@ -76,27 +81,32 @@ public class UserController {
      * stops authenticating. An earlier version of this endpoint set a local status flag that nothing
      * consulted, so it reported success while leaving access entirely intact.
      */
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/{id}/disable")
     public UserResponse disable(@PathVariable UUID id) {
         return provisioningService.disable(id);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/{id}/enable")
     public UserResponse enable(@PathVariable UUID id) {
         return provisioningService.enable(id);
     }
 
     /** Roles as the identity provider holds them — the only place a role grants anything. */
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping("/{id}/roles")
     public List<String> roles(@PathVariable UUID id) {
         return provisioningService.rolesOf(id);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping("/{id}/roles")
     public List<String> grantRole(@PathVariable UUID id, @RequestParam @NotBlank String role) {
         return provisioningService.grantRole(id, role);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @DeleteMapping("/{id}/roles")
     public List<String> revokeRole(@PathVariable UUID id, @RequestParam @NotBlank String role) {
         return provisioningService.revokeRole(id, role);

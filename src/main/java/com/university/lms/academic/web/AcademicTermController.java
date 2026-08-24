@@ -1,10 +1,13 @@
 package com.university.lms.academic.web;
 
 import com.university.lms.academic.dto.AcademicTermResponse;
+import com.university.lms.academic.dto.ExamWindowRequest;
 import com.university.lms.academic.dto.AddDropWindowRequest;
 import com.university.lms.academic.dto.CreateAcademicTermRequest;
 import com.university.lms.academic.dto.RegistrationWindowRequest;
 import com.university.lms.academic.service.AcademicCalendarService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -33,6 +36,7 @@ public class AcademicTermController {
         this.service = service;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping
     public ResponseEntity<AcademicTermResponse> create(@Valid @RequestBody CreateAcademicTermRequest request) {
         AcademicTermResponse created = service.createTerm(request);
@@ -40,6 +44,7 @@ public class AcademicTermController {
                 .body(created);
     }
 
+    @AccessClass(AUTHENTICATED)
     @GetMapping("/{id}")
     public AcademicTermResponse findById(@PathVariable UUID id) {
         return service.findTerm(id);
@@ -49,12 +54,21 @@ public class AcademicTermController {
      * Sets the registration window. PUT because it replaces the window wholesale and repeating the
      * call with the same body leaves the term in the same state.
      */
+    @AccessClass(REGISTRY_ONLY)
+    @PutMapping("/{id}/exam-window")
+    public AcademicTermResponse setExamWindow(
+            @PathVariable UUID id, @Valid @RequestBody ExamWindowRequest request) {
+        return service.setExamWindow(id, request);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
     @PutMapping("/{id}/registration-window")
     public AcademicTermResponse setRegistrationWindow(
             @PathVariable UUID id, @Valid @RequestBody RegistrationWindowRequest request) {
         return service.setRegistrationWindow(id, request);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PutMapping("/{id}/add-drop-window")
     public AcademicTermResponse setAddDropWindow(
             @PathVariable UUID id, @Valid @RequestBody AddDropWindowRequest request) {

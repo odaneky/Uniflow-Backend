@@ -1,0 +1,1 @@
+Method <com.university.lms.assessment.service.ExamScheduleService.notifyCandidates(com.university.lms.assessment.domain.ExamSitting, java.lang.String, java.lang.String)> gets field <com.university.lms.notification.domain.NotificationType.SYSTEM> in (ExamScheduleService.java:194)

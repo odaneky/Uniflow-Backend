@@ -3,9 +3,11 @@ package com.university.lms.finance.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.university.lms.common.exception.BusinessException;
+import com.university.lms.finance.config.FinanceProperties;
 import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.finance.domain.AccountEntry;
 import com.university.lms.finance.domain.AccountEntryType;
@@ -26,7 +28,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -60,13 +61,19 @@ class FinanceServiceTest {
     @Mock
     private PaymentPlanService paymentPlanService;
 
-    @InjectMocks
     private FinanceService service;
 
     @BeforeEach
     void callerIsTheStudent() {
-        when(currentUserProvider.require()).thenReturn(STUDENT);
-        when(studentDirectory.studentIdOfUser(USER_ID)).thenReturn(Optional.of(STUDENT_ID));
+        lenient().when(currentUserProvider.require()).thenReturn(STUDENT);
+        lenient().when(studentDirectory.studentIdOfUser(USER_ID)).thenReturn(Optional.of(STUDENT_ID));
+        service = new FinanceService(
+                accountRepository,
+                entryRepository,
+                studentDirectory,
+                currentUserProvider,
+                paymentPlanService,
+                new FinanceProperties(true));
     }
 
     @Test
@@ -107,5 +114,21 @@ class FinanceServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())
                         .isEqualTo(FinanceErrorCode.PAYMENT_NOTHING_DUE));
+    }
+
+    @Test
+    void refusesEveryPaymentWhenSelfServiceIsDisabled() {
+        FinanceService disabled = new FinanceService(
+                accountRepository,
+                entryRepository,
+                studentDirectory,
+                currentUserProvider,
+                paymentPlanService,
+                new FinanceProperties(false));
+
+        assertThatThrownBy(() -> disabled.payOwn(new CreatePaymentRequest(new BigDecimal("1.00"))))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())
+                        .isEqualTo(FinanceErrorCode.SELF_SERVICE_PAYMENT_DISABLED));
     }
 }

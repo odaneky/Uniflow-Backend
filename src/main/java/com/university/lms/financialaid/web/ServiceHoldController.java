@@ -3,6 +3,8 @@ package com.university.lms.financialaid.web;
 import com.university.lms.financialaid.dto.ServiceHoldMutationRequest;
 import com.university.lms.financialaid.dto.ServiceHoldResponse;
 import com.university.lms.financialaid.service.ServiceHoldService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import com.university.lms.common.exception.ValidationException;
 import com.university.lms.financialaid.domain.FinancialAidErrorCode;
 import jakarta.validation.Valid;
@@ -25,11 +27,13 @@ public class ServiceHoldController {
         this.serviceHoldService = serviceHoldService;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @GetMapping
     public List<ServiceHoldResponse> list(@PathVariable UUID studentId) {
         return serviceHoldService.allHoldsFor(studentId);
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping
     public ServiceHoldResponse mutate(
             @PathVariable UUID studentId, @Valid @RequestBody ServiceHoldMutationRequest request) {

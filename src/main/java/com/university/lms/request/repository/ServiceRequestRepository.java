@@ -28,12 +28,12 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
             WHERE (:statuses IS NULL OR r.status IN :statuses)
               AND (:type IS NULL OR r.requestType = :type)
               AND (:assignedTo IS NULL OR r.assignedTo = :assignedTo)
-              AND (:reference IS NULL OR LOWER(r.reference) LIKE LOWER(CONCAT('%', :reference, '%')))
+              AND (:referencePattern IS NULL OR LOWER(r.reference) LIKE :referencePattern ESCAPE '!')
             """)
     Page<ServiceRequest> search(
             @Param("statuses") Collection<ServiceRequestStatus> statuses,
             @Param("type") ServiceRequestType type,
             @Param("assignedTo") UUID assignedTo,
-            @Param("reference") String reference,
+            @Param("referencePattern") String referencePattern,
             Pageable pageable);
 }

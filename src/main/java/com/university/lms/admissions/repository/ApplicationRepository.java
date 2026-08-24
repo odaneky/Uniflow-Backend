@@ -3,6 +3,7 @@ package com.university.lms.admissions.repository;
 import com.university.lms.admissions.domain.Application;
 import com.university.lms.admissions.domain.ApplicationStatus;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +15,14 @@ public interface ApplicationRepository extends JpaRepository<Application, UUID> 
 
     boolean existsByReference(String reference);
 
+    /**
+     * The resume lookup: reference AND the address it belongs to, never one alone.
+     *
+     * <p>Case-insensitive on both — a reference is read off a screen or an email and retyped, and
+     * insisting on exact case would fail honest applicants far more often than it would stop anyone.
+     */
+    Optional<Application> findByReferenceIgnoreCaseAndApplicantEmailIgnoreCase(String reference, String applicantEmail);
+
     boolean existsByApplicantEmailIgnoreCaseAndProgrammeIdAndAcademicTermIdAndStatusNotIn(
             String applicantEmail, UUID programmeId, UUID academicTermId, Collection<ApplicationStatus> statuses);
 
@@ -22,11 +31,11 @@ public interface ApplicationRepository extends JpaRepository<Application, UUID> 
             SELECT a FROM Application a
             WHERE (:statuses IS NULL OR a.status IN :statuses)
               AND (:assignedTo IS NULL OR a.assignedTo = :assignedTo)
-              AND (:reference IS NULL OR LOWER(a.reference) LIKE LOWER(CONCAT('%', :reference, '%')))
+              AND (:referencePattern IS NULL OR LOWER(a.reference) LIKE :referencePattern ESCAPE '!')
             """)
     Page<Application> search(
             @Param("statuses") Collection<ApplicationStatus> statuses,
             @Param("assignedTo") UUID assignedTo,
-            @Param("reference") String reference,
+            @Param("referencePattern") String referencePattern,
             Pageable pageable);
 }

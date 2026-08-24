@@ -5,6 +5,8 @@ import com.university.lms.academic.dto.ProgrammeResponse;
 import com.university.lms.academic.dto.ReplaceProgrammeCreditLoadRequest;
 import com.university.lms.academic.dto.UpdateProgrammeRequest;
 import com.university.lms.academic.service.AcademicStructureService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import com.university.lms.common.dto.PageResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -34,12 +36,14 @@ public class ProgrammeController {
         this.service = service;
     }
 
+    @AccessClass(STAFF_ONLY)
     @PostMapping
     public ResponseEntity<ProgrammeResponse> create(@Valid @RequestBody CreateProgrammeRequest request) {
         ProgrammeResponse created = service.createProgramme(request);
         return ResponseEntity.created(URI.create("/api/v1/programmes/" + created.id())).body(created);
     }
 
+    @AccessClass(PUBLIC)
     @GetMapping
     public PageResponse<ProgrammeResponse> findAll(
             @RequestParam(required = false) UUID departmentId,
@@ -47,16 +51,19 @@ public class ProgrammeController {
         return service.findProgrammes(departmentId, pageable);
     }
 
+    @AccessClass(PUBLIC)
     @GetMapping("/{id}")
     public ProgrammeResponse findById(@PathVariable UUID id) {
         return service.findProgramme(id);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PatchMapping("/{id}")
     public ProgrammeResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateProgrammeRequest request) {
         return service.updateProgramme(id, request);
     }
 
+    @AccessClass(STAFF_ONLY)
     @PutMapping("/{id}/credit-load")
     public ProgrammeResponse replaceCreditLoad(
             @PathVariable UUID id, @Valid @RequestBody ReplaceProgrammeCreditLoadRequest request) {

@@ -2,6 +2,8 @@ package com.university.lms.identity.web;
 
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.dto.CurrentUserResponse;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +33,7 @@ public class MeController {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping
     public CurrentUserResponse me() {
         return CurrentUserResponse.from(
@@ -44,6 +47,7 @@ public class MeController {
      * the identity provider; UniFlow has no password to change and must never grow an endpoint that
      * implies otherwise.
      */
+    @AccessClass(OWN_RECORD_ONLY)
     @GetMapping("/security")
     public Map<String, Object> security() {
         return Map.of(

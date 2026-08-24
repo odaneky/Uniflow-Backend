@@ -15,7 +15,10 @@ public interface AcademicRecord {
 
     record Summary(BigDecimal gpa, int creditsAttempted, int creditsEarned, long publishedGradeCount) {}
 
-    record PublishedOverall(UUID courseSectionId, String letter, BigDecimal gradePoint, Instant recordedAt) {}
+    /** @param pass whether {@code letter} is a passing result — grading owns that interpretation;
+     *      callers must never re-derive it from the raw letter. */
+    record PublishedOverall(
+            UUID courseSectionId, String letter, BigDecimal gradePoint, boolean pass, Instant recordedAt) {}
 
     Summary summaryOf(UUID studentId);
 

@@ -50,6 +50,20 @@ public class Application extends BaseEntity {
     @Column(name = "reference", nullable = false, length = 20)
     private String reference;
 
+    /**
+     * SHA-256 of the applicant's capability token — never the token. Null for rows created before
+     * tokens existed; those are reachable by staff through the admissions queue instead.
+     */
+    @Column(name = "access_token_hash", length = 64)
+    private String accessTokenHash;
+
+    /** Bounds the damage of a leaked resume link. Extended each time the applicant comes back. */
+    @Column(name = "access_token_expires_at")
+    private Instant accessTokenExpiresAt;
+
+    @Column(name = "last_accessed_at")
+    private Instant lastAccessedAt;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload", columnDefinition = "jsonb")
     private String payload;
@@ -99,6 +113,32 @@ public class Application extends BaseEntity {
         this.academicTermId = academicTermId;
         this.reference = reference;
         this.payload = blankPayloadToNull(payloadJson);
+    }
+
+    /** Replaces any previous token, so resuming invalidates every link issued earlier. */
+    public void issueAccessToken(String tokenHash, Instant expiresAt) {
+        this.accessTokenHash = tokenHash;
+        this.accessTokenExpiresAt = expiresAt;
+    }
+
+    public boolean accessTokenExpired(Instant now) {
+        return accessTokenExpiresAt == null || accessTokenExpiresAt.isBefore(now);
+    }
+
+    public void recordAccess(Instant at) {
+        this.lastAccessedAt = at;
+    }
+
+    /**
+     * Retires the token once it can serve no further purpose.
+     *
+     * <p>A decided application is not editable and its status is delivered by other means, so the
+     * capability has nothing left to grant. Keeping it alive would leave a credential in circulation
+     * for no benefit.
+     */
+    public void revokeAccessToken() {
+        this.accessTokenHash = null;
+        this.accessTokenExpiresAt = null;
     }
 
     public void updateDraft(String applicantEmail, String applicantName, String payloadJson) {

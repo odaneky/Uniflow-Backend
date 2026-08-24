@@ -2,6 +2,8 @@ package com.university.lms.enrollment.web;
 
 import com.university.lms.enrollment.dto.RosterEntryResponse;
 import com.university.lms.enrollment.service.SectionRosterService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,7 @@ public class SectionRosterController {
         this.sectionRosterService = sectionRosterService;
     }
 
+    @AccessClass(STAFF_ONLY)
     @GetMapping("/{sectionId}/roster")
     public List<RosterEntryResponse> roster(@PathVariable UUID sectionId) {
         return sectionRosterService.roster(sectionId);

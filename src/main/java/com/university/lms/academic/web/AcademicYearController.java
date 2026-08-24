@@ -4,6 +4,8 @@ import com.university.lms.academic.dto.AcademicTermResponse;
 import com.university.lms.academic.dto.AcademicYearResponse;
 import com.university.lms.academic.dto.CreateAcademicYearRequest;
 import com.university.lms.academic.service.AcademicCalendarService;
+import com.university.lms.common.security.AccessClass;
+import static com.university.lms.common.security.AccessClass.Value.*;
 import com.university.lms.common.dto.PageResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -31,6 +33,7 @@ public class AcademicYearController {
         this.service = service;
     }
 
+    @AccessClass(REGISTRY_ONLY)
     @PostMapping
     public ResponseEntity<AcademicYearResponse> create(@Valid @RequestBody CreateAcademicYearRequest request) {
         AcademicYearResponse created = service.createYear(request);
@@ -38,18 +41,21 @@ public class AcademicYearController {
                 .body(created);
     }
 
+    @AccessClass(PUBLIC)
     @GetMapping
     public PageResponse<AcademicYearResponse> findAll(
             @PageableDefault(size = 20, sort = "code", direction = Sort.Direction.DESC) Pageable pageable) {
         return service.findYears(pageable);
     }
 
+    @AccessClass(PUBLIC)
     @GetMapping("/{id}")
     public AcademicYearResponse findById(@PathVariable UUID id) {
         return service.findYear(id);
     }
 
     /** Not paged: a year holds a handful of terms, bounded by the calendar. */
+    @AccessClass(PUBLIC)
     @GetMapping("/{id}/terms")
     public List<AcademicTermResponse> terms(@PathVariable UUID id) {
         return service.findTermsOfYear(id);

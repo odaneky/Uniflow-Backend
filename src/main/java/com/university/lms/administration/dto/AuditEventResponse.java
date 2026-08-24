@@ -13,7 +13,12 @@ public record AuditEventResponse(
         String entityType,
         UUID entityId,
         Instant occurredAt,
-        String details) {
+        String details,
+        String reason,
+        String beforeValue,
+        String afterValue,
+        String sourceIp,
+        String correlationId) {
 
     public static AuditEventResponse from(AuditEvent event) {
         return new AuditEventResponse(
@@ -24,6 +29,11 @@ public record AuditEventResponse(
                 event.getEntityType(),
                 event.getEntityId(),
                 event.getOccurredAt(),
-                event.getDetails());
+                event.getDetails(),
+                event.getReason(),
+                event.getBeforeValue(),
+                event.getAfterValue(),
+                event.getSourceIp(),
+                event.getCorrelationId());
     }
 }

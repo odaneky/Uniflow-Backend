@@ -41,11 +41,13 @@ import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -124,6 +126,8 @@ class EnrollmentServiceTest {
         lenient().when(courseCatalog.unmetRequirements(any(), any(), any(), anyInt())).thenReturn(List.of());
         lenient().when(courseCatalog.meetingsOf(any())).thenReturn(List.of());
         lenient().when(curriculumCatalog.allowsEnrolment(any(), any())).thenReturn(true);
+        lenient().when(curriculumCatalog.hasPublishedResult(any(), any())).thenReturn(true);
+        lenient().when(curriculumCatalog.hasPassed(any(), any())).thenReturn(true);
         lenient()
                 .when(courseCatalog.findCourse(COURSE_ID))
                 .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
@@ -672,6 +676,48 @@ class EnrollmentServiceTest {
 
         assertThat(response.status()).isEqualTo(EnrollmentStatus.COMPLETED);
         verify(courseCatalog, never()).teaches(any(), any());
+    }
+
+    @Test
+    @DisplayName("complete() is refused when the section has no published overall result")
+    void completeIsRefusedWithoutAPublishedResult() {
+        when(currentUserProvider.require()).thenReturn(STAFF_CALLER);
+        Enrollment enrolment = new Enrollment(STUDENT_ID, SECTION_ID);
+        when(repository.findById(enrolment.getId())).thenReturn(Optional.of(enrolment));
+        when(curriculumCatalog.hasPublishedResult(STUDENT_ID, SECTION_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.complete(enrolment.getId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())
+                        .isEqualTo(EnrollmentErrorCode.ENROLLMENT_NO_PUBLISHED_RESULT));
+    }
+
+    @Test
+    @DisplayName("a completed but failed prerequisite course does not satisfy the prerequisite")
+    void failedCompletedCourseDoesNotSatisfyItsOwnPrerequisite() {
+        UUID prereqSectionId = UUID.randomUUID();
+        UUID prereqCourseId = UUID.randomUUID();
+        givenEligibleStudent();
+        givenOpenSection(30, 10);
+        givenRegistrationOpen();
+        Enrollment priorAttempt = new Enrollment(STUDENT_ID, prereqSectionId, EnrollmentStatus.COMPLETED);
+        when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any())).thenReturn(List.of(priorAttempt));
+        when(courseCatalog.findSection(prereqSectionId))
+                .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
+                        prereqSectionId, prereqCourseId, "CMP1024", "Foundations", TERM_ID, "A", 30, 10, true, null, false)));
+        when(courseCatalog.findCourse(prereqCourseId))
+                .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
+                        prereqCourseId, "CMP1024", "Foundations", 3, 1, true)));
+        when(curriculumCatalog.hasPassed(STUDENT_ID, prereqCourseId)).thenReturn(false);
+
+        ArgumentCaptor<Set<UUID>> completedCaptor = ArgumentCaptor.forClass(Set.class);
+        when(courseCatalog.unmetRequirements(eq(COURSE_ID), completedCaptor.capture(), any(), anyInt()))
+                .thenReturn(List.of());
+        when(repository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.enrol(request);
+
+        assertThat(completedCaptor.getValue()).doesNotContain(prereqCourseId);
     }
 
     @Test

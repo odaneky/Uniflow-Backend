@@ -1,0 +1,5 @@
+Method <com.university.lms.financialaid.service.SapService.completionRateForTerm(java.util.UUID, java.util.UUID)> calls method <com.university.lms.grading.domain.Grade.getLetter()> in (SapService.java:124)
+Method <com.university.lms.financialaid.service.SapService.completionRateForTerm(java.util.UUID, java.util.UUID)> calls method <com.university.lms.grading.domain.Grade.isPublished()> in (SapService.java:123)
+Method <com.university.lms.financialaid.service.SapService.completionRateForTerm(java.util.UUID, java.util.UUID)> calls method <com.university.lms.grading.domain.GradeResult.fromLetter(java.lang.String)> in (SapService.java:124)
+Method <com.university.lms.financialaid.service.SapService.completionRateForTerm(java.util.UUID, java.util.UUID)> calls method <com.university.lms.grading.domain.GradeResult.isPass()> in (SapService.java:124)
+Method <com.university.lms.financialaid.service.SapService.completionRateForTerm(java.util.UUID, java.util.UUID)> calls method <com.university.lms.grading.repository.GradeRepository.findByStudentIdAndCourseSectionIdAndAssessmentIdIsNull(java.util.UUID, java.util.UUID)> in (SapService.java:121)
