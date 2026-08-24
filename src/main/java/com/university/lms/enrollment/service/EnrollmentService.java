@@ -31,6 +31,7 @@ import com.university.lms.enrollment.repository.EnrollmentCheckoutIdempotencyRep
 import com.university.lms.enrollment.repository.EnrollmentRepository;
 import com.university.lms.financialaid.api.RegistrationHolds;
 import com.university.lms.finance.api.StudentBilling;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Duration;
 import java.time.Instant;
@@ -95,6 +96,7 @@ public class EnrollmentService {
     private final AuditTrail auditTrail;
     private final RecordAccessLog recordAccessLog;
     private final UniFlowMetrics metrics;
+    private final StaffAppointments staffAppointments;
 
     public EnrollmentService(
             EnrollmentRepository repository,
@@ -109,7 +111,8 @@ public class EnrollmentService {
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
             RecordAccessLog recordAccessLog,
-            UniFlowMetrics metrics) {
+            UniFlowMetrics metrics,
+            StaffAppointments staffAppointments) {
         this.repository = repository;
         this.checkoutIdempotencyRepository = checkoutIdempotencyRepository;
         this.objectMapper = objectMapper;
@@ -123,6 +126,7 @@ public class EnrollmentService {
         this.auditTrail = auditTrail;
         this.recordAccessLog = recordAccessLog;
         this.metrics = metrics;
+        this.staffAppointments = staffAppointments;
     }
 
     /**
@@ -432,9 +436,40 @@ public class EnrollmentService {
     private void requireOwnStudentRecordOrStaff(UUID studentId) {
         CurrentUser caller = currentUserProvider.require();
         if (caller.isStaff()) {
+            requireAuthorizedStaff(caller, studentId);
             return;
         }
         if (!ownStudentId(caller).equals(studentId)) {
+            throw new ForbiddenException(
+                    CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
+        }
+    }
+
+    /**
+     * A5: any staff role could view or end another student's enrolment record — {@link
+     * #findById}, {@link #drop}, {@link #withdraw} all route through here — regardless of
+     * department. Same fail-open safety property and student -> programme -> department resolution
+     * as {@code StudentService}/{@code FinancialAidService}. Assumes the caller is already
+     * confirmed staff; this only refines who among staff, not whether the caller is staff at all.
+     *
+     * <p>{@code search()}'s own staff carve-out is deliberately untouched — its doc comment already
+     * states "staff may filter freely" as an intentional listing capability with no single target
+     * resource when the {@code studentId} filter is absent, the same shape declined in {@code
+     * StudentService.search()}.
+     */
+    private void requireAuthorizedStaff(CurrentUser caller, UUID studentId) {
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return;
+        }
+        Optional<UUID> orgUnitId = studentDirectory
+                .findById(studentId)
+                .map(StudentDirectory.StudentSummary::programmeId)
+                .flatMap(academicStructure::departmentOfProgramme)
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        if (orgUnitId.isPresent() && !staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get())) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }

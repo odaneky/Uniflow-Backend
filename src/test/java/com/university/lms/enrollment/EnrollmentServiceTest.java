@@ -40,6 +40,7 @@ import com.university.lms.enrollment.repository.EnrollmentRepository;
 import com.university.lms.enrollment.service.EnrollmentService;
 import com.university.lms.financialaid.api.RegistrationHolds;
 import com.university.lms.finance.api.StudentBilling;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
@@ -109,6 +110,9 @@ class EnrollmentServiceTest {
     @Mock
     private UniFlowMetrics metrics;
 
+    @Mock
+    private StaffAppointments staffAppointments;
+
     @InjectMocks
     private EnrollmentService service;
 
@@ -150,6 +154,7 @@ class EnrollmentServiceTest {
                 .when(academicStructure.creditLoadFor(any()))
                 .thenReturn(new AcademicStructure.CreditLoad(12, 18, false));
         lenient().when(academicStructure.checkoutCorrectionHours()).thenReturn(48);
+        lenient().when(staffAppointments.activeAppointmentsOf(any())).thenReturn(List.of());
     }
 
     private static final CurrentUser STAFF_CALLER = new CurrentUser(
