@@ -1,5 +1,6 @@
 package com.university.lms.course.api;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -65,6 +66,16 @@ public interface CourseCatalog {
     Optional<CourseSummary> findCourse(UUID courseId);
 
     Optional<SectionSummary> findSection(UUID sectionId);
+
+    /**
+     * Batch form of {@link #findCourse}. Order is unspecified; ids with no match are simply absent
+     * from the result, not represented as an empty entry — checking a large enrolment history one
+     * course at a time is the N+1 this exists to avoid.
+     */
+    List<CourseSummary> findCourses(Collection<UUID> courseIds);
+
+    /** Batch form of {@link #findSection}, for the same reason as {@link #findCourses}. */
+    List<SectionSummary> findSections(Collection<UUID> sectionIds);
 
     /**
      * Clauses the student must satisfy to enrol in this course. Empty when there are none.

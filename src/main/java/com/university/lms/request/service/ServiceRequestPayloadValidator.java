@@ -2,6 +2,7 @@ package com.university.lms.request.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.exception.ValidationException;
 import com.university.lms.enrollment.api.EnrollmentActions;
 import com.university.lms.grading.api.GradeDirectory;
@@ -17,12 +18,17 @@ public class ServiceRequestPayloadValidator {
     private final ObjectMapper objectMapper;
     private final EnrollmentActions enrollmentActions;
     private final GradeDirectory gradeDirectory;
+    private final AcademicStructure academicStructure;
 
     public ServiceRequestPayloadValidator(
-            ObjectMapper objectMapper, EnrollmentActions enrollmentActions, GradeDirectory gradeDirectory) {
+            ObjectMapper objectMapper,
+            EnrollmentActions enrollmentActions,
+            GradeDirectory gradeDirectory,
+            AcademicStructure academicStructure) {
         this.objectMapper = objectMapper;
         this.enrollmentActions = enrollmentActions;
         this.gradeDirectory = gradeDirectory;
+        this.academicStructure = academicStructure;
     }
 
     public String validateAndNormalize(ServiceRequestType type, Object payload, UUID studentId) {
@@ -39,6 +45,7 @@ public class ServiceRequestPayloadValidator {
             case COURSE_SUBSTITUTION -> validateCourseSubstitution(node);
             case LEAVE_OF_ABSENCE -> validateLeaveOfAbsence(node);
             case READMISSION -> validateReadmission(node);
+            case PROGRAMME_TRANSFER -> validateProgrammeTransfer(node);
         };
     }
 
@@ -139,6 +146,15 @@ public class ServiceRequestPayloadValidator {
     }
 
     private String validateReadmission(JsonNode node) {
+        requireText(node, "reason");
+        return node.toString();
+    }
+
+    private String validateProgrammeTransfer(JsonNode node) {
+        UUID newProgrammeId = requireUuid(node, "newProgrammeId");
+        if (!academicStructure.programmeExists(newProgrammeId)) {
+            throw new ValidationException(RequestErrorCode.REQUEST_INVALID_PAYLOAD, "No programme exists with that id");
+        }
         requireText(node, "reason");
         return node.toString();
     }

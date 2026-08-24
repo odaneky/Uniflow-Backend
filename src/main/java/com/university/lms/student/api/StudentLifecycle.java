@@ -13,4 +13,7 @@ public interface StudentLifecycle {
     void beginLeave(UUID studentId, UUID actorUserId);
 
     void readmit(UUID studentId, UUID actorUserId);
+
+    /** Closes the student's open primary programme membership and opens a new one, reviewed. */
+    void transferProgramme(UUID studentId, UUID newProgrammeId, String reason, UUID actorUserId);
 }

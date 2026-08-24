@@ -12,9 +12,9 @@ implement every capability. This document is the honest inventory of the gap.
 
 | Area | State |
 |---|---|
-| Modular monolith structure, 14 modules | ✅ complete |
-| Domain model — 32 entities, 30 repositories | ✅ complete |
-| Flyway migrations (14) + seed reference data | ✅ complete, schema-verified |
+| Modular monolith structure, 21 modules | ✅ complete |
+| Domain model — 78 entities, 75 repositories | ✅ complete |
+| Flyway migrations (78) + seed reference data | ✅ complete, schema-verified |
 | Error contract + global handler | ✅ complete |
 | Auditing, pagination, optimistic locking | ✅ complete |
 | Student / Course / Enrollment REST slices | ✅ complete |
@@ -92,10 +92,9 @@ Incidentally fixed: `created_by` records the token's subject, which now joins to
   first-time callers against a twenty-connection pool failed with
   `CannotCreateTransactionException`. Resolving the caller in a filter, before the business
   transaction opens, would remove the nesting entirely.
-- **Lecturer scoping.** `POST /enrollments/{id}/complete` is restricted to `LECTURER`, `REGISTRAR`
-  and `SYSTEM_ADMIN` by role, but nothing checks the lecturer teaches *that* section. The same is
-  true of every future grading endpoint. Needs a `teaches(lecturerUserId, sectionId)` contract from
-  the course module.
+- **~~Lecturer scoping~~ — done.** `course.api.CourseCatalog.teaches(lecturerUserId, sectionId)`
+  exists and is checked at every relevant call site (enrolment completion, grading, service-request
+  routing, forum access, messaging), not only `POST /enrollments/{id}/complete`.
 - **Production hardening of Keycloak** — `start` rather than `start-dev`, TLS, a fixed hostname,
   real admin credentials from a secret store, `sslRequired: "all"`, and removal of the public dev
   client with its password grant.
@@ -312,10 +311,10 @@ Per the brief, and worth restating so nobody "fixes" these by accident:
 5. **P1** — curriculum model, then prerequisites and credit limits.
 6. **P2/P3** — in whatever order product priority dictates.
 
-There is no longer a single blocking item: the system authenticates, authorises by role, and scopes
-by ownership, all under test. What remains before a real deployment is hardening — Keycloak in
-production mode, lecturer-level scoping, and the loose ends in step 4 — rather than missing
-capability.
+There is no longer a single blocking item: the system authenticates, authorises by role, scopes by
+ownership, and scopes lecturers to the sections they teach, all under test. What remains before a
+real deployment is hardening — Keycloak in production mode and the loose ends in step 4 — rather
+than missing capability.
 
 ---
 

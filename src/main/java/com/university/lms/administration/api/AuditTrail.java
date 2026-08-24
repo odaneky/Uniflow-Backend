@@ -56,6 +56,8 @@ public interface AuditTrail {
         public static final String APPLICATION_ACCESS_REISSUED = "APPLICATION_ACCESS_REISSUED";
         public static final String APPLICATION_TRANSITIONED = "APPLICATION_TRANSITIONED";
         public static final String APPLICATION_MATRICULATED = "APPLICATION_MATRICULATED";
+        /** A registrar posted a manual, unreviewed charge or credit directly onto a student's ledger. */
+        public static final String LEDGER_ENTRY_POSTED = "LEDGER_ENTRY_POSTED";
 
         private Action() {}
     }
@@ -70,6 +72,7 @@ public interface AuditTrail {
         public static final String CONVERSATION = "Conversation";
         public static final String SERVICE_REQUEST = "ServiceRequest";
         public static final String APPLICATION = "Application";
+        public static final String ACCOUNT_ENTRY = "AccountEntry";
 
         private EntityType() {}
     }

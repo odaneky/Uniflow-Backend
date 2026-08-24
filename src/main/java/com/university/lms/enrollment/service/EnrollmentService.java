@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -604,27 +605,41 @@ public class EnrollmentService {
     private void requireCourseRequirements(UUID studentId, UUID courseId) {
         List<Enrollment> history = repository.findByStudentIdAndStatusIn(
                 studentId, List.of(EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED));
+
+        // One query for every section in the history and one for every course, rather than two
+        // per row — the naive version issues two lookups per historical enrolment, on exactly the
+        // path that spikes hardest during a registration rush.
+        Set<UUID> sectionIds =
+                history.stream().map(Enrollment::getCourseSectionId).collect(Collectors.toSet());
+        Map<UUID, CourseCatalog.SectionSummary> sectionsById = courseCatalog.findSections(sectionIds).stream()
+                .collect(Collectors.toMap(CourseCatalog.SectionSummary::id, s -> s));
+        Set<UUID> courseIds = sectionsById.values().stream()
+                .map(CourseCatalog.SectionSummary::courseId)
+                .collect(Collectors.toSet());
+        Map<UUID, CourseCatalog.CourseSummary> coursesById = courseCatalog.findCourses(courseIds).stream()
+                .collect(Collectors.toMap(CourseCatalog.CourseSummary::id, c -> c));
+
         Set<UUID> completed = new HashSet<>();
         Set<UUID> inProgress = new HashSet<>();
         int highestCompletedLevel = 0;
         for (Enrollment row : history) {
-            var section = courseCatalog.findSection(row.getCourseSectionId());
-            if (section.isEmpty()) {
+            CourseCatalog.SectionSummary section = sectionsById.get(row.getCourseSectionId());
+            if (section == null) {
                 continue;
             }
-            var course = courseCatalog.findCourse(section.get().courseId());
-            if (course.isEmpty()) {
+            CourseCatalog.CourseSummary course = coursesById.get(section.courseId());
+            if (course == null) {
                 continue;
             }
             if (row.getStatus() == EnrollmentStatus.COMPLETED) {
                 // A COMPLETED enrolment with a failing published grade satisfies no prerequisite —
                 // "completed" records that the course was sat, not that it was passed.
-                if (curriculumCatalog.hasPassed(studentId, course.get().id())) {
-                    completed.add(course.get().id());
-                    highestCompletedLevel = Math.max(highestCompletedLevel, course.get().level());
+                if (curriculumCatalog.hasPassed(studentId, course.id())) {
+                    completed.add(course.id());
+                    highestCompletedLevel = Math.max(highestCompletedLevel, course.level());
                 }
             } else if (row.getStatus() == EnrollmentStatus.ENROLLED) {
-                inProgress.add(course.get().id());
+                inProgress.add(course.id());
             }
         }
         List<String> unmet =

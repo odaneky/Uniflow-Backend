@@ -1,6 +1,7 @@
 package com.university.lms.course.repository;
 
 import com.university.lms.course.domain.CourseSection;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +24,10 @@ public interface CourseSectionRepository extends JpaRepository<CourseSection, UU
     /** Fetch-joins the course so a section read does not trigger a second query for its parent. */
     @Query("select cs from CourseSection cs join fetch cs.course where cs.id = :id")
     Optional<CourseSection> findByIdWithCourse(@Param("id") UUID id);
+
+    /** Batch form of {@link #findByIdWithCourse} — one query for a whole set of ids, not one each. */
+    @Query("select cs from CourseSection cs join fetch cs.course where cs.id in :ids")
+    List<CourseSection> findByIdInWithCourse(@Param("ids") Collection<UUID> ids);
 
     @Query("select cs from CourseSection cs join fetch cs.course where cs.lecturerUserId = :lecturerUserId")
     List<CourseSection> findByLecturerUserIdWithCourse(@Param("lecturerUserId") UUID lecturerUserId);

@@ -1,5 +1,6 @@
 package com.university.lms.student.service;
 
+import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.student.api.StudentLifecycle;
 import com.university.lms.student.domain.Student;
@@ -7,6 +8,7 @@ import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentStatus;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.repository.StudentRepository;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -18,10 +20,18 @@ public class DefaultStudentLifecycle implements StudentLifecycle {
 
     private final StudentRepository studentRepository;
     private final StudentService studentService;
+    private final StudentProgrammeEnrolmentService programmeEnrolmentService;
+    private final AcademicStructure academicStructure;
 
-    public DefaultStudentLifecycle(StudentRepository studentRepository, @Lazy StudentService studentService) {
+    public DefaultStudentLifecycle(
+            StudentRepository studentRepository,
+            @Lazy StudentService studentService,
+            StudentProgrammeEnrolmentService programmeEnrolmentService,
+            AcademicStructure academicStructure) {
         this.studentRepository = studentRepository;
         this.studentService = studentService;
+        this.programmeEnrolmentService = programmeEnrolmentService;
+        this.academicStructure = academicStructure;
     }
 
     @Override
@@ -60,5 +70,19 @@ public class DefaultStudentLifecycle implements StudentLifecycle {
         if (student.getStatus() == StudentStatus.ON_LEAVE || student.getStatus() == StudentStatus.WITHDRAWN) {
             student.changeStatus(StudentStatus.ACTIVE);
         }
+    }
+
+    @Override
+    public void transferProgramme(UUID studentId, UUID newProgrammeId, String reason, UUID actorUserId) {
+        Student student = studentRepository
+                .findById(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.STUDENT_NOT_FOUND, "No student exists with id " + studentId));
+        if (!academicStructure.programmeExists(newProgrammeId)) {
+            throw new ResourceNotFoundException(
+                    StudentErrorCode.STUDENT_PROGRAMME_NOT_FOUND, "No programme exists with id " + newProgrammeId);
+        }
+        student.transferToProgramme(newProgrammeId);
+        programmeEnrolmentService.transfer(studentId, newProgrammeId, LocalDate.now(), reason, actorUserId);
     }
 }

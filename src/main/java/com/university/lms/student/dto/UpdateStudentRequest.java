@@ -12,7 +12,7 @@ import java.util.UUID;
  *
  * <p>{@code clearAdvisor} is the explicit way to remove an assigned advisor. {@code advisorUserId}
  * assigns (or reassigns) when non-null. Office hours are posted by the assigned advisor via
- * {@code PATCH /me/advisor/office-hours}; {@code advisorOfficeHours} is ignored here.
+ * {@code PATCH /me/advisor/office-hours}, never here.
  * {@code contact} applies demographic/contact corrections directly when present.
  * {@code residencyClassification} changes which tuition tier this student is charged going
  * forward — it does not rewrite charges already posted.
@@ -27,7 +27,6 @@ public record UpdateStudentRequest(
         LocalDate expectedGraduationDate,
         UUID advisorUserId,
         Boolean clearAdvisor,
-        String advisorOfficeHours,
         UpdateOwnProfileRequest contact,
         ResidencyClassification residencyClassification,
         @Size(max = 1000, message = "must be at most 1000 characters") String reason) {}

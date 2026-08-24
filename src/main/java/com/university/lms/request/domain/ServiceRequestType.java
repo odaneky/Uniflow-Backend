@@ -12,7 +12,8 @@ public enum ServiceRequestType {
     LATE_ADD,
     COURSE_SUBSTITUTION,
     LEAVE_OF_ABSENCE,
-    READMISSION;
+    READMISSION,
+    PROGRAMME_TRANSFER;
 
     public String referencePrefix() {
         return switch (this) {
@@ -27,6 +28,7 @@ public enum ServiceRequestType {
             case COURSE_SUBSTITUTION -> "CS";
             case LEAVE_OF_ABSENCE -> "LO";
             case READMISSION -> "RA";
+            case PROGRAMME_TRANSFER -> "PT";
         };
     }
 
@@ -43,6 +45,7 @@ public enum ServiceRequestType {
             case COURSE_SUBSTITUTION -> "Course Substitution";
             case LEAVE_OF_ABSENCE -> "Leave of Absence";
             case READMISSION -> "Readmission";
+            case PROGRAMME_TRANSFER -> "Programme Transfer";
         };
     }
 
@@ -56,6 +59,7 @@ public enum ServiceRequestType {
             case LATE_ADD -> "Registrar Review";
             case COURSE_SUBSTITUTION -> "Degree Audit";
             case LEAVE_OF_ABSENCE -> "Registrar Review";
+            case PROGRAMME_TRANSFER -> "Registrar Review";
         };
     }
 }

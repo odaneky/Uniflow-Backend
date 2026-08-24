@@ -1,5 +1,6 @@
 package com.university.lms.finance.service;
 
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.CommonErrorCode;
@@ -42,6 +43,7 @@ public class FinanceService {
     private final PaymentPlanService paymentPlanService;
     private final FinanceProperties financeProperties;
     private final RecordAccessLog recordAccessLog;
+    private final AuditTrail auditTrail;
 
     public FinanceService(
             StudentAccountRepository accountRepository,
@@ -50,7 +52,8 @@ public class FinanceService {
             CurrentUserProvider currentUserProvider,
             PaymentPlanService paymentPlanService,
             FinanceProperties financeProperties,
-            RecordAccessLog recordAccessLog) {
+            RecordAccessLog recordAccessLog,
+            AuditTrail auditTrail) {
         this.accountRepository = accountRepository;
         this.entryRepository = entryRepository;
         this.studentDirectory = studentDirectory;
@@ -58,6 +61,7 @@ public class FinanceService {
         this.paymentPlanService = paymentPlanService;
         this.financeProperties = financeProperties;
         this.recordAccessLog = recordAccessLog;
+        this.auditTrail = auditTrail;
     }
 
     public AccountResponse own() {
@@ -93,7 +97,7 @@ public class FinanceService {
 
     @Transactional
     public AccountResponse addEntry(UUID studentId, CreateAccountEntryRequest request) {
-        requireRegistry();
+        CurrentUser caller = requireRegistry();
         if (!studentDirectory.exists(studentId)) {
             throw new ResourceNotFoundException(
                     FinanceErrorCode.ACCOUNT_STUDENT_NOT_FOUND, "No student exists with id " + studentId);
@@ -106,13 +110,36 @@ public class FinanceService {
             account.dueOn(request.dueOn());
         }
         BigDecimal signed = signedAmount(request.entryType(), request.amount());
-        entryRepository.save(new AccountEntry(
+        AccountEntry entry = entryRepository.save(new AccountEntry(
                 account,
                 request.entryType(),
                 signed,
                 request.description(),
                 request.occurredAt() == null ? Instant.now() : request.occurredAt()));
+        recordLedgerEntryAudit(caller, studentId, entry, signed);
         return toResponse(account);
+    }
+
+    /**
+     * A manual ledger entry posts an arbitrary signed amount with no second-person approval — the
+     * full-form record with a reason and an after-snapshot is exactly what
+     * {@link AuditTrail#record(UUID, String, String, String, UUID, String, String, String, String)}
+     * was written for.
+     */
+    private void recordLedgerEntryAudit(CurrentUser caller, UUID studentId, AccountEntry entry, BigDecimal signed) {
+        String afterValue = "{\"studentId\":\"" + studentId + "\",\"entryType\":\"" + entry.getEntryType()
+                + "\",\"amount\":\"" + signed + "\",\"description\":\"" + entry.getDescription().replace("\"", "'")
+                + "\"}";
+        auditTrail.record(
+                caller.userId(),
+                caller.fullName(),
+                AuditTrail.Action.LEDGER_ENTRY_POSTED,
+                AuditTrail.EntityType.ACCOUNT_ENTRY,
+                entry.getId(),
+                "Manual " + entry.getEntryType() + " of " + signed.abs() + " on student " + studentId,
+                entry.getDescription(),
+                null,
+                afterValue);
     }
 
     /**

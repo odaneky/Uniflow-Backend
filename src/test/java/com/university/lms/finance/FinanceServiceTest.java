@@ -3,10 +3,13 @@ package com.university.lms.finance.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.finance.config.FinanceProperties;
@@ -77,6 +80,9 @@ class FinanceServiceTest {
     @Mock
     private RecordAccessLog recordAccessLog;
 
+    @Mock
+    private AuditTrail auditTrail;
+
     private FinanceService service;
 
     @BeforeEach
@@ -90,7 +96,8 @@ class FinanceServiceTest {
                 currentUserProvider,
                 paymentPlanService,
                 new FinanceProperties(true),
-                recordAccessLog);
+                recordAccessLog,
+                auditTrail);
     }
 
     @Test
@@ -142,12 +149,40 @@ class FinanceServiceTest {
                 currentUserProvider,
                 paymentPlanService,
                 new FinanceProperties(false),
-                recordAccessLog);
+                recordAccessLog,
+                auditTrail);
 
         assertThatThrownBy(() -> disabled.payOwn(new CreatePaymentRequest(new BigDecimal("1.00"))))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())
                         .isEqualTo(FinanceErrorCode.SELF_SERVICE_PAYMENT_DISABLED));
+    }
+
+    @Test
+    @DisplayName("E3: a manual ledger entry is recorded on the audit trail")
+    void manualLedgerEntryIsAudited() {
+        when(currentUserProvider.require()).thenReturn(REGISTRAR);
+        when(studentDirectory.exists(STUDENT_ID)).thenReturn(true);
+        StudentAccount account = new StudentAccount(STUDENT_ID, "USD");
+        when(accountRepository.findByStudentId(STUDENT_ID)).thenReturn(Optional.of(account));
+        when(entryRepository.save(any(AccountEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.addEntry(
+                STUDENT_ID,
+                new com.university.lms.finance.dto.CreateAccountEntryRequest(
+                        AccountEntryType.CREDIT, new BigDecimal("50.00"), "Manual fee waiver", null, null, null));
+
+        verify(auditTrail)
+                .record(
+                        eq(REGISTRAR_USER_ID),
+                        eq("Rita Registrar"),
+                        eq(AuditTrail.Action.LEDGER_ENTRY_POSTED),
+                        eq(AuditTrail.EntityType.ACCOUNT_ENTRY),
+                        any(UUID.class),
+                        any(),
+                        eq("Manual fee waiver"),
+                        isNull(),
+                        any());
     }
 
     @Test

@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -708,12 +709,12 @@ class EnrollmentServiceTest {
         givenRegistrationOpen();
         Enrollment priorAttempt = new Enrollment(STUDENT_ID, prereqSectionId, EnrollmentStatus.COMPLETED);
         when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any())).thenReturn(List.of(priorAttempt));
-        when(courseCatalog.findSection(prereqSectionId))
-                .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
-                        prereqSectionId, prereqCourseId, "CMP1024", "Foundations", TERM_ID, "A", 30, 10, true, null, false)));
-        when(courseCatalog.findCourse(prereqCourseId))
-                .thenReturn(Optional.of(new CourseCatalog.CourseSummary(
-                        prereqCourseId, "CMP1024", "Foundations", 3, 1, true)));
+        CourseCatalog.SectionSummary prereqSection = new CourseCatalog.SectionSummary(
+                prereqSectionId, prereqCourseId, "CMP1024", "Foundations", TERM_ID, "A", 30, 10, true, null, false);
+        CourseCatalog.CourseSummary prereqCourse =
+                new CourseCatalog.CourseSummary(prereqCourseId, "CMP1024", "Foundations", 3, 1, true);
+        when(courseCatalog.findSections(any())).thenReturn(List.of(prereqSection));
+        when(courseCatalog.findCourses(any())).thenReturn(List.of(prereqCourse));
         when(curriculumCatalog.hasPassed(STUDENT_ID, prereqCourseId)).thenReturn(false);
 
         ArgumentCaptor<Set<UUID>> completedCaptor = ArgumentCaptor.forClass(Set.class);
@@ -724,6 +725,50 @@ class EnrollmentServiceTest {
         service.enrol(request);
 
         assertThat(completedCaptor.getValue()).doesNotContain(prereqCourseId);
+    }
+
+    @Test
+    @DisplayName("F6: checking prerequisites batches the catalog lookups instead of one per historical enrolment")
+    void prerequisiteCheckBatchesCatalogLookups() {
+        UUID sectionA = UUID.randomUUID();
+        UUID sectionB = UUID.randomUUID();
+        UUID sectionC = UUID.randomUUID();
+        UUID courseA = UUID.randomUUID();
+        UUID courseB = UUID.randomUUID();
+        UUID courseC = UUID.randomUUID();
+        givenEligibleStudent();
+        givenOpenSection(30, 10);
+        givenRegistrationOpen();
+        when(repository.findByStudentIdAndStatusIn(eq(STUDENT_ID), any()))
+                .thenReturn(List.of(
+                        new Enrollment(STUDENT_ID, sectionA, EnrollmentStatus.COMPLETED),
+                        new Enrollment(STUDENT_ID, sectionB, EnrollmentStatus.COMPLETED),
+                        new Enrollment(STUDENT_ID, sectionC, EnrollmentStatus.ENROLLED)));
+        when(courseCatalog.findSections(any()))
+                .thenReturn(List.of(
+                        new CourseCatalog.SectionSummary(
+                                sectionA, courseA, "CMP1024", "A", TERM_ID, "A", 30, 10, true, null, false),
+                        new CourseCatalog.SectionSummary(
+                                sectionB, courseB, "CMP1025", "B", TERM_ID, "A", 30, 10, true, null, false),
+                        new CourseCatalog.SectionSummary(
+                                sectionC, courseC, "CMP1026", "C", TERM_ID, "A", 30, 10, true, null, false)));
+        when(courseCatalog.findCourses(any()))
+                .thenReturn(List.of(
+                        new CourseCatalog.CourseSummary(courseA, "CMP1024", "A", 3, 1, true),
+                        new CourseCatalog.CourseSummary(courseB, "CMP1025", "B", 3, 1, true),
+                        new CourseCatalog.CourseSummary(courseC, "CMP1026", "C", 3, 1, true)));
+        when(curriculumCatalog.hasPassed(eq(STUDENT_ID), any())).thenReturn(true);
+        when(courseCatalog.unmetRequirements(eq(COURSE_ID), any(), any(), anyInt())).thenReturn(List.of());
+        when(repository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.enrol(request);
+
+        // Exactly one batch call for the whole prerequisite check, not one per historical row —
+        // findSection/findCourse are still legitimately called elsewhere in enrol() for unrelated
+        // per-section lookups (credit load, attempt numbering), so this only asserts the specific
+        // fix: the history loop batches instead of looping single lookups.
+        verify(courseCatalog, times(1)).findSections(any());
+        verify(courseCatalog, times(1)).findCourses(any());
     }
 
     @Test

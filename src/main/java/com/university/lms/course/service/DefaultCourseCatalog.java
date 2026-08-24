@@ -1,6 +1,7 @@
 package com.university.lms.course.service;
 
 import com.university.lms.course.api.CourseCatalog;
+import com.university.lms.course.domain.Course;
 import com.university.lms.course.domain.CourseRequirementGroup;
 import com.university.lms.course.domain.CourseSection;
 import com.university.lms.course.domain.CourseSectionStatus;
@@ -15,6 +16,7 @@ import com.university.lms.course.repository.SectionComponentRepository;
 import com.university.lms.course.repository.SectionMeetingRepository;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -65,15 +67,7 @@ public class DefaultCourseCatalog implements CourseCatalog {
         if (courseId == null) {
             return Optional.empty();
         }
-        return courseRepository
-                .findById(courseId)
-                .map(course -> new CourseSummary(
-                        course.getId(),
-                        course.getCourseCode(),
-                        course.getTitle(),
-                        course.getCredits(),
-                        course.getLevel(),
-                        course.isOfferable()));
+        return courseRepository.findById(courseId).map(DefaultCourseCatalog::toCourseSummary);
     }
 
     @Override
@@ -82,6 +76,42 @@ public class DefaultCourseCatalog implements CourseCatalog {
             return Optional.empty();
         }
         return courseSectionRepository.findByIdWithCourse(sectionId).map(this::toSummary);
+    }
+
+    /**
+     * Checking prerequisites against a student's whole enrolment history used to call {@link
+     * #findSection} and {@link #findCourse} once per historical row — two queries per enrolment,
+     * on the path that spikes hardest during a registration rush. One query for every section, one
+     * for every course, is what these two batch methods exist to make possible instead.
+     */
+    @Override
+    public List<CourseSummary> findCourses(Collection<UUID> courseIds) {
+        if (courseIds == null || courseIds.isEmpty()) {
+            return List.of();
+        }
+        return courseRepository.findAllById(courseIds).stream()
+                .map(DefaultCourseCatalog::toCourseSummary)
+                .toList();
+    }
+
+    @Override
+    public List<SectionSummary> findSections(Collection<UUID> sectionIds) {
+        if (sectionIds == null || sectionIds.isEmpty()) {
+            return List.of();
+        }
+        return courseSectionRepository.findByIdInWithCourse(sectionIds).stream()
+                .map(this::toSummary)
+                .toList();
+    }
+
+    private static CourseSummary toCourseSummary(Course course) {
+        return new CourseSummary(
+                course.getId(),
+                course.getCourseCode(),
+                course.getTitle(),
+                course.getCredits(),
+                course.getLevel(),
+                course.isOfferable());
     }
 
     @Override
