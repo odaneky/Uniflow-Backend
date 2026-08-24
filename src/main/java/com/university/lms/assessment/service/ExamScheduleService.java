@@ -1,8 +1,13 @@
 package com.university.lms.assessment.service;
 
+import com.university.lms.assessment.domain.AssessmentErrorCode;
+import com.university.lms.assessment.domain.ExamMisconductRecord;
 import com.university.lms.assessment.domain.ExamSitting;
+import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
 import com.university.lms.assessment.dto.ExamSittingResponse;
+import com.university.lms.assessment.dto.ReportExamMisconductRequest;
 import com.university.lms.assessment.dto.ScheduleExamRequest;
+import com.university.lms.assessment.repository.ExamMisconductRecordRepository;
 import com.university.lms.assessment.repository.ExamSittingRepository;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.ResourceNotFoundException;
@@ -10,6 +15,7 @@ import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.identity.api.UserDirectory;
 import com.university.lms.notification.api.Notifier;
 import com.university.lms.notification.domain.NotificationType;
 import com.university.lms.student.api.StudentDirectory;
@@ -43,25 +49,31 @@ public class ExamScheduleService {
     private static final String ENTITY = "ExamSitting";
 
     private final ExamSittingRepository examSittingRepository;
+    private final ExamMisconductRecordRepository examMisconductRecordRepository;
     private final CourseCatalog courseCatalog;
     private final EnrollmentDirectory enrollmentDirectory;
     private final StudentDirectory studentDirectory;
+    private final UserDirectory userDirectory;
     private final Notifier notifier;
     private final AuditTrail auditTrail;
     private final CurrentUserProvider currentUserProvider;
 
     public ExamScheduleService(
             ExamSittingRepository examSittingRepository,
+            ExamMisconductRecordRepository examMisconductRecordRepository,
             CourseCatalog courseCatalog,
             EnrollmentDirectory enrollmentDirectory,
             StudentDirectory studentDirectory,
+            UserDirectory userDirectory,
             Notifier notifier,
             AuditTrail auditTrail,
             CurrentUserProvider currentUserProvider) {
         this.examSittingRepository = examSittingRepository;
+        this.examMisconductRecordRepository = examMisconductRecordRepository;
         this.courseCatalog = courseCatalog;
         this.enrollmentDirectory = enrollmentDirectory;
         this.studentDirectory = studentDirectory;
+        this.userDirectory = userDirectory;
         this.notifier = notifier;
         this.auditTrail = auditTrail;
         this.currentUserProvider = currentUserProvider;
@@ -211,6 +223,53 @@ public class ExamScheduleService {
         sitting.publish();
         log.info("Published exam sitting {}", sittingId);
         return toResponse(sitting, courseCatalog.findSection(sitting.getCourseSectionId()).orElse(null));
+    }
+
+    /**
+     * Files a conduct report against a candidate in this sitting.
+     *
+     * <p>Append-only, deliberately: this is the examinations office's record of what was observed,
+     * not a case management workflow. Disciplinary follow-up (G7) reads it rather than owns it.
+     */
+    @Transactional
+    public ExamMisconductRecordResponse reportMisconduct(UUID sittingId, ReportExamMisconductRequest request) {
+        require(sittingId);
+        if (!studentDirectory.exists(request.studentId())) {
+            throw new ResourceNotFoundException(
+                    AssessmentErrorCode.MISCONDUCT_STUDENT_NOT_FOUND,
+                    "No student exists with id " + request.studentId());
+        }
+
+        UUID reporter = actorId();
+        ExamMisconductRecord saved = examMisconductRecordRepository.save(
+                new ExamMisconductRecord(sittingId, request.studentId(), request.description().trim(), reporter));
+
+        auditTrail.record(
+                reporter,
+                AuditTrail.Action.EXAM_MISCONDUCT_REPORTED,
+                ENTITY,
+                sittingId,
+                "Reported candidate " + request.studentId());
+        log.info("Recorded misconduct report for student {} in sitting {}", request.studentId(), sittingId);
+        return ExamMisconductRecordResponse.from(saved, reporterName(reporter));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ExamMisconductRecordResponse> misconductFor(UUID sittingId) {
+        require(sittingId);
+        List<ExamMisconductRecordResponse> responses = new ArrayList<>();
+        for (ExamMisconductRecord record :
+                examMisconductRecordRepository.findByExamSittingIdOrderByCreatedAtDesc(sittingId)) {
+            responses.add(ExamMisconductRecordResponse.from(record, reporterName(record.getReportedBy())));
+        }
+        return responses;
+    }
+
+    private String reporterName(UUID userId) {
+        if (userId == null) {
+            return null;
+        }
+        return userDirectory.findById(userId).map(UserDirectory.UserSummary::fullName).orElse(null);
     }
 
     @Transactional(readOnly = true)

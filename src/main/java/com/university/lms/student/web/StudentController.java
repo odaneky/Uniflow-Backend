@@ -3,7 +3,9 @@ package com.university.lms.student.web;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.student.domain.StudentStatus;
 import com.university.lms.student.dto.AddProgrammeMembershipRequest;
+import com.university.lms.student.dto.AdvisingNoteResponse;
 import com.university.lms.student.dto.AdvisorCandidateResponse;
+import com.university.lms.student.dto.CreateAdvisingNoteRequest;
 import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.EndProgrammeMembershipRequest;
 import com.university.lms.student.dto.ProgrammeMembershipResponse;
@@ -148,5 +150,23 @@ public class StudentController {
             @PathVariable UUID membershipId,
             @Valid @RequestBody EndProgrammeMembershipRequest request) {
         studentService.endProgrammeMembership(id, membershipId, request);
+    }
+
+    /**
+     * Visible only to this student's current advisor and registry staff — enforced in the service,
+     * since {@code STAFF_ONLY} alone would let any staff role read what an advisor wrote.
+     */
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/{id}/advising-notes")
+    public List<AdvisingNoteResponse> advisingNotes(@PathVariable UUID id) {
+        return studentService.listAdvisingNotes(id);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @PostMapping("/{id}/advising-notes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AdvisingNoteResponse addAdvisingNote(
+            @PathVariable UUID id, @Valid @RequestBody CreateAdvisingNoteRequest request) {
+        return studentService.addAdvisingNote(id, request);
     }
 }

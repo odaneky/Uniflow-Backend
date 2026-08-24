@@ -70,6 +70,9 @@ class StudentServiceTest {
     @Mock
     private AdvisorOfficeHoursRepository advisorOfficeHoursRepository;
 
+    @Mock
+    private com.university.lms.student.repository.AdvisingNoteRepository advisingNoteRepository;
+
     @InjectMocks
     private StudentService service;
 
@@ -269,6 +272,58 @@ class StudentServiceTest {
                 new UpdateStudentRequest(null, null, null, advisorId, null, null, null, null));
 
         assertThat(response.advisorOfficeHours()).isEqualTo("Tue 14:00–16:00 · Room 210");
+    }
+
+    @Test
+    @DisplayName("G8: a student's assigned advisor can add an advising note")
+    void assignedAdvisorCanAddANote() {
+        Student student = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        UUID advisorId = UUID.randomUUID();
+        student.assignAdvisor(advisorId);
+        when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
+        CurrentUser advisor = new CurrentUser(
+                advisorId, "subject-advisor", "advisor", "advisor@university.test", "Ada Advisor",
+                Optional.empty(), Set.of(SecurityRoles.ACADEMIC_ADVISOR), Set.of());
+        when(currentUserProvider.require()).thenReturn(advisor);
+        when(advisingNoteRepository.save(any(com.university.lms.student.domain.AdvisingNote.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.addAdvisingNote(
+                student.getId(), new com.university.lms.student.dto.CreateAdvisingNoteRequest("Discussed course load"));
+
+        assertThat(response.note()).isEqualTo("Discussed course load");
+        assertThat(response.advisorUserId()).isEqualTo(advisorId);
+    }
+
+    @Test
+    @DisplayName("G8: an advisor who is not assigned to this student cannot add or read notes")
+    void unassignedAdvisorCannotAccessNotes() {
+        Student student = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        student.assignAdvisor(UUID.randomUUID());
+        when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
+        CurrentUser otherAdvisor = new CurrentUser(
+                UUID.randomUUID(), "subject-other", "other", "other@university.test", "Otto Otheradvisor",
+                Optional.empty(), Set.of(SecurityRoles.ACADEMIC_ADVISOR), Set.of());
+        when(currentUserProvider.require()).thenReturn(otherAdvisor);
+
+        assertThatThrownBy(() -> service.addAdvisingNote(
+                        student.getId(), new com.university.lms.student.dto.CreateAdvisingNoteRequest("Note")))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("G8: registry staff can read advising notes regardless of assignment")
+    void registryCanReadNotes() {
+        Student student = new Student(USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
+        student.assignAdvisor(UUID.randomUUID());
+        when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));
+        CurrentUser registrar = new CurrentUser(
+                UUID.randomUUID(), "subject-registrar", "registrar", "registrar@university.test", "Rita Registrar",
+                Optional.empty(), Set.of(SecurityRoles.REGISTRAR), Set.of());
+        when(currentUserProvider.require()).thenReturn(registrar);
+        when(advisingNoteRepository.findByStudentIdOrderByCreatedAtDesc(student.getId())).thenReturn(List.of());
+
+        assertThat(service.listAdvisingNotes(student.getId())).isEmpty();
     }
 
     private void givenValidReferences() {

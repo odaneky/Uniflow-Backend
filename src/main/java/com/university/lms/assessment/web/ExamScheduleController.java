@@ -2,7 +2,9 @@ package com.university.lms.assessment.web;
 
 import com.university.lms.assessment.dto.CancelExamRequest;
 import org.springframework.web.bind.annotation.PutMapping;
+import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
 import com.university.lms.assessment.dto.ExamSittingResponse;
+import com.university.lms.assessment.dto.ReportExamMisconductRequest;
 import com.university.lms.assessment.dto.ScheduleExamRequest;
 import com.university.lms.assessment.service.ExamScheduleService;
 import com.university.lms.common.security.AccessClass;
@@ -11,6 +13,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -100,5 +104,20 @@ public class ExamScheduleController {
     @PostMapping("/exams/{sittingId}/publish")
     public ExamSittingResponse publish(@PathVariable UUID sittingId) {
         return examScheduleService.publish(sittingId);
+    }
+
+    /** Files a conduct report against a candidate sitting this exam. */
+    @AccessClass(STAFF_ONLY)
+    @PostMapping("/exams/{sittingId}/misconduct")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ExamMisconductRecordResponse reportMisconduct(
+            @PathVariable UUID sittingId, @Valid @RequestBody ReportExamMisconductRequest request) {
+        return examScheduleService.reportMisconduct(sittingId, request);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/exams/{sittingId}/misconduct")
+    public List<ExamMisconductRecordResponse> misconduct(@PathVariable UUID sittingId) {
+        return examScheduleService.misconductFor(sittingId);
     }
 }

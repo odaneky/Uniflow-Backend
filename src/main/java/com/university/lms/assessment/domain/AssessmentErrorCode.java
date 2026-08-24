@@ -19,7 +19,8 @@ public enum AssessmentErrorCode implements ErrorCode {
     QUIZ_INVALID_QUESTION,
     QUIZ_ATTEMPT_NOT_IN_PROGRESS,
     QUIZ_ANSWER_INVALID,
-    QUIZ_GRADE_NOT_MANUAL;
+    QUIZ_GRADE_NOT_MANUAL,
+    MISCONDUCT_STUDENT_NOT_FOUND;
 
     @Override
     public String code() {

@@ -18,8 +18,10 @@ import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentStatus;
 import com.university.lms.student.dto.AddProgrammeMembershipRequest;
 import com.university.lms.student.dto.AdviseeSummaryResponse;
+import com.university.lms.student.dto.AdvisingNoteResponse;
 import com.university.lms.student.dto.AdvisorCandidateResponse;
 import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
+import com.university.lms.student.dto.CreateAdvisingNoteRequest;
 import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.EndProgrammeMembershipRequest;
 import com.university.lms.student.dto.ProgrammeMembershipResponse;
@@ -27,7 +29,9 @@ import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.StudentSummaryResponse;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.dto.UpdateStudentRequest;
+import com.university.lms.student.domain.AdvisingNote;
 import com.university.lms.student.domain.AdvisorOfficeHours;
+import com.university.lms.student.repository.AdvisingNoteRepository;
 import com.university.lms.student.repository.AdvisorOfficeHoursRepository;
 import com.university.lms.student.repository.StudentRepository;
 import java.time.LocalDate;
@@ -64,6 +68,7 @@ public class StudentService {
     private final StudentProgrammeEnrolmentService programmeEnrolmentService;
     private final AuditTrail auditTrail;
     private final AdvisorOfficeHoursRepository advisorOfficeHoursRepository;
+    private final AdvisingNoteRepository advisingNoteRepository;
 
     public StudentService(
             StudentRepository studentRepository,
@@ -73,7 +78,8 @@ public class StudentService {
             RecordAccessLog recordAccessLog,
             StudentProgrammeEnrolmentService programmeEnrolmentService,
             AuditTrail auditTrail,
-            AdvisorOfficeHoursRepository advisorOfficeHoursRepository) {
+            AdvisorOfficeHoursRepository advisorOfficeHoursRepository,
+            AdvisingNoteRepository advisingNoteRepository) {
         this.studentRepository = studentRepository;
         this.userDirectory = userDirectory;
         this.academicStructure = academicStructure;
@@ -82,6 +88,7 @@ public class StudentService {
         this.programmeEnrolmentService = programmeEnrolmentService;
         this.auditTrail = auditTrail;
         this.advisorOfficeHoursRepository = advisorOfficeHoursRepository;
+        this.advisingNoteRepository = advisingNoteRepository;
     }
 
     @Transactional
@@ -332,6 +339,44 @@ public class StudentService {
                     CommonErrorCode.ACCESS_DENIED, "Only academic advisors can manage office hours");
         }
         return caller;
+    }
+
+    /**
+     * G8 (partial): advising had no depth beyond assignment and office hours — no way to record
+     * what was discussed with an advisee, or for the next advisor to read it if the assignment
+     * changes. Visible only to the student's current advisor and registry staff, not broadcast to
+     * every staff role, since a note may say something the student does not know staff can see.
+     */
+    @Transactional
+    public AdvisingNoteResponse addAdvisingNote(UUID studentId, CreateAdvisingNoteRequest request) {
+        Student student = require(studentId);
+        CurrentUser caller = requireAssignedAdvisorOrRegistry(student);
+        AdvisingNote saved = advisingNoteRepository.save(new AdvisingNote(studentId, caller.userId(), request.note()));
+        return AdvisingNoteResponse.from(saved, caller.fullName());
+    }
+
+    public List<AdvisingNoteResponse> listAdvisingNotes(UUID studentId) {
+        Student student = require(studentId);
+        requireAssignedAdvisorOrRegistry(student);
+        return advisingNoteRepository.findByStudentIdOrderByCreatedAtDesc(studentId).stream()
+                .map(note -> AdvisingNoteResponse.from(
+                        note,
+                        userDirectory.findById(note.getAdvisorUserId())
+                                .map(UserDirectory.UserSummary::fullName)
+                                .orElse(null)))
+                .toList();
+    }
+
+    private CurrentUser requireAssignedAdvisorOrRegistry(Student student) {
+        CurrentUser caller = currentUserProvider.require();
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR)) {
+            return caller;
+        }
+        if (caller.hasRole(SecurityRoles.ACADEMIC_ADVISOR) && caller.userId().equals(student.getAdvisorUserId())) {
+            return caller;
+        }
+        throw new ForbiddenException(
+                CommonErrorCode.ACCESS_DENIED, "Only this student's advisor or the registry may view advising notes");
     }
 
     @Transactional

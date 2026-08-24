@@ -26,6 +26,8 @@ public interface AuditTrail {
         public static final String EXAM_RESCHEDULED = "EXAM_RESCHEDULED";
         public static final String EXAM_UNPUBLISHED = "EXAM_UNPUBLISHED";
         public static final String EXAM_CANCELLED = "EXAM_CANCELLED";
+        /** A candidate was reported for a conduct breach during a sitting. */
+        public static final String EXAM_MISCONDUCT_REPORTED = "EXAM_MISCONDUCT_REPORTED";
         /** Somebody knowingly scheduled a lecturer or a room into a clash. */
         public static final String SCHEDULE_CONFLICT_OVERRIDDEN = "SCHEDULE_CONFLICT_OVERRIDDEN";
         public static final String IDENTITY_LINKED = "IDENTITY_LINKED";
