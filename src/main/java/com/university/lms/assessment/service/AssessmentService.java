@@ -21,10 +21,12 @@ import com.university.lms.finance.api.StudentBilling;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,7 @@ public class AssessmentService {
     private final CurrentUserProvider currentUserProvider;
     private final StudentBilling studentBilling;
     private final AssessmentOutboxPublisher assessmentOutboxPublisher;
+    private final StaffAppointments staffAppointments;
 
     public AssessmentService(
             AssessmentRepository assessmentRepository,
@@ -61,7 +64,8 @@ public class AssessmentService {
             DocumentStore documentStore,
             CurrentUserProvider currentUserProvider,
             StudentBilling studentBilling,
-            AssessmentOutboxPublisher assessmentOutboxPublisher) {
+            AssessmentOutboxPublisher assessmentOutboxPublisher,
+            StaffAppointments staffAppointments) {
         this.assessmentRepository = assessmentRepository;
         this.attemptRepository = attemptRepository;
         this.courseCatalog = courseCatalog;
@@ -72,6 +76,7 @@ public class AssessmentService {
         this.currentUserProvider = currentUserProvider;
         this.studentBilling = studentBilling;
         this.assessmentOutboxPublisher = assessmentOutboxPublisher;
+        this.staffAppointments = staffAppointments;
     }
 
     public List<AssessmentResponse> own(UUID sectionId) {
@@ -369,8 +374,12 @@ public class AssessmentService {
 
     private void requireEnrolledOrStaff(UUID sectionId) {
         CurrentUser caller = currentUserProvider.require();
-        requireKnownSection(sectionId);
-        if (caller.isStaff()) {
+        CourseCatalog.SectionSummary section = courseCatalog
+                .findSection(sectionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        AssessmentErrorCode.ASSESSMENT_SECTION_NOT_FOUND,
+                        "No course section exists with id " + sectionId));
+        if (isAuthorizedStaff(caller, section)) {
             return;
         }
         UUID studentId = studentDirectory
@@ -381,5 +390,26 @@ public class AssessmentService {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
+    }
+
+    /**
+     * A5: same org-scoped check as {@code LearningService.isAuthorizedStaff}, applied to the
+     * identical duplicated guard shape here. Fails open at each "not yet provisioned" branch —
+     * see that method's javadoc for the full reasoning, which applies unchanged.
+     */
+    private boolean isAuthorizedStaff(CurrentUser caller, CourseCatalog.SectionSummary section) {
+        if (!caller.isStaff()) {
+            return false;
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return true;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return true;
+        }
+        Optional<UUID> orgUnitId = courseCatalog
+                .departmentOfCourse(section.courseId())
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 }

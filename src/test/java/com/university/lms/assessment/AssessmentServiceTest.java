@@ -22,6 +22,7 @@ import com.university.lms.finance.api.StudentBilling;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -70,6 +71,9 @@ class AssessmentServiceTest {
 
     @Mock
     private AssessmentOutboxPublisher assessmentOutboxPublisher;
+
+    @Mock
+    private StaffAppointments staffAppointments;
 
     @InjectMocks
     private AssessmentService service;
