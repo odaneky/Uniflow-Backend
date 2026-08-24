@@ -415,4 +415,33 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
             allowed(get("/api/v1/audit-events").with(as(SecurityRoles.SYSTEM_ADMIN)));
         }
     }
+
+    @Nested
+    @DisplayName("API documentation")
+    class ApiDocumentation {
+
+        /**
+         * F7: the generated spec enumerates every endpoint's shape — not something to hand to every
+         * authenticated caller by default, the same reasoning as the audit trail above.
+         */
+        @Test
+        @DisplayName("the generated OpenAPI document is admin-only")
+        void openApiDocumentIsSystemAdminOnly() throws Exception {
+            mockMvc.perform(get("/v3/api-docs"))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+            denied(get("/v3/api-docs").with(as(SecurityRoles.REGISTRAR)));
+            denied(get("/v3/api-docs").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/v3/api-docs").with(as(SecurityRoles.SYSTEM_ADMIN)));
+        }
+
+        @Test
+        @DisplayName("the document generated for an admin is well-formed OpenAPI describing the real API")
+        void openApiDocumentDescribesTheRealApi() throws Exception {
+            mockMvc.perform(get("/v3/api-docs").with(as(SecurityRoles.SYSTEM_ADMIN)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.openapi").exists())
+                    .andExpect(jsonPath("$.paths['/api/v1/students']").exists());
+        }
+    }
 }

@@ -284,6 +284,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/record-access/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
 
+                        // -------- API documentation --------
+                        // The generated spec enumerates every endpoint's shape, including ones a
+                        // regular staff role has no business knowing exist. Admin-only, the same as
+                        // the audit trail above.
+                        .requestMatchers(
+                                "/v3/api-docs",
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**")
+                        .hasRole(SYSTEM_ADMIN)
+
                         // -------- reads --------
                         // Any authenticated member of the university may read the catalog and the
                         // academic structure. Reads of *personal* data are only role-gated here;
