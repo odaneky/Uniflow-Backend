@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.support.AbstractPostgresIntegrationTest;
+import com.university.lms.support.AcademicFixtures;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -21,17 +22,14 @@ class ProgrammeApplicationFormIntegrationTest extends AbstractPostgresIntegratio
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private AcademicFixtures academicFixtures;
+
     @Test
     void defaultFormIsPublicAndCustomizableByRegistrar() throws Exception {
-        String programmeId = mockMvc.perform(get("/api/v1/programmes")
-                        .param("size", "1")
-                        .with(jwt().authorities(new SimpleGrantedAuthority(SecurityRoles.authority(SecurityRoles.REGISTRAR)))))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        String id = programmeId.replaceAll("(?s).*\"id\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+        // A dedicated programme, not "whichever one sorts first" — that was fragile against any
+        // other test in the same run having already customized the first-sorted programme's form.
+        String id = academicFixtures.programme().getId().toString();
 
         mockMvc.perform(get("/api/v1/programmes/" + id + "/application-form"))
                 .andExpect(status().isOk())

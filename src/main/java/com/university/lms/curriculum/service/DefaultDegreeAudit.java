@@ -2,7 +2,10 @@ package com.university.lms.curriculum.service;
 
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.curriculum.api.DegreeAudit;
+import com.university.lms.curriculum.domain.GraduationClearanceItem;
+import com.university.lms.curriculum.domain.GraduationClearanceStatus;
 import com.university.lms.curriculum.dto.DegreeProgressResponse;
+import com.university.lms.curriculum.repository.GraduationClearanceItemRepository;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -18,14 +21,17 @@ public class DefaultDegreeAudit implements DegreeAudit {
     private static final BigDecimal DEFAULT_MIN_GPA = BigDecimal.valueOf(2.0);
 
     private final CurriculumService curriculumService;
+    private final GraduationClearanceItemRepository clearanceItemRepository;
     private final AcademicStructure academicStructure;
     private final StudentDirectory studentDirectory;
 
     public DefaultDegreeAudit(
             CurriculumService curriculumService,
+            GraduationClearanceItemRepository clearanceItemRepository,
             AcademicStructure academicStructure,
             StudentDirectory studentDirectory) {
         this.curriculumService = curriculumService;
+        this.clearanceItemRepository = clearanceItemRepository;
         this.academicStructure = academicStructure;
         this.studentDirectory = studentDirectory;
     }
@@ -50,6 +56,15 @@ public class DefaultDegreeAudit implements DegreeAudit {
         if (!certificateProgramme && progress.gpa() != null && progress.gpa().compareTo(minGpa) < 0) {
             blockers.add("GPA below graduation minimum of " + minGpa);
         }
+        for (GraduationClearanceItem item : clearanceItemRepository.findByStudentIdOrderByItemTypeAsc(studentId)) {
+            if (item.getStatus() == GraduationClearanceStatus.PENDING) {
+                blockers.add("Clearance pending: " + item.getItemType());
+            }
+        }
+        curriculumService.residencyCreditsFor(progress.programmeId())
+                .filter(required -> progress.creditsEarned() < required)
+                .ifPresent(required -> blockers.add("Residency requirement not met: " + progress.creditsEarned()
+                        + " of " + required + " required credits earned in residence"));
         boolean eligible = blockers.isEmpty();
         return new Eligibility(
                 eligible,

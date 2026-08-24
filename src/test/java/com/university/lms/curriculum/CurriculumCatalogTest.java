@@ -8,6 +8,7 @@ import com.university.lms.curriculum.domain.CurriculumVersion;
 import com.university.lms.curriculum.domain.CurriculumVersionStatus;
 import com.university.lms.curriculum.domain.ProgrammeRequirementBlock;
 import com.university.lms.curriculum.domain.RequirementKind;
+import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
 import com.university.lms.curriculum.repository.CurriculumVersionRepository;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
 import com.university.lms.curriculum.service.DefaultCurriculumCatalog;
@@ -38,6 +39,9 @@ class CurriculumCatalogTest {
     private CurriculumVersionRepository versionRepository;
 
     @Mock
+    private CourseSubstitutionRepository substitutionRepository;
+
+    @Mock
     private AcademicRecord academicRecord;
 
     @Mock
@@ -47,7 +51,8 @@ class CurriculumCatalogTest {
 
     @BeforeEach
     void setUp() {
-        catalog = new DefaultCurriculumCatalog(blockRepository, versionRepository, academicRecord, courseCatalog);
+        catalog = new DefaultCurriculumCatalog(
+                blockRepository, versionRepository, substitutionRepository, academicRecord, courseCatalog);
     }
 
     private CurriculumVersion publishedVersion() {
@@ -160,5 +165,45 @@ class CurriculumCatalogTest {
                         retakeSectionId, COURSE_ID, "COMP1010", "Intro", UUID.randomUUID(), "B", 30, 10, true, null, false)));
 
         assertThat(catalog.hasPassed(studentId, COURSE_ID)).isTrue();
+    }
+
+    @Test
+    @DisplayName("an approved substitution satisfies the required course once the substitute is passed")
+    void approvedSubstitutionSatisfiesTheRequiredCourse() {
+        UUID studentId = UUID.randomUUID();
+        UUID requiredCourseId = UUID.randomUUID();
+        UUID substituteCourseId = UUID.randomUUID();
+        UUID substituteSectionId = UUID.randomUUID();
+        when(academicRecord.publishedOverallOf(studentId))
+                .thenReturn(List.of(new AcademicRecord.PublishedOverall(
+                        substituteSectionId, "B", new BigDecimal("3.00"), true, Instant.parse("2026-01-01T00:00:00Z"))));
+        when(courseCatalog.findSection(substituteSectionId))
+                .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
+                        substituteSectionId, substituteCourseId, "COMP2020", "Advanced", UUID.randomUUID(), "A", 30, 10, true, null, false)));
+        when(substitutionRepository.findByStudentIdAndRequiredCourseId(studentId, requiredCourseId))
+                .thenReturn(Optional.of(new com.university.lms.curriculum.domain.CourseSubstitution(
+                        studentId, requiredCourseId, substituteCourseId, UUID.randomUUID(), UUID.randomUUID())));
+
+        assertThat(catalog.hasPassed(studentId, requiredCourseId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a substitution pointing to a failed course does not satisfy the requirement")
+    void substitutionToAFailedCourseDoesNotSatisfy() {
+        UUID studentId = UUID.randomUUID();
+        UUID requiredCourseId = UUID.randomUUID();
+        UUID substituteCourseId = UUID.randomUUID();
+        UUID substituteSectionId = UUID.randomUUID();
+        when(academicRecord.publishedOverallOf(studentId))
+                .thenReturn(List.of(new AcademicRecord.PublishedOverall(
+                        substituteSectionId, "F", BigDecimal.ZERO, false, Instant.parse("2026-01-01T00:00:00Z"))));
+        when(courseCatalog.findSection(substituteSectionId))
+                .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
+                        substituteSectionId, substituteCourseId, "COMP2020", "Advanced", UUID.randomUUID(), "A", 30, 10, true, null, false)));
+        when(substitutionRepository.findByStudentIdAndRequiredCourseId(studentId, requiredCourseId))
+                .thenReturn(Optional.of(new com.university.lms.curriculum.domain.CourseSubstitution(
+                        studentId, requiredCourseId, substituteCourseId, UUID.randomUUID(), UUID.randomUUID())));
+
+        assertThat(catalog.hasPassed(studentId, requiredCourseId)).isFalse();
     }
 }

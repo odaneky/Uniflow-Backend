@@ -6,6 +6,7 @@ import com.university.lms.curriculum.domain.CurriculumVersion;
 import com.university.lms.curriculum.domain.CurriculumVersionStatus;
 import com.university.lms.curriculum.domain.ProgrammeRequirementBlock;
 import com.university.lms.curriculum.domain.RequirementKind;
+import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
 import com.university.lms.curriculum.repository.CurriculumVersionRepository;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
 import com.university.lms.grading.api.AcademicRecord;
@@ -23,16 +24,19 @@ public class DefaultCurriculumCatalog implements CurriculumCatalog {
 
     private final ProgrammeRequirementBlockRepository blockRepository;
     private final CurriculumVersionRepository versionRepository;
+    private final CourseSubstitutionRepository substitutionRepository;
     private final AcademicRecord academicRecord;
     private final CourseCatalog courseCatalog;
 
     public DefaultCurriculumCatalog(
             ProgrammeRequirementBlockRepository blockRepository,
             CurriculumVersionRepository versionRepository,
+            CourseSubstitutionRepository substitutionRepository,
             AcademicRecord academicRecord,
             CourseCatalog courseCatalog) {
         this.blockRepository = blockRepository;
         this.versionRepository = versionRepository;
+        this.substitutionRepository = substitutionRepository;
         this.academicRecord = academicRecord;
         this.courseCatalog = courseCatalog;
     }
@@ -69,6 +73,18 @@ public class DefaultCurriculumCatalog implements CurriculumCatalog {
         if (studentId == null || courseId == null) {
             return false;
         }
+        if (passedByGrade(studentId, courseId)) {
+            return true;
+        }
+        // An approved substitution satisfies the required course once the substitute is itself
+        // passed — checked against grades only, never chained through another substitution.
+        return substitutionRepository
+                .findByStudentIdAndRequiredCourseId(studentId, courseId)
+                .map(substitution -> passedByGrade(studentId, substitution.getSubstituteCourseId()))
+                .orElse(false);
+    }
+
+    private boolean passedByGrade(UUID studentId, UUID courseId) {
         return academicRecord.publishedOverallOf(studentId).stream()
                 .filter(overall -> courseIdOf(overall.courseSectionId())
                         .map(courseId::equals)

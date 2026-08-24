@@ -18,8 +18,11 @@ import com.university.lms.curriculum.dto.DegreeProgressResponse;
 import com.university.lms.curriculum.dto.DegreeProgressResponse.CurriculumCourseResponse;
 import com.university.lms.curriculum.dto.DegreeProgressResponse.RequirementProgressResponse;
 import com.university.lms.curriculum.dto.RequirementBlockResponse;
+import com.university.lms.curriculum.domain.TransferCredit;
+import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
 import com.university.lms.curriculum.repository.CurriculumVersionRepository;
 import com.university.lms.curriculum.repository.ProgrammeRequirementBlockRepository;
+import com.university.lms.curriculum.repository.TransferCreditRepository;
 import com.university.lms.grading.api.AcademicRecord;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
@@ -29,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,6 +48,8 @@ public class CurriculumService {
 
     private final ProgrammeRequirementBlockRepository blockRepository;
     private final CurriculumVersionRepository versionRepository;
+    private final TransferCreditRepository transferCreditRepository;
+    private final CourseSubstitutionRepository substitutionRepository;
     private final AcademicStructure academicStructure;
     private final CourseCatalog courseCatalog;
     private final AcademicRecord academicRecord;
@@ -53,6 +59,8 @@ public class CurriculumService {
     public CurriculumService(
             ProgrammeRequirementBlockRepository blockRepository,
             CurriculumVersionRepository versionRepository,
+            TransferCreditRepository transferCreditRepository,
+            CourseSubstitutionRepository substitutionRepository,
             AcademicStructure academicStructure,
             CourseCatalog courseCatalog,
             AcademicRecord academicRecord,
@@ -60,6 +68,8 @@ public class CurriculumService {
             CurrentUserProvider currentUserProvider) {
         this.blockRepository = blockRepository;
         this.versionRepository = versionRepository;
+        this.transferCreditRepository = transferCreditRepository;
+        this.substitutionRepository = substitutionRepository;
         this.academicStructure = academicStructure;
         this.courseCatalog = courseCatalog;
         this.academicRecord = academicRecord;
@@ -173,36 +183,86 @@ public class CurriculumService {
                 latestByCourse.put(section.courseId(), result);
             });
         }
-        Set<UUID> completedCourseIds = new HashSet<>();
+        Set<UUID> passedByGrade = new HashSet<>();
         for (Map.Entry<UUID, AcademicRecord.PublishedOverall> entry : latestByCourse.entrySet()) {
             if (entry.getValue().pass()) {
-                completedCourseIds.add(entry.getKey());
+                passedByGrade.add(entry.getKey());
+            }
+        }
+
+        // Transfer credit satisfies a block the same way a passing grade does — a course mapped to
+        // an internal course id counts as complete; one with none is general credit, spent below on
+        // whatever block still has room for it. G2: transfer credits were on the transcript but
+        // consulted by neither this check nor the prerequisite check, so a transfer student was
+        // blocked from courses and requirements they already qualified for.
+        Map<UUID, Integer> transferCreditsByCourse = new LinkedHashMap<>();
+        int unmappedTransferCredits = 0;
+        for (TransferCredit transferCredit : transferCreditRepository.findByStudentIdOrderByAwardedAtDesc(studentId)) {
+            if (transferCredit.getInternalCourseId() != null) {
+                transferCreditsByCourse.putIfAbsent(transferCredit.getInternalCourseId(), transferCredit.getCreditsAwarded());
+            } else {
+                unmappedTransferCredits += transferCredit.getCreditsAwarded();
+            }
+        }
+        Set<UUID> satisfiedCourseIds = new HashSet<>(passedByGrade);
+        satisfiedCourseIds.addAll(transferCreditsByCourse.keySet());
+
+        // An approved substitution satisfies the required course once the substitute is itself
+        // satisfied — checked against grades and transfer credit only, never chained through
+        // another substitution. D2: the request workflow used to validate a substitution's payload
+        // and record nothing, so an approved substitution never actually excused the requirement.
+        for (var substitution : substitutionRepository.findByStudentId(studentId)) {
+            if (satisfiedCourseIds.contains(substitution.getSubstituteCourseId())) {
+                satisfiedCourseIds.add(substitution.getRequiredCourseId());
+            }
+        }
+
+        List<ProgrammeRequirementBlock> requirementBlocks = findActiveVersion(programme.id())
+                .map(version -> blockRepository.findByCurriculumVersionIdOrderByPositionAsc(version.getId()))
+                .orElseGet(List::of);
+
+        // A block naming no courses (a FREE_ELECTIVE or GENERAL_EDUCATION pool) used to be
+        // unsatisfiable no matter how many credits the student earned, since the loop below had
+        // nothing to iterate. It draws instead from a spare-credit pool: unmapped transfer credit,
+        // plus any satisfied course not claimed by a block that names courses explicitly.
+        Set<UUID> namedCourseIds = new HashSet<>();
+        for (ProgrammeRequirementBlock block : requirementBlocks) {
+            namedCourseIds.addAll(block.getCourseIds());
+        }
+        int sparePool = unmappedTransferCredits;
+        for (UUID courseId : satisfiedCourseIds) {
+            if (!namedCourseIds.contains(courseId)) {
+                sparePool += creditsOf(courseId, transferCreditsByCourse);
             }
         }
 
         List<RequirementProgressResponse> blocks = new ArrayList<>();
         List<CurriculumCourseResponse> remaining = new ArrayList<>();
         Set<UUID> remainingSeen = new HashSet<>();
-        List<ProgrammeRequirementBlock> requirementBlocks = findActiveVersion(programme.id())
-                .map(version -> blockRepository.findByCurriculumVersionIdOrderByPositionAsc(version.getId()))
-                .orElseGet(List::of);
         for (ProgrammeRequirementBlock block : requirementBlocks) {
-            int earned = 0;
+            int earned;
             List<CurriculumCourseResponse> blockRemaining = new ArrayList<>();
-            for (UUID courseId : block.getCourseIds()) {
-                CourseCatalog.CourseSummary course = courseCatalog.findCourse(courseId).orElse(null);
-                if (course == null) {
-                    continue;
-                }
-                if (completedCourseIds.contains(courseId)) {
-                    earned += course.credits();
-                    continue;
-                }
-                CurriculumCourseResponse row =
-                        new CurriculumCourseResponse(course.id(), course.courseCode(), course.title(), course.credits());
-                blockRemaining.add(row);
-                if (remainingSeen.add(courseId)) {
-                    remaining.add(row);
+            if (block.getCourseIds().isEmpty()) {
+                int allocated = Math.min(sparePool, block.getRequiredCredits());
+                sparePool -= allocated;
+                earned = allocated;
+            } else {
+                earned = 0;
+                for (UUID courseId : block.getCourseIds()) {
+                    CourseCatalog.CourseSummary course = courseCatalog.findCourse(courseId).orElse(null);
+                    if (course == null) {
+                        continue;
+                    }
+                    if (satisfiedCourseIds.contains(courseId)) {
+                        earned += course.credits();
+                        continue;
+                    }
+                    CurriculumCourseResponse row = new CurriculumCourseResponse(
+                            course.id(), course.courseCode(), course.title(), course.credits());
+                    blockRemaining.add(row);
+                    if (remainingSeen.add(courseId)) {
+                        remaining.add(row);
+                    }
                 }
             }
             blocks.add(new RequirementProgressResponse(
@@ -225,6 +285,22 @@ public class CurriculumService {
                 summary.gpa(),
                 blocks,
                 remaining);
+    }
+
+    private int creditsOf(UUID courseId, Map<UUID, Integer> transferCreditsByCourse) {
+        return courseCatalog
+                .findCourse(courseId)
+                .map(CourseCatalog.CourseSummary::credits)
+                .orElseGet(() -> transferCreditsByCourse.getOrDefault(courseId, 0));
+    }
+
+    /**
+     * The active curriculum version's residency requirement — the minimum credits {@link
+     * DegreeProgressResponse#creditsEarned()} must reach without counting transfer credit — if one
+     * is configured. Empty when the programme has no active version, or that version has none set.
+     */
+    Optional<Integer> residencyCreditsFor(UUID programmeId) {
+        return findActiveVersion(programmeId).map(CurriculumVersion::getResidencyCredits);
     }
 
     private void addKnownCourse(ProgrammeRequirementBlock block, UUID courseId) {
