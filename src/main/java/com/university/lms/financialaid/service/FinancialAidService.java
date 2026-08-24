@@ -25,6 +25,7 @@ import com.university.lms.financialaid.repository.FinancialAidAwardRepository;
 import com.university.lms.financialaid.repository.IsirSnapshotRepository;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -36,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -54,6 +56,7 @@ public class FinancialAidService {
     private final StudentDirectory studentDirectory;
     private final AcademicStructure academicStructure;
     private final CurrentUserProvider currentUserProvider;
+    private final StaffAppointments staffAppointments;
 
     public FinancialAidService(
             IsirSnapshotRepository isirRepository,
@@ -62,7 +65,8 @@ public class FinancialAidService {
             AccountEntryRepository entryRepository,
             StudentDirectory studentDirectory,
             AcademicStructure academicStructure,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            StaffAppointments staffAppointments) {
         this.isirRepository = isirRepository;
         this.awardRepository = awardRepository;
         this.accountRepository = accountRepository;
@@ -70,6 +74,7 @@ public class FinancialAidService {
         this.studentDirectory = studentDirectory;
         this.academicStructure = academicStructure;
         this.currentUserProvider = currentUserProvider;
+        this.staffAppointments = staffAppointments;
     }
 
     public List<FinancialAidAwardResponse> awardsForStudent(UUID studentId) {
@@ -276,9 +281,35 @@ public class FinancialAidService {
     private void requireOwnStudentOrStaff(UUID studentId) {
         CurrentUser caller = currentUserProvider.require();
         if (caller.isStaff()) {
+            requireAuthorizedStaff(caller, studentId);
             return;
         }
         if (!ownStudentId().equals(studentId)) {
+            throw new ForbiddenException(
+                    CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
+        }
+    }
+
+    /**
+     * A5: any staff role could view or accept an award on behalf of any student's financial aid
+     * record, regardless of department — Title IV data, among the most sensitive in the system.
+     * Same fail-open safety property and student -> programme -> department resolution as {@code
+     * StudentService.requireSelfOrAuthorizedStaff}. Assumes the caller is already confirmed staff;
+     * this only refines who among staff, not whether the caller is staff at all.
+     */
+    private void requireAuthorizedStaff(CurrentUser caller, UUID studentId) {
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return;
+        }
+        Optional<UUID> orgUnitId = studentDirectory
+                .findById(studentId)
+                .map(StudentDirectory.StudentSummary::programmeId)
+                .flatMap(academicStructure::departmentOfProgramme)
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        if (orgUnitId.isPresent() && !staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get())) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }

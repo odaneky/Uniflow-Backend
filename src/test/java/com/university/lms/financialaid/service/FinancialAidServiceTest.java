@@ -23,6 +23,7 @@ import com.university.lms.financialaid.repository.FinancialAidAwardRepository;
 import com.university.lms.financialaid.repository.IsirSnapshotRepository;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -78,6 +79,9 @@ class FinancialAidServiceTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private StaffAppointments staffAppointments;
+
     private FinancialAidService service;
 
     @BeforeEach
@@ -89,9 +93,11 @@ class FinancialAidServiceTest {
                 entryRepository,
                 studentDirectory,
                 academicStructure,
-                currentUserProvider);
+                currentUserProvider,
+                staffAppointments);
 
         lenient().when(currentUserProvider.require()).thenReturn(REGISTRAR);
+        lenient().when(staffAppointments.activeAppointmentsOf(any())).thenReturn(List.of());
         lenient().when(studentDirectory.exists(STUDENT_ID)).thenReturn(true);
         lenient()
                 .when(academicStructure.findTerm(eq(TERM_ID), any()))
