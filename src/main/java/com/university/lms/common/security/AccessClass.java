@@ -11,12 +11,14 @@ import java.lang.annotation.Target;
  * whether the specific record behind an id belongs to them. That finer check still lives in the
  * service layer, in {@code CurrentUser.requireSelfOrStaff} and its relatives.
  *
- * <p>The point is not precision. It is that {@code GET /api/v1/** → authenticated()} in
- * {@code SecurityConfig} is a fail-<em>open</em> default: forget a narrower rule for a new endpoint
- * and every signed-in caller — student included — can reach it, silently, with nothing to catch the
- * omission. {@code com.university.lms.architecture.AccessClassCoverageTest} makes the omission
- * itself impossible: every controller method must carry one of these values or the build fails.
- * That test is what actually closes the gap; this annotation is just what it reads.
+ * <p>The point is not precision. A3 inverted {@code SecurityConfig}'s GET catch-all from
+ * fail-<em>open</em> ({@code authenticated()} — a forgotten rule for a new endpoint meant every
+ * signed-in caller, student included, could reach it silently) to fail-<em>closed</em>
+ * ({@code denyAll()} — a forgotten rule now means a 403). {@code
+ * com.university.lms.architecture.AccessClassCoverageTest} still makes the omission of this
+ * annotation itself impossible, independent of that: every controller method must carry one of
+ * these values or the build fails, so a new endpoint is caught here even before it reaches
+ * SecurityConfig at all.
  *
  * @see Value
  */

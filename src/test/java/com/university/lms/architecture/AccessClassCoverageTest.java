@@ -19,12 +19,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 
 /**
- * Every controller endpoint must declare an {@link AccessClass}. The catch-all
- * {@code GET /api/v1/** -> authenticated()} in {@code SecurityConfig} is fail-<em>open</em>: a new
- * endpoint with no narrower rule is reachable by any signed-in caller, silently, with nothing to
- * catch the omission before it ships. This test is what catches it — a controller method with no
- * {@code @AccessClass} fails the build, the same way a module-boundary violation does in
- * {@code ModuleBoundaryTest}.
+ * Every controller endpoint must declare an {@link AccessClass}. Before A3, the catch-all
+ * {@code GET /api/v1/** -> authenticated()} in {@code SecurityConfig} was fail-<em>open</em>: a new
+ * endpoint with no narrower rule was reachable by any signed-in caller, silently, with nothing to
+ * catch the omission before it shipped. That catch-all is now {@code denyAll()} — a forgotten rule
+ * is a 403, not a silent grant — but this test still matters independently: it catches a missing
+ * {@code @AccessClass} at build time, before the endpoint ever reaches {@code SecurityConfig} at
+ * all, the same way a module-boundary violation does in {@code ModuleBoundaryTest}.
  *
  * <p>Strict, not frozen: at introduction all 220 endpoints across 57 controllers were unannotated,
  * and this ran as a {@code FreezingArchRule} so the rule could be enforced from day one without

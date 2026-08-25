@@ -524,6 +524,126 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
         }
     }
 
+    /**
+     * A3: the second batch — every remaining GET matched to the role set its own service-layer
+     * guard actually enforces, closing out the catch-all entirely (all 104 GET endpoints now have
+     * an explicit rule; see SecurityConfig's reads section for the per-group reasoning). A few of
+     * these had no service-layer guard at all before this change — purely relying on this matcher,
+     * same shape as the exam-window/tuition-schedule rules — so these tests pin real behaviour
+     * change, not just an explicit restatement of an existing rule.
+     */
+    @Nested
+    @DisplayName("A3: the remaining role-scoped reads")
+    class RemainingRoleScopedReads {
+
+        @Test
+        @DisplayName("teaching-section reads: staff and the section's own lecturer, not a student")
+        void teachingSectionReadsAreStaffOrTeachingLecturer() throws Exception {
+            String sectionId = UUID.randomUUID().toString();
+            denied(get("/api/v1/grades/sections/" + sectionId).with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/grades/sections/" + sectionId).with(as(SecurityRoles.REGISTRAR)));
+            allowed(get("/api/v1/learning/sections/" + sectionId).with(as(SecurityRoles.FACULTY_ADMIN)));
+            allowed(get("/api/v1/sections/" + sectionId + "/attendance").with(as(SecurityRoles.LECTURER)));
+        }
+
+        @Test
+        @DisplayName("a section roster also reaches an academic advisor, unlike the group above")
+        void rosterAlsoReachesAcademicAdvisor() throws Exception {
+            String sectionId = UUID.randomUUID().toString();
+            denied(get("/api/v1/courses/sections/" + sectionId + "/roster").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/courses/sections/" + sectionId + "/roster").with(as(SecurityRoles.ACADEMIC_ADVISOR)));
+        }
+
+        @Test
+        @DisplayName("exam misconduct records are staff-only, the same authorisation as the rest of timetabling")
+        void examMisconductIsStaffOnly() throws Exception {
+            String sittingId = UUID.randomUUID().toString();
+            denied(get("/api/v1/courses/sections/exams/" + sittingId + "/misconduct").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/courses/sections/exams/" + sittingId + "/misconduct")
+                    .with(as(SecurityRoles.EXAMS_OFFICER)));
+        }
+
+        @Test
+        @DisplayName("reading the requests queue matches its own requireStaffReader role set")
+        void requestsQueueMatchesRequireStaffReader() throws Exception {
+            denied(get("/api/v1/requests").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/requests").with(as(SecurityRoles.FINANCIAL_AID_OFFICER)));
+        }
+
+        @Test
+        @DisplayName("the admissions queue matches AdmissionsService.requireStaffReader")
+        void admissionsQueueMatchesRequireStaffReader() throws Exception {
+            denied(get("/api/v1/admissions/queue").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/admissions/queue").with(as(SecurityRoles.ADMISSIONS_OFFICER)));
+        }
+
+        @Test
+        @DisplayName("a student ledger read matches FinanceService.requireRegistry")
+        void accountReadMatchesRequireRegistry() throws Exception {
+            String studentId = UUID.randomUUID().toString();
+            denied(get("/api/v1/accounts/" + studentId).with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/accounts/" + studentId).with(as(SecurityRoles.BURSAR)));
+        }
+
+        @Test
+        @DisplayName("advising notes match StudentService.requireAssignedAdvisorOrRegistry's role set")
+        void advisingNotesMatchTheirOwnGuard() throws Exception {
+            String studentId = UUID.randomUUID().toString();
+            denied(get("/api/v1/students/" + studentId + "/advising-notes").with(as(SecurityRoles.LECTURER)));
+            allowed(get("/api/v1/students/" + studentId + "/advising-notes").with(as(SecurityRoles.ACADEMIC_ADVISOR)));
+        }
+
+        /**
+         * org-units/children, staff-appointments, reports/census, service-holds and
+         * students/*&#47;programmes had no service-layer guard at all — this matcher was the only
+         * gate, and until this change it did not exist, so any authenticated caller (a student
+         * included) could reach all five. Pins the fix, not a restatement.
+         */
+        @Test
+        @DisplayName("registry-only reads with no service-layer guard of their own are now actually restricted")
+        void registryOnlyReadsWithNoServiceGuardAreNowRestricted() throws Exception {
+            UUID orgUnitId = UUID.randomUUID();
+            UUID termId = UUID.randomUUID();
+            UUID studentId = UUID.randomUUID();
+            denied(get("/api/v1/org-units/" + orgUnitId + "/children").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/org-units/" + orgUnitId + "/children").with(as(SecurityRoles.REGISTRAR)));
+            denied(get("/api/v1/reports/terms/" + termId + "/census").with(as(SecurityRoles.LECTURER)));
+            allowed(get("/api/v1/reports/terms/" + termId + "/census").with(as(SecurityRoles.REGISTRAR)));
+            denied(get("/api/v1/service-holds/students/" + studentId).with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/service-holds/students/" + studentId).with(as(SecurityRoles.SYSTEM_ADMIN)));
+            denied(get("/api/v1/students/" + studentId + "/programmes").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/students/" + studentId + "/programmes").with(as(SecurityRoles.REGISTRAR)));
+        }
+
+        /**
+         * search() and listAdvisorCandidates() are "any staff role, nothing narrower" by design
+         * (see the A5 commit narrowing StudentService's other guards) — every non-STUDENT role must
+         * reach them, not just the usual REGISTRAR/FACULTY_ADMIN/LECTURER set.
+         */
+        @Test
+        @DisplayName("the student roster and advisor picker reach every staff role, not a student")
+        void studentRosterAndAdvisorCandidatesReachEveryStaffRole() throws Exception {
+            denied(get("/api/v1/students").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/students").with(as(SecurityRoles.BURSAR)));
+            allowed(get("/api/v1/students").with(as(SecurityRoles.EXAMS_OFFICER)));
+            denied(get("/api/v1/students/advisor-candidates").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/students/advisor-candidates").with(as(SecurityRoles.FINANCIAL_AID_OFFICER)));
+        }
+
+        /**
+         * The collision this matcher was written to avoid: advisor-candidates is a literal sibling
+         * one path segment deep, same shape as /{id}. If the wildcard below ever moved ahead of the
+         * literal match in the chain, a student would still be refused (StudentService's own check
+         * would catch it) but the coarse layer's promise would quietly loosen. Pinned here as a
+         * belt-and-braces check on ordering, not just on outcome.
+         */
+        @Test
+        @DisplayName("advisor-candidates keeps its own stricter rule despite the /{id} wildcard beneath it")
+        void advisorCandidatesStaysStricterThanTheIdWildcard() throws Exception {
+            denied(get("/api/v1/students/advisor-candidates").with(as(SecurityRoles.STUDENT)));
+        }
+    }
+
     @Nested
     @DisplayName("Audit trail")
     class AuditTrailAccess {

@@ -143,11 +143,18 @@ public class SecurityConfig {
                         // The office's view of a section's exams includes UNPUBLISHED drafts. Students
                         // read their own timetable through /me/exams, which returns published rows
                         // only; without this rule the broad GET fallback would hand them the drafts.
+                        // A3: also covers .../exams/{sittingId}/misconduct, which ExamScheduleService
+                        // has no guard of its own for — this matcher was the only gate, but its
+                        // pattern didn't reach that literal "exams" segment followed by more path,
+                        // so it silently fell to the catch-all until now. Same role set as the rest
+                        // of this controller, per its own class-level doc: "the same authorisation as
+                        // the rest of timetabling."
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/courses/sections/*/exams",
                                 "/api/v1/courses/sections/exams",
-                                "/api/v1/courses/sections")
+                                "/api/v1/courses/sections",
+                                "/api/v1/courses/sections/exams/*/misconduct")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER, EXAMS_OFFICER)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/add-drop-window")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
@@ -334,10 +341,7 @@ public class SecurityConfig {
                         // CurrentUser.requireSelfOrStaff and its relatives — not something a URL
                         // pattern can express. Listed explicitly, ahead of the catch-all, purely so
                         // A3's eventual inversion of that catch-all to denyAll() has something to
-                        // enumerate against instead of these going dark along with it. This is not
-                        // the complete GET surface yet — the STAFF_ONLY and REGISTRY_ONLY endpoints
-                        // still relying on the catch-all need their own per-endpoint role rules
-                        // first, so the catch-all cannot be flipped until that follow-up lands too.
+                        // enumerate against instead of these going dark along with it.
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/academic-policy",
@@ -366,8 +370,92 @@ public class SecurityConfig {
                                 "/api/v1/students/*/transcript.pdf",
                                 "/api/v1/students/me")
                         .authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/**")
+
+                        // A3: the remaining GET reads, each matched to the role set its own
+                        // service-layer guard actually enforces (or, where the guard turned out not
+                        // to exist at all, to what its @AccessClass label already promised — see the
+                        // per-group notes below). Teaching-section reads: gated by
+                        // requireTeacherOrAdmin in AssessmentService/QuizService/GradeService/
+                        // LearningService/AttendanceService, all narrowed to the same shape earlier
+                        // in A5 — SYSTEM_ADMIN/REGISTRAR/FACULTY_ADMIN org-scoped, or the section's
+                        // own LECTURER.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/assessments/sections/*",
+                                "/api/v1/assessments/*/attempts",
+                                "/api/v1/assessments/*/attempts/*/file",
+                                "/api/v1/assessments/*/quiz",
+                                "/api/v1/assessments/*/quiz/attempts/*",
+                                "/api/v1/grades/sections/*",
+                                "/api/v1/grades/sections/*/export",
+                                "/api/v1/learning/sections/*",
+                                "/api/v1/sections/*/attendance",
+                                "/api/v1/sections/*/attendance/at-risk")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
+                        // SectionRosterService.requireStaffForSection additionally accepts
+                        // ACADEMIC_ADVISOR, unlike the group above.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/courses/sections/*/roster")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, ACADEMIC_ADVISOR, LECTURER)
+                        // ServiceRequestService.requireStaffReader's role set — see its javadoc.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/requests", "/api/v1/requests/*")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR, LECTURER, FINANCIAL_AID_OFFICER)
+                        // AdmissionsService.requireStaffReader's role set.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admissions/queue", "/api/v1/admissions/applications/*")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ADMISSIONS_OFFICER)
+                        // FinanceService.requireRegistry's role set.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/accounts/*")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
+                        // StudentService.requireAssignedAdvisorOrRegistry's role set.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/students/*/advising-notes")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR)
+                        // A3: none of these four had a service-layer guard at all — purely relying
+                        // on this matcher, same shape as the exam-window/payment-plans/tuition-
+                        // schedule/fee-catalog rules above. Restricted to what their own
+                        // @AccessClass(REGISTRY_ONLY) already promised, never enforced until now.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/org-units/*/children",
+                                "/api/v1/staff-appointments",
+                                "/api/v1/reports/terms/*/census",
+                                "/api/v1/service-holds/students/*",
+                                "/api/v1/students/*/programmes")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        // StudentService.search/listAdvisorCandidates: "any staff role, nothing
+                        // narrower" by design (see the A5 commit narrowing StudentService's other
+                        // guards) — every non-STUDENT role, spelled out since Spring Security has no
+                        // native "not this role" expression. advisor-candidates is listed here,
+                        // ahead of the /{id} wildcard below that would otherwise also match it as a
+                        // single path segment.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/students", "/api/v1/students/advisor-candidates")
+                        .hasAnyRole(
+                                SYSTEM_ADMIN,
+                                REGISTRAR,
+                                FACULTY_ADMIN,
+                                LECTURER,
+                                ACADEMIC_ADVISOR,
+                                BURSAR,
+                                FINANCIAL_AID_OFFICER,
+                                ADMISSIONS_OFFICER,
+                                EXAMS_OFFICER)
+                        // StudentService.requireSelfOrAuthorizedStaff: self, unconditionally, or any
+                        // staff role narrowed to their own department (A5) — the coarse layer here
+                        // cannot see "self", so this is .authenticated(), same reasoning as the
+                        // SELF_OR_STAFF group above. Must follow the advisor-candidates matcher: a
+                        // single path segment would otherwise also match that literal sibling.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/students/*")
                         .authenticated()
+
+                        // A3: every GET under /api/v1/** now has its own explicit rule above —
+                        // AccessClassCoverageTest guarantees every controller method carries an
+                        // @AccessClass, and this file's own inventory (all 104 GET endpoints,
+                        // cross-checked against SecurityConfig's ordered matcher list by simulating
+                        // Ant-style path matching) confirmed zero fell through to this line. What
+                        // was `GET /api/v1/** -> authenticated()` — fail-open: a new endpoint added
+                        // with no matcher of its own was silently reachable by any signed-in caller
+                        // — is now denyAll(). A forgotten rule for a future endpoint is a 403 in
+                        // AuthorizationRulesIntegrationTest, not a silent disclosure.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/**")
+                        .denyAll()
                         .anyRequest()
                         .authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults())
