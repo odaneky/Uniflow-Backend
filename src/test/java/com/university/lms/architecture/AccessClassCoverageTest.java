@@ -8,7 +8,6 @@ import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
-import com.tngtech.archunit.library.freeze.FreezingArchRule;
 import com.university.lms.common.security.AccessClass;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
@@ -27,12 +26,14 @@ import org.springframework.web.bind.annotation.PutMapping;
  * {@code @AccessClass} fails the build, the same way a module-boundary violation does in
  * {@code ModuleBoundaryTest}.
  *
- * <p>Not yet strict: at introduction, all 220 endpoints across 57 controllers were unannotated.
- * {@link FreezingArchRule} — see that class's own javadoc for the mechanism — lets this be
- * enforced from today for every endpoint already annotated, without requiring the remaining ones
- * to be finished in the same change. The frozen count only ever shrinks as endpoints are annotated;
- * it can never grow, so a new endpoint added with no {@code @AccessClass} fails immediately rather
- * than quietly joining the backlog.
+ * <p>Strict, not frozen: at introduction all 220 endpoints across 57 controllers were unannotated,
+ * and this ran as a {@code FreezingArchRule} so the rule could be enforced from day one without
+ * blocking on the whole backlog landing in one change (see {@code ModuleBoundaryTest}'s javadoc for
+ * that mechanism). The annotation sweep is now complete — every controller endpoint (104 GET, 138
+ * across the other four methods) carries an {@code @AccessClass}, confirmed by an empty frozen-
+ * violation store — so this reverts to a plain rule. A plain rule fails louder and sooner than a
+ * frozen one that happens to have nothing left frozen: it does not depend on a store file staying
+ * intact, and does not admit a violation that a corrupted or reset store would silently re-allow.
  */
 class AccessClassCoverageTest {
 
@@ -74,6 +75,6 @@ class AccessClassCoverageTest {
                 .as("every controller endpoint method (@GetMapping/@PostMapping/@PutMapping/"
                         + "@PatchMapping/@DeleteMapping) declares an @AccessClass — see that "
                         + "annotation's javadoc for why");
-        FreezingArchRule.freeze(rule).check(mainClasses);
+        rule.check(mainClasses);
     }
 }
