@@ -177,9 +177,17 @@ public class CurriculumService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         CurriculumErrorCode.CURRICULUM_VERSION_NOT_FOUND,
                         "No draft curriculum version exists for programme " + programmeId));
+        // The old row must physically flush its retirement before the draft's publish is written:
+        // uk_curriculum_versions_one_published allows only one PUBLISHED row per programme, and
+        // Hibernate's batch ordering does not guarantee the retire-update reaches the database
+        // before the publish-update does, so without this flush the two can collide on that index
+        // even though the entity-level sequencing here looks correct.
         versionRepository
                 .findByProgrammeIdAndStatus(programmeId, CurriculumVersionStatus.PUBLISHED)
-                .ifPresent(CurriculumVersion::retire);
+                .ifPresent(previous -> {
+                    previous.retire();
+                    versionRepository.saveAndFlush(previous);
+                });
         draft.publish();
     }
 
