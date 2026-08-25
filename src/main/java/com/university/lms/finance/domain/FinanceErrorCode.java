@@ -13,7 +13,8 @@ public enum FinanceErrorCode implements ErrorCode {
     TUITION_PROGRAMME_NOT_FOUND,
     FEE_NOT_FOUND,
     FEE_NAME_ALREADY_EXISTS,
-    INVALID_FEE;
+    INVALID_FEE,
+    INVALID_REFUND_POLICY;
 
     @Override
     public String code() {

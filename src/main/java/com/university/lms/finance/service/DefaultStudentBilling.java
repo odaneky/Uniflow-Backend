@@ -38,6 +38,7 @@ public class DefaultStudentBilling implements StudentBilling {
     private final FeeCatalogRepository feeRepository;
     private final StudentDirectory studentDirectory;
     private final AcademicStructure academicStructure;
+    private final RefundPolicyService refundPolicyService;
 
     public DefaultStudentBilling(
             StudentAccountRepository accountRepository,
@@ -47,7 +48,8 @@ public class DefaultStudentBilling implements StudentBilling {
             FeeCatalogService feeCatalogService,
             FeeCatalogRepository feeRepository,
             StudentDirectory studentDirectory,
-            AcademicStructure academicStructure) {
+            AcademicStructure academicStructure,
+            RefundPolicyService refundPolicyService) {
         this.accountRepository = accountRepository;
         this.entryRepository = entryRepository;
         this.paymentPlanService = paymentPlanService;
@@ -56,6 +58,7 @@ public class DefaultStudentBilling implements StudentBilling {
         this.feeRepository = feeRepository;
         this.studentDirectory = studentDirectory;
         this.academicStructure = academicStructure;
+        this.refundPolicyService = refundPolicyService;
     }
 
     @Override
@@ -224,16 +227,11 @@ public class DefaultStudentBilling implements StudentBilling {
         }
     }
 
-    private static final BigDecimal WITHDRAWAL_TIER_1 = new BigDecimal("0.75");
-    private static final BigDecimal WITHDRAWAL_TIER_2 = new BigDecimal("0.50");
-    private static final BigDecimal WITHDRAWAL_TIER_3 = new BigDecimal("0.25");
-    private static final long WITHDRAWAL_TIER_DAYS = 7;
-
     /**
      * E4: a withdrawal used to earn no refund at all, no matter how soon after add/drop closed it
-     * happened. This is a conventional starting default — 75/50/25/0% tapering weekly from the
-     * no-penalty window's close — not an institution-specific policy read from configuration; there
-     * is nowhere yet for the registrar to set the institution's own dates and percentages.
+     * happened. The taper's own dates and percentages are {@link RefundPolicyService} — a settable
+     * institution policy, not a hardcoded default — read fresh here so a change takes effect on the
+     * next withdrawal without a restart.
      *
      * <p>A drop within the no-penalty window is a full refund handled separately by {@link
      * #creditForDrop}; this only runs once a student is far enough past it that {@code
@@ -255,16 +253,7 @@ public class DefaultStudentBilling implements StudentBilling {
             // unexpected calendar lookup must not manufacture a refund no tier actually grants.
             return BigDecimal.ZERO;
         }
-        if (daysSinceAddDropClosed < WITHDRAWAL_TIER_DAYS) {
-            return WITHDRAWAL_TIER_1;
-        }
-        if (daysSinceAddDropClosed < WITHDRAWAL_TIER_DAYS * 2) {
-            return WITHDRAWAL_TIER_2;
-        }
-        if (daysSinceAddDropClosed < WITHDRAWAL_TIER_DAYS * 3) {
-            return WITHDRAWAL_TIER_3;
-        }
-        return BigDecimal.ZERO;
+        return refundPolicyService.current().percentFor(daysSinceAddDropClosed);
     }
 
     private void reverse(

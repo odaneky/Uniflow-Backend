@@ -65,6 +65,7 @@ public interface AuditTrail {
         public static final String FEE_DEACTIVATED = "FEE_DEACTIVATED";
         public static final String PAYMENT_PLAN_REPLACED = "PAYMENT_PLAN_REPLACED";
         public static final String TUITION_SCHEDULE_REPLACED = "TUITION_SCHEDULE_REPLACED";
+        public static final String REFUND_POLICY_REPLACED = "REFUND_POLICY_REPLACED";
         public static final String AWARD_ACCEPTED = "AWARD_ACCEPTED";
         /** A Title IV or institutional award was marked as paid out. */
         public static final String AWARD_DISBURSED = "AWARD_DISBURSED";
@@ -109,6 +110,7 @@ public interface AuditTrail {
         public static final String FEE = "Fee";
         public static final String PAYMENT_PLAN = "PaymentPlan";
         public static final String TUITION_SCHEDULE = "TuitionSchedule";
+        public static final String REFUND_POLICY = "RefundPolicy";
         public static final String FINANCIAL_AID_AWARD = "FinancialAidAward";
         public static final String SERVICE_HOLD = "ServiceHold";
         public static final String REQUIREMENT_BLOCK = "RequirementBlock";

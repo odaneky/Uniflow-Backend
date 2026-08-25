@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.finance.domain.AccountEntry;
 import com.university.lms.finance.domain.AccountEntryType;
+import com.university.lms.finance.domain.RefundPolicy;
 import com.university.lms.finance.domain.StudentAccount;
 import com.university.lms.finance.repository.AccountEntryRepository;
 import com.university.lms.finance.repository.FeeCatalogRepository;
@@ -57,6 +58,9 @@ class WithdrawalRefundTest {
     @Mock
     AcademicStructure academicStructure;
 
+    @Mock
+    RefundPolicyService refundPolicyService;
+
     DefaultStudentBilling billing;
 
     UUID studentId;
@@ -74,12 +78,17 @@ class WithdrawalRefundTest {
                 feeCatalogService,
                 feeRepository,
                 studentDirectory,
-                academicStructure);
+                academicStructure,
+                refundPolicyService);
         studentId = UUID.randomUUID();
         enrollmentId = UUID.randomUUID();
         termId = UUID.randomUUID();
         account = new StudentAccount(studentId, "USD");
         org.mockito.Mockito.lenient().when(feeRepository.findAll()).thenReturn(List.of());
+        org.mockito.Mockito.lenient()
+                .when(refundPolicyService.current())
+                .thenReturn(new RefundPolicy(
+                        7, new BigDecimal("0.75"), 14, new BigDecimal("0.50"), 21, new BigDecimal("0.25")));
     }
 
     private AcademicStructure.TermCalendar calendarClosedDaysAgo(long days) {

@@ -179,6 +179,9 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/tuition-schedule/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
+                        // E4: the withdrawal refund taper is bursar's-office policy, same as tuition.
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/refund-policy")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/fee-catalog", "/api/v1/fee-catalog/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/fee-catalog/**")
@@ -361,6 +364,7 @@ public class SecurityConfig {
                                 "/api/v1/payment-plans/*",
                                 "/api/v1/programmes/*/requirement-blocks",
                                 "/api/v1/tuition-schedule",
+                                "/api/v1/refund-policy",
                                 "/api/v1/enrollments",
                                 "/api/v1/enrollments/*",
                                 "/api/v1/financial-aid/students/*/awards",
