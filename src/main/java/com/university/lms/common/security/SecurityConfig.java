@@ -269,16 +269,16 @@ public class SecurityConfig {
                         // A6 groundwork: widened to also accept the eventual owner of each area —
                         // BURSAR for the ledger, FINANCIAL_AID_OFFICER for aid — never narrowed to
                         // exclude REGISTRAR, since nobody has been granted the narrower role in any
-                        // real environment yet. service-holds is deliberately left REGISTRAR-only:
-                        // HoldType spans FINANCIAL, SAP, ADVISING, ORIENTATION and PLACEMENT, so a
-                        // single blanket widening would be the wrong shape — it needs a per-type
-                        // decision, not a first pass.
+                        // real environment yet.
                         .requestMatchers(HttpMethod.POST, "/api/v1/accounts/**", "/api/v1/accounts")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/financial-aid/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FINANCIAL_AID_OFFICER)
+                        // Coarse gate only — HoldType spans several future owners, so the real,
+                        // per-type decision lives in ServiceHoldService.requireAuthorizedForHoldType.
+                        // The union here just has to cover every role that check might accept.
                         .requestMatchers(HttpMethod.POST, "/api/v1/service-holds/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR, FINANCIAL_AID_OFFICER, ACADEMIC_ADVISOR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/requests/**", "/api/v1/requests")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR)
                         .requestMatchers(

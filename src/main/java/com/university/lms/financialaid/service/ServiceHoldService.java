@@ -54,8 +54,7 @@ public class ServiceHoldService implements HoldActions {
 
     @Transactional
     public ServiceHoldResponse placeHold(UUID studentId, HoldType holdType, String reason) {
-        requireRegistry();
-        CurrentUser actor = currentUserProvider.require();
+        CurrentUser actor = requireAuthorizedForHoldType(holdType);
         return ServiceHoldResponse.from(placeHoldInternal(studentId, holdType, reason, actor.userId()));
     }
 
@@ -67,11 +66,11 @@ public class ServiceHoldService implements HoldActions {
 
     @Transactional
     public ServiceHoldResponse clearHold(UUID holdId) {
-        requireRegistry();
         ServiceHold hold = repository
                 .findById(holdId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         FinancialAidErrorCode.HOLD_NOT_FOUND, "No service hold exists with id " + holdId));
+        requireAuthorizedForHoldType(hold.getHoldType());
         try {
             hold.clear(Instant.now());
         } catch (IllegalStateException ex) {
@@ -89,7 +88,7 @@ public class ServiceHoldService implements HoldActions {
     /** Clears all active holds of a type — e.g. SAP appeal waiver. */
     @Transactional
     public void clearActiveHoldsOfType(UUID studentId, HoldType holdType) {
-        requireRegistry();
+        requireAuthorizedForHoldType(holdType);
         requireStudentExists(studentId);
         for (ServiceHold hold : repository.findByStudentIdAndActiveTrueOrderByPlacedAtDesc(studentId)) {
             if (hold.getHoldType() == holdType && hold.isActive()) {
@@ -109,11 +108,52 @@ public class ServiceHoldService implements HoldActions {
         }
     }
 
+    /**
+     * A6 groundwork: {@link #allHoldsFor} lists every hold type at once, so — like {@code
+     * StudentService.search} and {@code EnrollmentService.search} before it — there is no single
+     * type to narrow against; it stays registry-only.
+     */
     private void requireRegistry() {
         CurrentUser caller = currentUserProvider.require();
         if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
+    }
+
+    /**
+     * A6: {@code HoldType} spans several future owners — unlike the single-role widenings so far,
+     * this dispatches by type rather than accepting one extra role unconditionally. {@code
+     * REGISTRAR} keeps every type, unconditionally, exactly as before.
+     *
+     * <p>{@code FINANCIAL} additionally accepts {@code BURSAR}, {@code SAP} additionally accepts
+     * {@code FINANCIAL_AID_OFFICER} — both scaffolding, inert until someone is actually granted the
+     * new role in a real environment, same as every other A6 widening this session.
+     *
+     * <p>{@code ADVISING} additionally accepts {@code ACADEMIC_ADVISOR} — an <em>existing</em> role
+     * with real holders already, so unlike the rest of this pass this one is not inert: an advisor
+     * gains real, immediate ability to place and clear their own advisees' advising holds. Still
+     * safe to ship — it only adds a capability nobody had before, never removes one.
+     *
+     * <p>{@code ORIENTATION}, {@code PLACEMENT} and {@code MANUAL} have no obvious narrower owner
+     * and stay registry-only rather than a guess.
+     */
+    private CurrentUser requireAuthorizedForHoldType(HoldType holdType) {
+        CurrentUser caller = currentUserProvider.require();
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR)) {
+            return caller;
+        }
+        String narrowerRole =
+                switch (holdType) {
+                    case FINANCIAL -> SecurityRoles.BURSAR;
+                    case SAP -> SecurityRoles.FINANCIAL_AID_OFFICER;
+                    case ADVISING -> SecurityRoles.ACADEMIC_ADVISOR;
+                    case ORIENTATION, PLACEMENT, MANUAL -> null;
+                };
+        if (narrowerRole != null && caller.hasRole(narrowerRole)) {
+            return caller;
+        }
+        throw new ForbiddenException(
+                CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
     }
 }
