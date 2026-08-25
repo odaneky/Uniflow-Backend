@@ -651,9 +651,17 @@ public class AdmissionsService {
                         AdmissionsErrorCode.APPLICATION_NOT_FOUND, "No application exists with id " + id));
     }
 
+    /**
+     * A6 groundwork: widened to also accept {@code ADMISSIONS_OFFICER}, the eventual owner of
+     * this area. {@code REGISTRAR} keeps everything it has today — nobody has been granted {@code
+     * ADMISSIONS_OFFICER} in any real environment yet, so narrowing this to exclude {@code
+     * REGISTRAR} would lock out every real registrar the day it shipped.
+     */
     private CurrentUser requireStaffReader() {
         CurrentUser caller = currentUserProvider.require();
-        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR)) {
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.ADMISSIONS_OFFICER)) {
             return caller;
         }
         throw new ForbiddenException(

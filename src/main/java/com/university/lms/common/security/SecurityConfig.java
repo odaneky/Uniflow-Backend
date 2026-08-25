@@ -1,6 +1,7 @@
 package com.university.lms.common.security;
 
 import static com.university.lms.common.security.SecurityRoles.ACADEMIC_ADVISOR;
+import static com.university.lms.common.security.SecurityRoles.ADMISSIONS_OFFICER;
 import static com.university.lms.common.security.SecurityRoles.BURSAR;
 import static com.university.lms.common.security.SecurityRoles.FACULTY_ADMIN;
 import static com.university.lms.common.security.SecurityRoles.FINANCIAL_AID_OFFICER;
@@ -235,8 +236,10 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/programmes/*/application-form")
                         .permitAll()
+                        // A6 groundwork: widened to also accept ADMISSIONS_OFFICER, never narrowed
+                        // to exclude REGISTRAR — see requireStaffReader's javadoc.
                         .requestMatchers(HttpMethod.PUT, "/api/v1/programmes/*/application-form")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ADMISSIONS_OFFICER)
                         .requestMatchers(HttpMethod.GET, "/api/v1/programmes", "/api/v1/programmes/*")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/academic-years", "/api/v1/academic-years/*")
@@ -247,7 +250,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/academic-years/*/terms")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/admissions/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ADMISSIONS_OFFICER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/enrollments/override")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/enrollments/*/approve")

@@ -40,8 +40,16 @@ public class AdmissionsWorkflow {
         }
     }
 
+    /**
+     * A6 groundwork: widened to also accept {@code ADMISSIONS_OFFICER}, the eventual owner of this
+     * area. {@code REGISTRAR} keeps everything it has today — nobody has been granted {@code
+     * ADMISSIONS_OFFICER} in any real environment yet, so narrowing this to exclude {@code
+     * REGISTRAR} would lock out every real registrar the day it shipped.
+     */
     public void assertStaffAction(CurrentUser caller, ApplicationStatus target) {
-        if (!caller.hasRole(SecurityRoles.SYSTEM_ADMIN) && !caller.hasRole(SecurityRoles.REGISTRAR)) {
+        if (!caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                && !caller.hasRole(SecurityRoles.REGISTRAR)
+                && !caller.hasRole(SecurityRoles.ADMISSIONS_OFFICER)) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to manage admissions");
         }

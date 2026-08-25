@@ -349,6 +349,13 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
         }
 
         @Test
+        @DisplayName("A6: ADMISSIONS_OFFICER may also work the admissions queue, alongside REGISTRAR")
+        void admissionsOfficerMayClaimApplications() throws Exception {
+            allowed(post("/api/v1/admissions/applications/" + UUID.randomUUID() + "/claim")
+                    .with(as(SecurityRoles.ADMISSIONS_OFFICER)));
+        }
+
+        @Test
         @DisplayName("a student may pay their own account through /me")
         void studentsMayPayThemselves() throws Exception {
             allowed(json(post("/api/v1/me/account/payments").with(as(SecurityRoles.STUDENT)), "{}"));
