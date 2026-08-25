@@ -15,4 +15,13 @@ public interface DegreeAudit {
             List<String> blockers) {}
 
     Eligibility eligibility(UUID studentId);
+
+    /**
+     * Records the conferral: a {@code DegreeAward} snapshotting the programme, curriculum version,
+     * GPA, credits and honours at this moment, and (through {@code StudentLifecycle.graduate}) the
+     * {@code students.status} flip to {@code GRADUATED}. Callers are expected to have already
+     * confirmed {@link #eligibility} themselves — this does not repeat that check — but refuses a
+     * second conferral for a programme the student has already graduated from.
+     */
+    void recordConferral(UUID studentId, UUID actorUserId);
 }

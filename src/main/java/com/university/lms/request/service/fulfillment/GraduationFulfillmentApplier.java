@@ -6,18 +6,15 @@ import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.request.domain.RequestErrorCode;
 import com.university.lms.request.domain.ServiceRequest;
 import com.university.lms.request.domain.ServiceRequestType;
-import com.university.lms.student.api.StudentLifecycle;
 import org.springframework.stereotype.Component;
 
 @Component
 public class GraduationFulfillmentApplier implements RequestFulfillmentApplier {
 
     private final DegreeAudit degreeAudit;
-    private final StudentLifecycle studentLifecycle;
 
-    public GraduationFulfillmentApplier(DegreeAudit degreeAudit, StudentLifecycle studentLifecycle) {
+    public GraduationFulfillmentApplier(DegreeAudit degreeAudit) {
         this.degreeAudit = degreeAudit;
-        this.studentLifecycle = studentLifecycle;
     }
 
     @Override
@@ -33,6 +30,9 @@ public class GraduationFulfillmentApplier implements RequestFulfillmentApplier {
                     RequestErrorCode.REQUEST_FULFILLMENT_FAILED,
                     "Student is not eligible to graduate: " + String.join("; ", eligibility.blockers()));
         }
-        studentLifecycle.graduate(request.getStudentId(), actor.userId());
+        // G3: recordConferral both writes the DegreeAward snapshot (GPA, credits, curriculum
+        // version, honours) and drives the students.status flip — a bare studentLifecycle.graduate
+        // used to do only the second half, leaving graduation with no conferral evidence at all.
+        degreeAudit.recordConferral(request.getStudentId(), actor.userId());
     }
 }

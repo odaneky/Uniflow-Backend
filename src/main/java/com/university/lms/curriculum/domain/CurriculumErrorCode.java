@@ -10,7 +10,8 @@ public enum CurriculumErrorCode implements ErrorCode {
     PROGRAMME_NOT_FOUND,
     /** The block's curriculum version is published or retired — publishing freezes its blocks. */
     CURRICULUM_VERSION_NOT_EDITABLE,
-    CURRICULUM_VERSION_NOT_FOUND;
+    CURRICULUM_VERSION_NOT_FOUND,
+    DEGREE_ALREADY_CONFERRED;
 
     @Override
     public String code() {

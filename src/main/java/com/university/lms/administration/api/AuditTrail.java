@@ -78,6 +78,7 @@ public interface AuditTrail {
         public static final String CURRICULUM_VERSION_PUBLISHED = "CURRICULUM_VERSION_PUBLISHED";
         /** A student's open primary programme enrolment was bound to the curriculum version governing it, once. */
         public static final String CURRICULUM_VERSION_BOUND = "CURRICULUM_VERSION_BOUND";
+        public static final String DEGREE_CONFERRED = "DEGREE_CONFERRED";
         public static final String COURSE_SUBSTITUTION_RECORDED = "COURSE_SUBSTITUTION_RECORDED";
         public static final String ACADEMIC_POLICY_REPLACED = "ACADEMIC_POLICY_REPLACED";
         public static final String PROGRAMME_CREDIT_LOAD_REPLACED = "PROGRAMME_CREDIT_LOAD_REPLACED";
