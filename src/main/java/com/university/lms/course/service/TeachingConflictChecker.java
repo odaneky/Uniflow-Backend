@@ -4,6 +4,7 @@ import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.course.api.Timetable;
 import com.university.lms.course.domain.CourseComponent;
 import com.university.lms.course.domain.CourseSection;
+import com.university.lms.course.domain.Room;
 import com.university.lms.course.domain.SectionComponent;
 import com.university.lms.course.domain.SectionMeeting;
 import com.university.lms.course.repository.CourseSectionRepository;
@@ -236,18 +237,16 @@ class TeachingConflictChecker {
      * G1: "Lab 3" and "Lab-3" used to be different rooms to this check, because the only
      * normalization was case and surrounding whitespace. Stripping space, hyphen, underscore and
      * period — the separators staff actually type — is what {@link SectionMeetingRepository
-     * #findByTermAndRoom} applies to the stored value too, so both sides of the comparison use the
-     * same key.
+     * #findByTermAndRoom} applies to the stored value too (as an inline SQL expression, necessarily
+     * a separate implementation from this one — a JPQL parameter can't share Java code with the
+     * function chain it's compared against), so both sides of that comparison use the same key.
+     *
+     * <p>{@link Room#normalize} is the same normalization again, for matching a meeting's room
+     * string against the room registry — delegated to here rather than duplicated, so there is one
+     * Java-side implementation instead of two silently drifting apart.
      */
-    private static String normaliseRoom(String room) {
-        if (room == null || room.isBlank()) {
-            return null;
-        }
-        // Lower-cased and stripped here rather than in the query. A bare parameter inside a SQL
-        // function is exactly the shape that once left Hibernate unable to infer a type and
-        // produced `lower(bytea)` at runtime; comparing an already-normalized value avoids the
-        // question entirely.
-        return room.trim().toLowerCase(Locale.ROOT).replaceAll("[ \\-_.]", "");
+    static String normaliseRoom(String room) {
+        return Room.normalize(room);
     }
 
     private static List<CourseCatalog.Meeting> toMeetings(List<SectionMeeting> rows) {

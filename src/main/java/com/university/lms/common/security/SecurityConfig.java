@@ -201,6 +201,10 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/courses/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN)
+                        // G1: buildings and rooms are the same academic-structure-setup category as
+                        // faculties and departments.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/buildings", "/api/v1/rooms")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN)
 
                         // -------- student records --------
                         .requestMatchers(HttpMethod.POST, "/api/v1/students")
@@ -349,6 +353,8 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/academic-policy",
                                 "/api/v1/academic-terms/*",
+                                "/api/v1/buildings",
+                                "/api/v1/rooms",
                                 "/api/v1/courses",
                                 "/api/v1/courses/*",
                                 "/api/v1/courses/*/sections",

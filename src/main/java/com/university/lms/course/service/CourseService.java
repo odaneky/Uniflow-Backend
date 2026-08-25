@@ -84,6 +84,7 @@ public class CourseService implements SectionActions {
     private final UniFlowMetrics metrics;
 
     private final TeachingConflictChecker conflictChecker;
+    private final RoomCapacityChecker capacityChecker;
 
     public CourseService(
             CourseRepository courseRepository,
@@ -96,7 +97,8 @@ public class CourseService implements SectionActions {
             CurrentUserProvider currentUserProvider,
             AuditTrail auditTrail,
             UniFlowMetrics metrics,
-            TeachingConflictChecker conflictChecker) {
+            TeachingConflictChecker conflictChecker,
+            RoomCapacityChecker capacityChecker) {
         this.courseRepository = courseRepository;
         this.courseSectionRepository = courseSectionRepository;
         this.requirementGroupRepository = requirementGroupRepository;
@@ -108,6 +110,7 @@ public class CourseService implements SectionActions {
         this.auditTrail = auditTrail;
         this.metrics = metrics;
             this.conflictChecker = conflictChecker;
+        this.capacityChecker = capacityChecker;
     }
 
     @Transactional
@@ -592,6 +595,16 @@ public class CourseService implements SectionActions {
                 throw new BusinessException(CourseErrorCode.SCHEDULE_CONFLICT, roomClash.get());
             }
             recordConflictOverride(section, "room", roomClash.get());
+        }
+        // G1: a room can be free and still too small — a different failure from being already
+        // booked, but the same override escape hatch, since a registrar may know the enrollment cap
+        // will not actually be reached.
+        Optional<String> capacityIssue = capacityChecker.capacityIssue(section, incoming);
+        if (capacityIssue.isPresent()) {
+            if (!request.overrideRequested()) {
+                throw new BusinessException(CourseErrorCode.SCHEDULE_CONFLICT, capacityIssue.get());
+            }
+            recordConflictOverride(section, "capacity", capacityIssue.get());
         }
 
         sectionMeetingRepository.deleteBySectionId(sectionId);

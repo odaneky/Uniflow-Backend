@@ -19,7 +19,11 @@ public enum CourseErrorCode implements ErrorCode {
     /** A lecturer or a room is already committed elsewhere at the same time in this term. */
     SCHEDULE_CONFLICT,
     INVALID_SECTION_STATE,
-    COURSE_SECTION_IN_USE;
+    COURSE_SECTION_IN_USE,
+    BUILDING_NOT_FOUND,
+    BUILDING_CODE_ALREADY_EXISTS,
+    ROOM_NOT_FOUND,
+    ROOM_CODE_ALREADY_EXISTS;
 
     @Override
     public String code() {

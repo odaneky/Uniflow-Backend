@@ -84,6 +84,8 @@ public interface AuditTrail {
         public static final String PROGRAMME_CREDIT_LOAD_REPLACED = "PROGRAMME_CREDIT_LOAD_REPLACED";
         public static final String FACULTY_CREATED = "FACULTY_CREATED";
         public static final String DEPARTMENT_CREATED = "DEPARTMENT_CREATED";
+        public static final String BUILDING_CREATED = "BUILDING_CREATED";
+        public static final String ROOM_CREATED = "ROOM_CREATED";
         public static final String PROGRAMME_CREATED = "PROGRAMME_CREATED";
         public static final String PROGRAMME_UPDATED = "PROGRAMME_UPDATED";
         public static final String ACADEMIC_YEAR_CREATED = "ACADEMIC_YEAR_CREATED";
@@ -118,6 +120,8 @@ public interface AuditTrail {
         public static final String PROGRAMME = "Programme";
         public static final String FACULTY = "Faculty";
         public static final String DEPARTMENT = "Department";
+        public static final String BUILDING = "Building";
+        public static final String ROOM = "Room";
         public static final String ACADEMIC_YEAR = "AcademicYear";
         public static final String ACADEMIC_TERM = "AcademicTerm";
         /** No natural id — institution-wide singleton configuration (policy, tuition schedule). */

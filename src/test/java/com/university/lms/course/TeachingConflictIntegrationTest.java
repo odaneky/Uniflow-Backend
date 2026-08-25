@@ -11,6 +11,8 @@ import com.university.lms.course.domain.CourseSection;
 import com.university.lms.course.domain.SectionComponent;
 import com.university.lms.course.dto.AssignLecturerRequest;
 import com.university.lms.course.dto.ReplaceSectionMeetingsRequest;
+import com.university.lms.course.repository.BuildingRepository;
+import com.university.lms.course.repository.RoomRepository;
 import com.university.lms.course.repository.SectionComponentRepository;
 import com.university.lms.course.service.CourseService;
 import com.university.lms.identity.domain.User;
@@ -46,6 +48,12 @@ class TeachingConflictIntegrationTest extends AbstractPostgresIntegrationTest {
     @Autowired
     private SectionComponentRepository sectionComponentRepository;
 
+    @Autowired
+    private BuildingRepository buildingRepository;
+
+    @Autowired
+    private RoomRepository roomRepository;
+
     private UUID lecturer() {
         String tag = UUID.randomUUID().toString().substring(0, 8);
         return userRepository
@@ -64,6 +72,18 @@ class TeachingConflictIntegrationTest extends AbstractPostgresIntegrationTest {
     /** Two sections of different courses in one term — the normal timetabling situation. */
     private CourseSection sectionInSameTermAs(AcademicTerm term) {
         return fixtures.openSection(term, 30);
+    }
+
+    /** Returns the actual room code registered — rooms are a global registry, not scoped per term
+     * like the meetings in this file's other tests, so the caller's label alone is not unique
+     * across repeated runs against a database that is not recreated between them. */
+    private String registerRoom(String label, int capacity) {
+        String tag = UUID.randomUUID().toString().substring(0, 8);
+        com.university.lms.course.domain.Building building =
+                buildingRepository.saveAndFlush(new com.university.lms.course.domain.Building("B-" + tag, "Building " + tag));
+        String code = label + " " + tag;
+        roomRepository.saveAndFlush(new com.university.lms.course.domain.Room(building, code, capacity));
+        return code;
     }
 
     @Nested
@@ -240,6 +260,65 @@ class TeachingConflictIntegrationTest extends AbstractPostgresIntegrationTest {
             courseService.replaceMeetings(section.getId(), meetingsAt(2, "15:00", "16:00", "SR-505", "Lecture"));
             assertThat(courseService.replaceMeetings(
                             section.getId(), meetingsAt(2, "15:00", "16:00", "SR-505", "Lecture")))
+                    .isNotNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("Capacity")
+    class Capacity {
+
+        @Test
+        @DisplayName("refuses a section too large for its registered room")
+        void refusesOversizedSection() {
+            AcademicTerm term = fixtures.openTerm();
+            CourseSection section = fixtures.openSection(term, 100);
+            String room = registerRoom("Small Hall", 40);
+
+            assertThatThrownBy(() -> courseService.replaceMeetings(
+                            section.getId(), meetingsAt(1, "09:00", "10:00", room, "Lecture")))
+                    .isInstanceOf(ApplicationException.class)
+                    .extracting(ex -> ((ApplicationException) ex).getErrorCode())
+                    .isEqualTo(CourseErrorCode.SCHEDULE_CONFLICT);
+        }
+
+        @Test
+        @DisplayName("allows a section that fits its registered room")
+        void allowsSectionThatFits() {
+            AcademicTerm term = fixtures.openTerm();
+            CourseSection section = fixtures.openSection(term, 40);
+            String room = registerRoom("Big Hall", 200);
+
+            assertThat(courseService.replaceMeetings(
+                            section.getId(), meetingsAt(1, "09:00", "10:00", room, "Lecture")))
+                    .isNotNull();
+        }
+
+        /** Additive: a room nobody has registered yet imposes no capacity limit at all. */
+        @Test
+        @DisplayName("is not checked for a room that was never registered")
+        void unregisteredRoomImposesNoLimit() {
+            AcademicTerm term = fixtures.openTerm();
+            CourseSection section = fixtures.openSection(term, 500);
+
+            assertThat(courseService.replaceMeetings(
+                            section.getId(), meetingsAt(1, "09:00", "10:00", "Unregistered Room", "Lecture")))
+                    .isNotNull();
+        }
+
+        @Test
+        @DisplayName("can be overridden deliberately")
+        void allowsExplicitOverride() {
+            AcademicTerm term = fixtures.openTerm();
+            CourseSection section = fixtures.openSection(term, 100);
+            String room = registerRoom("Tiny Room", 10);
+
+            assertThat(courseService.replaceMeetings(
+                            section.getId(),
+                            new ReplaceSectionMeetingsRequest(
+                                    List.of(new ReplaceSectionMeetingsRequest.MeetingRequest(
+                                            1, LocalTime.parse("09:00"), LocalTime.parse("10:00"), room, "Lecture")),
+                                    true)))
                     .isNotNull();
         }
     }
