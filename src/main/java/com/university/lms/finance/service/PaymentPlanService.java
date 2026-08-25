@@ -1,6 +1,8 @@
 package com.university.lms.finance.service;
 
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.exception.ValidationException;
 import com.university.lms.finance.api.PaymentStanding;
@@ -53,6 +55,10 @@ public class PaymentPlanService {
         return new PaymentPlanResponse(term.id(), term.name(), term.startDate(), rows);
     }
 
+    @Auditable(
+            action = AuditTrail.Action.PAYMENT_PLAN_REPLACED,
+            entityType = AuditTrail.EntityType.PAYMENT_PLAN,
+            entityId = "#academicTermId")
     @Transactional
     public PaymentPlanResponse replace(UUID academicTermId, ReplacePaymentPlanRequest request) {
         AcademicStructure.TermCalendar term = requireTerm(academicTermId);

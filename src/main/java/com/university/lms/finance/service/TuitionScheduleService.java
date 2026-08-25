@@ -1,6 +1,8 @@
 package com.university.lms.finance.service;
 
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.finance.api.StudentBilling.TuitionQuote;
 import com.university.lms.finance.domain.FinanceErrorCode;
@@ -90,6 +92,11 @@ public class TuitionScheduleService {
         return new TuitionQuote(perCredit, schedule.getCampusFee(), List.of());
     }
 
+    @Auditable(
+            action = AuditTrail.Action.TUITION_SCHEDULE_REPLACED,
+            entityType = AuditTrail.EntityType.TUITION_SCHEDULE,
+            entityId = "null",
+            details = "'Base tuition schedule replaced'")
     @Transactional
     public TuitionScheduleResponse replace(ReplaceTuitionScheduleRequest request) {
         TuitionSchedule schedule = requireSchedule();
@@ -97,6 +104,11 @@ public class TuitionScheduleService {
         return find();
     }
 
+    @Auditable(
+            action = AuditTrail.Action.TUITION_SCHEDULE_REPLACED,
+            entityType = AuditTrail.EntityType.TUITION_SCHEDULE,
+            entityId = "#programmeId",
+            details = "'Programme tuition rate replaced'")
     @Transactional
     public TuitionScheduleResponse replaceProgrammeRate(UUID programmeId, ReplaceProgrammeTuitionRateRequest request) {
         if (!academicStructure.programmeExists(programmeId)) {
@@ -111,12 +123,22 @@ public class TuitionScheduleService {
         return find();
     }
 
+    @Auditable(
+            action = AuditTrail.Action.TUITION_SCHEDULE_REPLACED,
+            entityType = AuditTrail.EntityType.TUITION_SCHEDULE,
+            entityId = "#programmeId",
+            details = "'Programme tuition rate cleared'")
     @Transactional
     public TuitionScheduleResponse clearProgrammeRate(UUID programmeId) {
         rateRepository.deleteByProgrammeId(programmeId);
         return find();
     }
 
+    @Auditable(
+            action = AuditTrail.Action.TUITION_SCHEDULE_REPLACED,
+            entityType = AuditTrail.EntityType.TUITION_SCHEDULE,
+            entityId = "null",
+            details = "'Residency tuition rate replaced for ' + #residencyClassification.name()")
     @Transactional
     public TuitionScheduleResponse replaceResidencyRate(
             ResidencyClassification residencyClassification, ReplaceResidencyTuitionRateRequest request) {
@@ -129,6 +151,11 @@ public class TuitionScheduleService {
         return find();
     }
 
+    @Auditable(
+            action = AuditTrail.Action.TUITION_SCHEDULE_REPLACED,
+            entityType = AuditTrail.EntityType.TUITION_SCHEDULE,
+            entityId = "null",
+            details = "'Residency tuition rate cleared for ' + #residencyClassification.name()")
     @Transactional
     public TuitionScheduleResponse clearResidencyRate(ResidencyClassification residencyClassification) {
         residencyRateRepository.deleteByResidencyClassification(residencyClassification.name());

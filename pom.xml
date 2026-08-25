@@ -41,6 +41,15 @@
             <version>2.6.0</version>
         </dependency>
 
+        <!-- AOP is already on the classpath transitively via spring-boot-starter-data-jpa (Spring
+             Data uses it for repository proxies); declared explicitly here because the
+             AuditableAspect in common.audit is a deliberate, first-class use of it, not an
+             incidental one. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- Persistence -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

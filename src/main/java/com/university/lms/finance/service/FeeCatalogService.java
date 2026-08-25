@@ -1,6 +1,8 @@
 package com.university.lms.finance.service;
 
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.exception.ValidationException;
@@ -61,6 +63,11 @@ public class FeeCatalogService {
                 .toList();
     }
 
+    @Auditable(
+            action = AuditTrail.Action.FEE_CREATED,
+            entityType = AuditTrail.EntityType.FEE,
+            entityId = "#result.id()",
+            details = "#result.name()")
     @Transactional
     public FeeResponse create(CreateFeeRequest request) {
         String name = request.name().trim();
@@ -80,6 +87,11 @@ public class FeeCatalogService {
         return toResponse(saved);
     }
 
+    @Auditable(
+            action = AuditTrail.Action.FEE_UPDATED,
+            entityType = AuditTrail.EntityType.FEE,
+            entityId = "#feeId",
+            details = "#result.name()")
     @Transactional
     public FeeResponse update(UUID feeId, UpdateFeeRequest request) {
         FeeCatalogItem fee = require(feeId);
@@ -111,6 +123,10 @@ public class FeeCatalogService {
         return toResponse(fee);
     }
 
+    @Auditable(
+            action = AuditTrail.Action.FEE_DEACTIVATED,
+            entityType = AuditTrail.EntityType.FEE,
+            entityId = "#feeId")
     @Transactional
     public void deactivate(UUID feeId) {
         require(feeId).deactivate();

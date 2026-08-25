@@ -60,6 +60,11 @@ public interface AuditTrail {
         public static final String APPLICATION_MATRICULATED = "APPLICATION_MATRICULATED";
         /** A registrar posted a manual, unreviewed charge or credit directly onto a student's ledger. */
         public static final String LEDGER_ENTRY_POSTED = "LEDGER_ENTRY_POSTED";
+        public static final String FEE_CREATED = "FEE_CREATED";
+        public static final String FEE_UPDATED = "FEE_UPDATED";
+        public static final String FEE_DEACTIVATED = "FEE_DEACTIVATED";
+        public static final String PAYMENT_PLAN_REPLACED = "PAYMENT_PLAN_REPLACED";
+        public static final String TUITION_SCHEDULE_REPLACED = "TUITION_SCHEDULE_REPLACED";
 
         private Action() {}
     }
@@ -75,6 +80,9 @@ public interface AuditTrail {
         public static final String SERVICE_REQUEST = "ServiceRequest";
         public static final String APPLICATION = "Application";
         public static final String ACCOUNT_ENTRY = "AccountEntry";
+        public static final String FEE = "Fee";
+        public static final String PAYMENT_PLAN = "PaymentPlan";
+        public static final String TUITION_SCHEDULE = "TuitionSchedule";
 
         private EntityType() {}
     }
