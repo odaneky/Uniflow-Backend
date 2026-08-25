@@ -1,6 +1,8 @@
 package com.university.lms.academic.service;
 
 import com.university.lms.academic.domain.AcademicErrorCode;
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.academic.domain.Department;
 import com.university.lms.academic.domain.Faculty;
 import com.university.lms.academic.domain.Programme;
@@ -71,6 +73,11 @@ public class AcademicStructureService {
     // Faculties
     // ------------------------------------------------------------------
 
+    @Auditable(
+            action = AuditTrail.Action.FACULTY_CREATED,
+            entityType = AuditTrail.EntityType.FACULTY,
+            entityId = "#result.id()",
+            details = "#result.code() + ' ' + #result.name()")
     @Transactional
     public FacultyResponse createFaculty(CreateFacultyRequest request) {
         String code = normalise(request.code());
@@ -109,6 +116,11 @@ public class AcademicStructureService {
     // Departments
     // ------------------------------------------------------------------
 
+    @Auditable(
+            action = AuditTrail.Action.DEPARTMENT_CREATED,
+            entityType = AuditTrail.EntityType.DEPARTMENT,
+            entityId = "#result.id()",
+            details = "#result.code() + ' ' + #result.name()")
     @Transactional
     public DepartmentResponse createDepartment(CreateDepartmentRequest request) {
         Faculty faculty = requireFaculty(request.facultyId());
@@ -155,6 +167,11 @@ public class AcademicStructureService {
     // Programmes
     // ------------------------------------------------------------------
 
+    @Auditable(
+            action = AuditTrail.Action.PROGRAMME_CREATED,
+            entityType = AuditTrail.EntityType.PROGRAMME,
+            entityId = "#result.id()",
+            details = "#result.code()")
     @Transactional
     public ProgrammeResponse createProgramme(CreateProgrammeRequest request) {
         Department department = requireDepartment(request.departmentId());
@@ -198,6 +215,10 @@ public class AcademicStructureService {
         return academicPolicyService.toResponse(requireProgramme(programmeId));
     }
 
+    @Auditable(
+            action = AuditTrail.Action.PROGRAMME_UPDATED,
+            entityType = AuditTrail.EntityType.PROGRAMME,
+            entityId = "#programmeId")
     @Transactional
     public ProgrammeResponse updateProgramme(UUID programmeId, UpdateProgrammeRequest request) {
         Programme programme = requireProgramme(programmeId);

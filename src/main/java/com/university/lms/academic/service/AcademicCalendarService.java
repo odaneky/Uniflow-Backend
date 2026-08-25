@@ -1,6 +1,8 @@
 package com.university.lms.academic.service;
 
 import com.university.lms.academic.domain.AcademicErrorCode;
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.academic.domain.AcademicTerm;
 import com.university.lms.academic.domain.AcademicYear;
 import com.university.lms.academic.dto.AcademicTermResponse;
@@ -55,6 +57,11 @@ public class AcademicCalendarService {
     // Years
     // ------------------------------------------------------------------
 
+    @Auditable(
+            action = AuditTrail.Action.ACADEMIC_YEAR_CREATED,
+            entityType = AuditTrail.EntityType.ACADEMIC_YEAR,
+            entityId = "#result.id()",
+            details = "#result.code()")
     @Transactional
     public AcademicYearResponse createYear(CreateAcademicYearRequest request) {
         String code = request.code().trim().toUpperCase(Locale.ROOT);
@@ -91,6 +98,11 @@ public class AcademicCalendarService {
     // Terms
     // ------------------------------------------------------------------
 
+    @Auditable(
+            action = AuditTrail.Action.ACADEMIC_TERM_CREATED,
+            entityType = AuditTrail.EntityType.ACADEMIC_TERM,
+            entityId = "#result.id()",
+            details = "#result.name()")
     @Transactional
     public AcademicTermResponse createTerm(CreateAcademicTermRequest request) {
         AcademicYear year = requireYear(request.academicYearId());
@@ -147,6 +159,11 @@ public class AcademicCalendarService {
      * most consequential switch in the system — it is what allows students to start competing for
      * seats — and it deserves to be an explicit, individually auditable operation.
      */
+    @Auditable(
+            action = AuditTrail.Action.REGISTRATION_WINDOW_SET,
+            entityType = AuditTrail.EntityType.ACADEMIC_TERM,
+            entityId = "#termId",
+            details = "#request.opensAt() + ' .. ' + #request.closesAt()")
     @Transactional
     public AcademicTermResponse setRegistrationWindow(UUID termId, RegistrationWindowRequest request) {
         AcademicTerm term = requireTerm(termId);
@@ -155,6 +172,11 @@ public class AcademicCalendarService {
         return AcademicTermResponse.from(term, Instant.now());
     }
 
+    @Auditable(
+            action = AuditTrail.Action.ADD_DROP_WINDOW_SET,
+            entityType = AuditTrail.EntityType.ACADEMIC_TERM,
+            entityId = "#termId",
+            details = "#request.opensAt() + ' .. ' + #request.closesAt()")
     @Transactional
     public AcademicTermResponse setAddDropWindow(UUID termId, AddDropWindowRequest request) {
         AcademicTerm term = requireTerm(termId);
@@ -175,6 +197,11 @@ public class AcademicCalendarService {
      * registration window is: publishing exam dates is a consequential, individually auditable
      * moment in the academic year.
      */
+    @Auditable(
+            action = AuditTrail.Action.EXAM_WINDOW_SET,
+            entityType = AuditTrail.EntityType.ACADEMIC_TERM,
+            entityId = "#termId",
+            details = "#request.startsOn() + ' .. ' + #request.endsOn()")
     @Transactional
     public AcademicTermResponse setExamWindow(UUID termId, ExamWindowRequest request) {
         AcademicTerm term = requireTerm(termId);

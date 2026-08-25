@@ -76,6 +76,19 @@ public interface AuditTrail {
         /** A programme's draft curriculum version was published; its requirement blocks are now immutable. */
         public static final String CURRICULUM_VERSION_PUBLISHED = "CURRICULUM_VERSION_PUBLISHED";
         public static final String COURSE_SUBSTITUTION_RECORDED = "COURSE_SUBSTITUTION_RECORDED";
+        public static final String ACADEMIC_POLICY_REPLACED = "ACADEMIC_POLICY_REPLACED";
+        public static final String PROGRAMME_CREDIT_LOAD_REPLACED = "PROGRAMME_CREDIT_LOAD_REPLACED";
+        public static final String FACULTY_CREATED = "FACULTY_CREATED";
+        public static final String DEPARTMENT_CREATED = "DEPARTMENT_CREATED";
+        public static final String PROGRAMME_CREATED = "PROGRAMME_CREATED";
+        public static final String PROGRAMME_UPDATED = "PROGRAMME_UPDATED";
+        public static final String ACADEMIC_YEAR_CREATED = "ACADEMIC_YEAR_CREATED";
+        public static final String ACADEMIC_TERM_CREATED = "ACADEMIC_TERM_CREATED";
+        /** Opens or moves a term's registration window — the switch that lets students compete for seats. */
+        public static final String REGISTRATION_WINDOW_SET = "REGISTRATION_WINDOW_SET";
+        public static final String ADD_DROP_WINDOW_SET = "ADD_DROP_WINDOW_SET";
+        /** The term-level examination period, distinct from EXAM_RESCHEDULED's individual sitting. */
+        public static final String EXAM_WINDOW_SET = "EXAM_WINDOW_SET";
 
         private Action() {}
     }
@@ -98,6 +111,12 @@ public interface AuditTrail {
         public static final String SERVICE_HOLD = "ServiceHold";
         public static final String REQUIREMENT_BLOCK = "RequirementBlock";
         public static final String PROGRAMME = "Programme";
+        public static final String FACULTY = "Faculty";
+        public static final String DEPARTMENT = "Department";
+        public static final String ACADEMIC_YEAR = "AcademicYear";
+        public static final String ACADEMIC_TERM = "AcademicTerm";
+        /** No natural id — institution-wide singleton configuration (policy, tuition schedule). */
+        public static final String INSTITUTION = "Institution";
 
         private EntityType() {}
     }
