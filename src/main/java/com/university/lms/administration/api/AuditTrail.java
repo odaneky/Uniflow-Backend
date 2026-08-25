@@ -70,6 +70,12 @@ public interface AuditTrail {
         public static final String AWARD_DISBURSED = "AWARD_DISBURSED";
         public static final String SERVICE_HOLD_PLACED = "SERVICE_HOLD_PLACED";
         public static final String SERVICE_HOLD_CLEARED = "SERVICE_HOLD_CLEARED";
+        public static final String REQUIREMENT_BLOCK_CREATED = "REQUIREMENT_BLOCK_CREATED";
+        public static final String REQUIREMENT_BLOCK_COURSE_ADDED = "REQUIREMENT_BLOCK_COURSE_ADDED";
+        public static final String REQUIREMENT_BLOCK_DELETED = "REQUIREMENT_BLOCK_DELETED";
+        /** A programme's draft curriculum version was published; its requirement blocks are now immutable. */
+        public static final String CURRICULUM_VERSION_PUBLISHED = "CURRICULUM_VERSION_PUBLISHED";
+        public static final String COURSE_SUBSTITUTION_RECORDED = "COURSE_SUBSTITUTION_RECORDED";
 
         private Action() {}
     }
@@ -90,6 +96,8 @@ public interface AuditTrail {
         public static final String TUITION_SCHEDULE = "TuitionSchedule";
         public static final String FINANCIAL_AID_AWARD = "FinancialAidAward";
         public static final String SERVICE_HOLD = "ServiceHold";
+        public static final String REQUIREMENT_BLOCK = "RequirementBlock";
+        public static final String PROGRAMME = "Programme";
 
         private EntityType() {}
     }

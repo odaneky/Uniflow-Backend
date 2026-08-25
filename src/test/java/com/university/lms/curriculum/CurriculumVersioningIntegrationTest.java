@@ -10,10 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.university.lms.academic.domain.Programme;
+import com.university.lms.administration.domain.AuditEvent;
+import com.university.lms.administration.repository.AuditEventRepository;
 import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.support.AbstractPostgresIntegrationTest;
 import com.university.lms.support.AcademicFixtures;
+import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -39,6 +43,9 @@ class CurriculumVersioningIntegrationTest extends AbstractPostgresIntegrationTes
     @Autowired
     private AcademicFixtures academicFixtures;
 
+    @Autowired
+    private AuditEventRepository auditEventRepository;
+
     private static RequestPostProcessor asRegistrar() {
         String subject = "registrar-" + UUID.randomUUID();
         return jwt().jwt(token -> token.claim("sub", subject)
@@ -60,6 +67,39 @@ class CurriculumVersioningIntegrationTest extends AbstractPostgresIntegrationTes
                 .getResponse()
                 .getContentAsString();
         return UUID.fromString(JsonPath.read(response, "$.id"));
+    }
+
+    /**
+     * B3: {@code createBlock}'s and {@code publishVersion}'s {@code @Auditable} annotations, driven
+     * through the real HTTP -> controller -> proxied-bean path rather than a direct unit-level
+     * proxy — this file already builds the fixtures createBlock/publishVersion need, so proving the
+     * wiring here is cheaper than a second bespoke integration test.
+     */
+    @Test
+    @DisplayName("creating a requirement block and publishing a curriculum version both write an audit event")
+    void createBlockAndPublishVersionWriteAuditEvents() throws Exception {
+        RequestPostProcessor registrar = asRegistrar();
+        UUID programmeId = academicFixtures.programme().getId();
+
+        UUID blockId = createBlock(programmeId, "Core Audit Test", registrar);
+
+        List<AuditEvent> createdEvents = auditEventRepository
+                .findByEntityTypeAndEntityIdOrderByOccurredAtDesc(
+                        "RequirementBlock", blockId, org.springframework.data.domain.Pageable.unpaged())
+                .getContent();
+        assertThat(createdEvents).hasSize(1);
+        assertThat(createdEvents.get(0).getAction()).isEqualTo("REQUIREMENT_BLOCK_CREATED");
+        assertThat(createdEvents.get(0).getDetails()).isEqualTo("Core Audit Test");
+
+        mockMvc.perform(post("/api/v1/programmes/{id}/requirement-blocks/publish", programmeId).with(registrar))
+                .andExpect(status().isNoContent());
+
+        List<AuditEvent> publishedEvents = auditEventRepository
+                .findByEntityTypeAndEntityIdOrderByOccurredAtDesc(
+                        "Programme", programmeId, org.springframework.data.domain.Pageable.unpaged())
+                .getContent();
+        assertThat(publishedEvents).hasSize(1);
+        assertThat(publishedEvents.get(0).getAction()).isEqualTo("CURRICULUM_VERSION_PUBLISHED");
     }
 
     @Test

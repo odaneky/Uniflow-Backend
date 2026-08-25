@@ -1,5 +1,7 @@
 package com.university.lms.curriculum.service;
 
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.curriculum.api.CourseSubstitutions;
 import com.university.lms.curriculum.domain.CourseSubstitution;
 import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
@@ -16,6 +18,15 @@ public class DefaultCourseSubstitutions implements CourseSubstitutions {
         this.repository = repository;
     }
 
+    // Scoped to the student, not to the substitution row itself: record() is void and the row's
+    // own id is never surfaced to the caller, but the student is a real, queryable entity and
+    // this is exactly the kind of correction a registrar reviewing a student's record would want
+    // to find.
+    @Auditable(
+            action = AuditTrail.Action.COURSE_SUBSTITUTION_RECORDED,
+            entityType = AuditTrail.EntityType.STUDENT,
+            entityId = "#studentId",
+            details = "'Substitutes for required course ' + #requiredCourseId")
     @Override
     @Transactional
     public void record(

@@ -1,6 +1,8 @@
 package com.university.lms.curriculum.service;
 
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
@@ -95,6 +97,11 @@ public class CurriculumService {
         return progressOf(studentId);
     }
 
+    @Auditable(
+            action = AuditTrail.Action.REQUIREMENT_BLOCK_CREATED,
+            entityType = AuditTrail.EntityType.REQUIREMENT_BLOCK,
+            entityId = "#result.id()",
+            details = "#result.name()")
     @Transactional
     public RequirementBlockResponse createBlock(UUID programmeId, CreateRequirementBlockRequest request) {
         requireCurriculumEditor();
@@ -125,6 +132,10 @@ public class CurriculumService {
         }
     }
 
+    @Auditable(
+            action = AuditTrail.Action.REQUIREMENT_BLOCK_COURSE_ADDED,
+            entityType = AuditTrail.EntityType.REQUIREMENT_BLOCK,
+            entityId = "#blockId")
     @Transactional
     public RequirementBlockResponse addCourse(UUID programmeId, UUID blockId, AddRequirementCourseRequest request) {
         requireCurriculumEditor();
@@ -133,6 +144,10 @@ public class CurriculumService {
         return RequirementBlockResponse.from(block);
     }
 
+    @Auditable(
+            action = AuditTrail.Action.REQUIREMENT_BLOCK_DELETED,
+            entityType = AuditTrail.EntityType.REQUIREMENT_BLOCK,
+            entityId = "#blockId")
     @Transactional
     public void deleteBlock(UUID programmeId, UUID blockId) {
         requireCurriculumEditor();
@@ -145,6 +160,10 @@ public class CurriculumService {
      * previously published. From this moment its requirement blocks are immutable — see
      * {@link CurriculumVersion#isEditable()}.
      */
+    @Auditable(
+            action = AuditTrail.Action.CURRICULUM_VERSION_PUBLISHED,
+            entityType = AuditTrail.EntityType.PROGRAMME,
+            entityId = "#programmeId")
     @Transactional
     public void publishVersion(UUID programmeId) {
         requireRegistry();
