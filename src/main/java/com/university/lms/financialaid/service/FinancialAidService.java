@@ -1,6 +1,8 @@
 package com.university.lms.financialaid.service;
 
 import com.university.lms.academic.api.AcademicStructure;
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
@@ -180,12 +182,26 @@ public class FinancialAidService {
                         new FinancialAidAward(studentId, academicTermId, type, amount, AwardStatus.OFFERED)));
     }
 
+    @Auditable(
+            action = AuditTrail.Action.AWARD_ACCEPTED,
+            entityType = AuditTrail.EntityType.FINANCIAL_AID_AWARD,
+            entityId = "#awardId")
     @Transactional
     public FinancialAidAwardResponse acceptOwnAward(UUID awardId) {
         UUID studentId = ownStudentId();
         return acceptAward(studentId, awardId);
     }
 
+    /**
+     * Also called by {@link #acceptOwnAward}, which cannot rely on this method's own
+     * {@code @Auditable} to fire for it — that call is a same-instance self-invocation, which
+     * bypasses the Spring AOP proxy the annotation depends on (see {@code Auditable}'s javadoc) —
+     * so both methods carry the annotation independently, one per real external entry point.
+     */
+    @Auditable(
+            action = AuditTrail.Action.AWARD_ACCEPTED,
+            entityType = AuditTrail.EntityType.FINANCIAL_AID_AWARD,
+            entityId = "#awardId")
     @Transactional
     public FinancialAidAwardResponse acceptAward(UUID studentId, UUID awardId) {
         FinancialAidAward award = requireAward(awardId);
@@ -202,6 +218,10 @@ public class FinancialAidService {
         return FinancialAidAwardResponse.from(award);
     }
 
+    @Auditable(
+            action = AuditTrail.Action.AWARD_DISBURSED,
+            entityType = AuditTrail.EntityType.FINANCIAL_AID_AWARD,
+            entityId = "#awardId")
     @Transactional
     public FinancialAidAwardResponse disburse(UUID awardId) {
         requireRegistry();

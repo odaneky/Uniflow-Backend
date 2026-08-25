@@ -1,5 +1,7 @@
 package com.university.lms.financialaid.service;
 
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
@@ -52,18 +54,38 @@ public class ServiceHoldService implements HoldActions {
                 .toList();
     }
 
+    @Auditable(
+            action = AuditTrail.Action.SERVICE_HOLD_PLACED,
+            entityType = AuditTrail.EntityType.SERVICE_HOLD,
+            entityId = "#result.id()",
+            details = "#holdType.name() + ': ' + #reason")
     @Transactional
     public ServiceHoldResponse placeHold(UUID studentId, HoldType holdType, String reason) {
         CurrentUser actor = requireAuthorizedForHoldType(holdType);
         return ServiceHoldResponse.from(placeHoldInternal(studentId, holdType, reason, actor.userId()));
     }
 
+    /**
+     * Also called directly by {@code SapService} through this injected {@code ServiceHoldService}
+     * reference — a genuinely separate external entry point from {@link #placeHold}'s controller
+     * path, not a self-invocation, so it needs its own {@code @Auditable} rather than relying on
+     * {@code placeHold}'s.
+     */
+    @Auditable(
+            action = AuditTrail.Action.SERVICE_HOLD_PLACED,
+            entityType = AuditTrail.EntityType.SERVICE_HOLD,
+            entityId = "#result.getId()",
+            details = "#holdType.name() + ': ' + #reason")
     @Transactional
     ServiceHold placeHoldInternal(UUID studentId, HoldType holdType, String reason, UUID placedBy) {
         requireStudentExists(studentId);
         return repository.save(new ServiceHold(studentId, holdType, reason, Instant.now(), placedBy));
     }
 
+    @Auditable(
+            action = AuditTrail.Action.SERVICE_HOLD_CLEARED,
+            entityType = AuditTrail.EntityType.SERVICE_HOLD,
+            entityId = "#holdId")
     @Transactional
     public ServiceHoldResponse clearHold(UUID holdId) {
         ServiceHold hold = repository
@@ -79,6 +101,16 @@ public class ServiceHoldService implements HoldActions {
         return ServiceHoldResponse.from(hold);
     }
 
+    // Clears every active SAP hold for the student, not one specific hold, so this is scoped to
+    // the student rather than to any single ServiceHold row — the same reasoning
+    // TuitionScheduleService uses for an institution-wide change with no one entity to point at,
+    // except here a real entity (the student) is available and worth keeping the event
+    // discoverable through, rather than leaving entityId null.
+    @Auditable(
+            action = AuditTrail.Action.SERVICE_HOLD_CLEARED,
+            entityType = AuditTrail.EntityType.STUDENT,
+            entityId = "#studentId",
+            details = "'SAP holds cleared'")
     @Override
     @Transactional
     public void clearSapHold(UUID studentId) {
