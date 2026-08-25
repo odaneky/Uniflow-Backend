@@ -232,6 +232,21 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
             allowed(get("/api/v1/courses").with(as(SecurityRoles.LECTURER)));
         }
 
+        /**
+         * A3 groundwork: {@code /api/v1/courses/*} was added as an explicit GET matcher ahead of
+         * the catch-all, and {@code /api/v1/courses/sections} — a literal path one segment deep —
+         * matches that same single-segment wildcard. The STAFF_ONLY rule for
+         * {@code /api/v1/courses/sections} is listed earlier in the chain and must keep winning by
+         * list order; this pins that a student still cannot reach it despite the newer, broader
+         * rule sitting nearby.
+         */
+        @Test
+        @DisplayName("a same-shaped literal sibling still wins over the newer explicit wildcard rule")
+        void courseSectionsListingStaysStaffOnlyDespiteTheNewerWildcardRule() throws Exception {
+            denied(get("/api/v1/courses/sections").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/courses/sections").with(as(SecurityRoles.REGISTRAR)));
+        }
+
         @Test
         @DisplayName("students cannot create courses or sections")
         void writingTheCatalogIsPrivileged() throws Exception {
@@ -474,6 +489,38 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
             allowed(json(post("/api/v1/students").with(as(SecurityRoles.REGISTRAR)), "{}"));
             denied(json(post("/api/v1/students").with(as(SecurityRoles.STUDENT)), "{}"));
             denied(json(post("/api/v1/students").with(as(SecurityRoles.LECTURER)), "{}"));
+        }
+    }
+
+    @Nested
+    @DisplayName("A3 groundwork: explicit reads ahead of the catch-all")
+    class ExplicitReadsAheadOfCatchAll {
+
+        /**
+         * These paths used to reach {@code GET /api/v1/** -> authenticated()} only through the
+         * catch-all; they now have their own explicit matcher applying the identical rule, so
+         * behaviour is unchanged — this pins that the move did not accidentally deny anyone who
+         * could reach them before. A representative sample across the AUTHENTICATED,
+         * SELF_OR_STAFF and OWN_RECORD_ONLY endpoints newly listed, not an exhaustive one.
+         */
+        @Test
+        @DisplayName("newly-explicit read paths remain reachable by any authenticated caller")
+        void newlyExplicitPathsStayReachable() throws Exception {
+            allowed(get("/api/v1/departments").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/faculties").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/academic-policy").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/tuition-schedule").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/fee-catalog").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/enrollments").with(as(SecurityRoles.REGISTRAR)));
+            allowed(get("/api/v1/students/me").with(as(SecurityRoles.STUDENT)));
+            allowed(get("/api/v1/students/by-number/S12345").with(as(SecurityRoles.REGISTRAR)));
+        }
+
+        @Test
+        @DisplayName("still denied without a token, same as before")
+        void newlyExplicitPathsStillRequireAuthentication() throws Exception {
+            mockMvc.perform(get("/api/v1/departments")).andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/api/v1/students/me")).andExpect(status().isUnauthorized());
         }
     }
 

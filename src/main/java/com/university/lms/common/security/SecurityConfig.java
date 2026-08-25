@@ -325,6 +325,47 @@ public class SecurityConfig {
                         // academic structure. Reads of *personal* data are only role-gated here;
                         // narrowing them to the subject's own records is service-layer work and is
                         // still outstanding — see docs/ROADMAP.md, P0.1.
+                        //
+                        // A3 groundwork: every path below resolves to the exact same rule the
+                        // catch-all beneath it already applies — AUTHENTICATED, SELF_OR_STAFF and
+                        // OWN_RECORD_ONLY all mean "any signed-in caller may reach the URL" at this
+                        // layer; the finer distinction between them (self vs. any staff, or nothing
+                        // for even staff to override) is a service-layer concern —
+                        // CurrentUser.requireSelfOrStaff and its relatives — not something a URL
+                        // pattern can express. Listed explicitly, ahead of the catch-all, purely so
+                        // A3's eventual inversion of that catch-all to denyAll() has something to
+                        // enumerate against instead of these going dark along with it. This is not
+                        // the complete GET surface yet — the STAFF_ONLY and REGISTRY_ONLY endpoints
+                        // still relying on the catch-all need their own per-endpoint role rules
+                        // first, so the catch-all cannot be flipped until that follow-up lands too.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/academic-policy",
+                                "/api/v1/academic-terms/*",
+                                "/api/v1/courses",
+                                "/api/v1/courses/*",
+                                "/api/v1/courses/*/sections",
+                                "/api/v1/courses/assigned-lecturers",
+                                "/api/v1/courses/assigned-lecturers/*/sections",
+                                "/api/v1/courses/by-code/*",
+                                "/api/v1/courses/sections/*",
+                                "/api/v1/departments",
+                                "/api/v1/departments/*",
+                                "/api/v1/faculties",
+                                "/api/v1/faculties/*",
+                                "/api/v1/fee-catalog",
+                                "/api/v1/payment-plans/*",
+                                "/api/v1/programmes/*/requirement-blocks",
+                                "/api/v1/tuition-schedule",
+                                "/api/v1/enrollments",
+                                "/api/v1/enrollments/*",
+                                "/api/v1/financial-aid/students/*/awards",
+                                "/api/v1/forum/topics/*",
+                                "/api/v1/forum/topics/*/posts",
+                                "/api/v1/students/by-number/*",
+                                "/api/v1/students/*/transcript.pdf",
+                                "/api/v1/students/me")
+                        .authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/**")
                         .authenticated()
                         .anyRequest()
