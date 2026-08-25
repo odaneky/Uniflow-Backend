@@ -19,6 +19,7 @@ import com.university.lms.finance.repository.TuitionScheduleRepository;
 import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -53,7 +54,7 @@ public class TuitionScheduleService {
         return new TuitionScheduleResponse(
                 schedule.getAmountPerCredit(),
                 schedule.getCampusFee(),
-                rateRepository.findAll().stream()
+                rateRepository.findAllByEffectiveToIsNull().stream()
                         .map(row -> new TuitionScheduleResponse.ProgrammeRate(row.getProgrammeId(), row.getAmountPerCredit()))
                         .toList(),
                 residencyRateRepository.findAll().stream()
@@ -77,7 +78,7 @@ public class TuitionScheduleService {
                 Optional<BigDecimal> programmeRate = summary.programmeId() == null
                         ? Optional.empty()
                         : rateRepository
-                                .findByProgrammeId(summary.programmeId())
+                                .findByProgrammeIdAndEffectiveToIsNull(summary.programmeId())
                                 .map(ProgrammeTuitionRate::getAmountPerCredit);
                 if (programmeRate.isPresent()) {
                     perCredit = programmeRate.get();
@@ -99,8 +100,14 @@ public class TuitionScheduleService {
             details = "'Base tuition schedule replaced'")
     @Transactional
     public TuitionScheduleResponse replace(ReplaceTuitionScheduleRequest request) {
-        TuitionSchedule schedule = requireSchedule();
-        schedule.replace(request.amountPerCredit(), request.campusFee());
+        // The open row must physically flush its closure before the new row is inserted — the
+        // same ordering constraint CurriculumService.publishVersion has against
+        // uk_curriculum_versions_one_published, here against uk_tuition_schedules_open.
+        scheduleRepository.findByEffectiveToIsNull().ifPresent(open -> {
+            open.end(LocalDate.now());
+            scheduleRepository.saveAndFlush(open);
+        });
+        scheduleRepository.save(new TuitionSchedule(request.amountPerCredit(), request.campusFee(), LocalDate.now()));
         return find();
     }
 
@@ -115,11 +122,11 @@ public class TuitionScheduleService {
             throw new ResourceNotFoundException(
                     FinanceErrorCode.TUITION_PROGRAMME_NOT_FOUND, "No programme exists with id " + programmeId);
         }
-        ProgrammeTuitionRate row = rateRepository
-                .findByProgrammeId(programmeId)
-                .orElseGet(() -> new ProgrammeTuitionRate(programmeId, request.amountPerCredit()));
-        row.replace(request.amountPerCredit());
-        rateRepository.save(row);
+        rateRepository.findByProgrammeIdAndEffectiveToIsNull(programmeId).ifPresent(open -> {
+            open.end(LocalDate.now());
+            rateRepository.saveAndFlush(open);
+        });
+        rateRepository.save(new ProgrammeTuitionRate(programmeId, request.amountPerCredit(), LocalDate.now()));
         return find();
     }
 
@@ -130,7 +137,10 @@ public class TuitionScheduleService {
             details = "'Programme tuition rate cleared'")
     @Transactional
     public TuitionScheduleResponse clearProgrammeRate(UUID programmeId) {
-        rateRepository.deleteByProgrammeId(programmeId);
+        rateRepository.findByProgrammeIdAndEffectiveToIsNull(programmeId).ifPresent(open -> {
+            open.end(LocalDate.now());
+            rateRepository.save(open);
+        });
         return find();
     }
 
@@ -164,8 +174,8 @@ public class TuitionScheduleService {
 
     private TuitionSchedule requireSchedule() {
         return scheduleRepository
-                .findById(TuitionSchedule.SINGLETON_ID)
+                .findByEffectiveToIsNull()
                 .orElseGet(() -> scheduleRepository.save(new TuitionSchedule(
-                        TuitionSchedule.DEFAULT_PER_CREDIT, TuitionSchedule.DEFAULT_CAMPUS_FEE)));
+                        TuitionSchedule.DEFAULT_PER_CREDIT, TuitionSchedule.DEFAULT_CAMPUS_FEE, LocalDate.now())));
     }
 }

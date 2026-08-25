@@ -14,6 +14,7 @@ import com.university.lms.finance.repository.TuitionScheduleRepository;
 import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,8 +58,9 @@ class TuitionScheduleServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(scheduleRepository.findById(TuitionSchedule.SINGLETON_ID))
-                .thenReturn(Optional.of(new TuitionSchedule(new BigDecimal("200.00"), new BigDecimal("350.00"))));
+        when(scheduleRepository.findByEffectiveToIsNull())
+                .thenReturn(Optional.of(
+                        new TuitionSchedule(new BigDecimal("200.00"), new BigDecimal("350.00"), LocalDate.now())));
     }
 
     private void studentIs(ResidencyClassification residency) {
@@ -71,7 +73,7 @@ class TuitionScheduleServiceTest {
     @DisplayName("no residency rate configured falls back to the institution default")
     void noResidencyRateFallsBackToInstitutionDefault() {
         studentIs(ResidencyClassification.OUT_OF_STATE);
-        when(rateRepository.findByProgrammeId(PROGRAMME_ID)).thenReturn(Optional.empty());
+        when(rateRepository.findByProgrammeIdAndEffectiveToIsNull(PROGRAMME_ID)).thenReturn(Optional.empty());
         when(residencyRateRepository.findByResidencyClassification("OUT_OF_STATE")).thenReturn(Optional.empty());
 
         TuitionQuote quote = service.quoteFor(STUDENT_ID);
@@ -83,7 +85,7 @@ class TuitionScheduleServiceTest {
     @DisplayName("an out-of-state student is charged the out-of-state residency rate")
     void residencyRateAppliesWhenNoProgrammeOverride() {
         studentIs(ResidencyClassification.OUT_OF_STATE);
-        when(rateRepository.findByProgrammeId(PROGRAMME_ID)).thenReturn(Optional.empty());
+        when(rateRepository.findByProgrammeIdAndEffectiveToIsNull(PROGRAMME_ID)).thenReturn(Optional.empty());
         when(residencyRateRepository.findByResidencyClassification("OUT_OF_STATE"))
                 .thenReturn(Optional.of(new ResidencyTuitionRate("OUT_OF_STATE", new BigDecimal("650.00"))));
 
@@ -96,7 +98,7 @@ class TuitionScheduleServiceTest {
     @DisplayName("an in-district student is not charged the out-of-state rate")
     void inDistrictStudentGetsTheInDistrictRate() {
         studentIs(ResidencyClassification.IN_DISTRICT);
-        when(rateRepository.findByProgrammeId(PROGRAMME_ID)).thenReturn(Optional.empty());
+        when(rateRepository.findByProgrammeIdAndEffectiveToIsNull(PROGRAMME_ID)).thenReturn(Optional.empty());
         when(residencyRateRepository.findByResidencyClassification("IN_DISTRICT"))
                 .thenReturn(Optional.of(new ResidencyTuitionRate("IN_DISTRICT", new BigDecimal("120.00"))));
 
@@ -109,8 +111,8 @@ class TuitionScheduleServiceTest {
     @DisplayName("a programme override wins over the residency rate")
     void programmeOverrideWinsOverResidencyRate() {
         studentIs(ResidencyClassification.OUT_OF_STATE);
-        when(rateRepository.findByProgrammeId(PROGRAMME_ID))
-                .thenReturn(Optional.of(new ProgrammeTuitionRate(PROGRAMME_ID, new BigDecimal("900.00"))));
+        when(rateRepository.findByProgrammeIdAndEffectiveToIsNull(PROGRAMME_ID))
+                .thenReturn(Optional.of(new ProgrammeTuitionRate(PROGRAMME_ID, new BigDecimal("900.00"), LocalDate.now())));
 
         TuitionQuote quote = service.quoteFor(STUDENT_ID);
 

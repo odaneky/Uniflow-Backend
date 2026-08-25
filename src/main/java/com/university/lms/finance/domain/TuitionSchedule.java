@@ -5,16 +5,22 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
-import java.util.UUID;
+import java.time.LocalDate;
 import lombok.Getter;
 
-/** One row: the university's default per-credit tuition and campus fee. */
+/**
+ * The university's default per-credit tuition and campus fee, effective for one interval.
+ *
+ * <p>Was a single row overwritten in place — {@link #replace} rewrote the only copy, so "what was
+ * the per-credit rate in Fall 2025" had no answer once a later change landed. Now a sequence of
+ * rows, at most one of which is open ({@link #getEffectiveTo()} {@code null}) at a time; replacing
+ * the rate closes the open row and opens a new one rather than mutating history.
+ */
 @Entity
 @Table(name = "tuition_schedules")
 @Getter
 public class TuitionSchedule extends BaseEntity {
 
-    public static final UUID SINGLETON_ID = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-000000000002");
     public static final BigDecimal DEFAULT_PER_CREDIT = new BigDecimal("200.00");
     public static final BigDecimal DEFAULT_CAMPUS_FEE = new BigDecimal("350.00");
 
@@ -24,15 +30,22 @@ public class TuitionSchedule extends BaseEntity {
     @Column(name = "campus_fee", nullable = false, precision = 12, scale = 2)
     private BigDecimal campusFee;
 
+    @Column(name = "effective_from", nullable = false)
+    private LocalDate effectiveFrom;
+
+    @Column(name = "effective_to")
+    private LocalDate effectiveTo;
+
     protected TuitionSchedule() {}
 
-    public TuitionSchedule(BigDecimal amountPerCredit, BigDecimal campusFee) {
-        setId(SINGLETON_ID);
-        replace(amountPerCredit, campusFee);
-    }
-
-    public void replace(BigDecimal amountPerCredit, BigDecimal campusFee) {
+    public TuitionSchedule(BigDecimal amountPerCredit, BigDecimal campusFee, LocalDate effectiveFrom) {
         this.amountPerCredit = amountPerCredit;
         this.campusFee = campusFee;
+        this.effectiveFrom = effectiveFrom;
+    }
+
+    /** Closes this interval — the row stops being the open, currently-effective one. */
+    public void end(LocalDate effectiveTo) {
+        this.effectiveTo = effectiveTo;
     }
 }
