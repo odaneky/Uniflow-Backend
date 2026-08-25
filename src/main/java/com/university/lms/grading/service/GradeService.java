@@ -29,6 +29,7 @@ import com.university.lms.common.exception.BusinessException;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -68,6 +69,7 @@ public class GradeService implements AcademicRecord {
     private final UniFlowMetrics metrics;
     private final GradeOutboxPublisher gradeOutboxPublisher;
     private final AssessmentRepository assessmentRepository;
+    private final StaffAppointments staffAppointments;
 
     public GradeService(
             GradeRepository gradeRepository,
@@ -83,7 +85,8 @@ public class GradeService implements AcademicRecord {
             AuditTrail auditTrail,
             UniFlowMetrics metrics,
             GradeOutboxPublisher gradeOutboxPublisher,
-            AssessmentRepository assessmentRepository) {
+            AssessmentRepository assessmentRepository,
+            StaffAppointments staffAppointments) {
         this.gradeRepository = gradeRepository;
         this.gradeRevisionRepository = gradeRevisionRepository;
         this.gradeScaleRepository = gradeScaleRepository;
@@ -98,6 +101,7 @@ public class GradeService implements AcademicRecord {
         this.metrics = metrics;
         this.gradeOutboxPublisher = gradeOutboxPublisher;
         this.assessmentRepository = assessmentRepository;
+        this.staffAppointments = staffAppointments;
     }
 
     public List<GradeResponse> gradebook(UUID sectionId) {
@@ -382,30 +386,48 @@ public class GradeService implements AcademicRecord {
                         "No grade band covers percentage " + percentage));
     }
 
-    private void requireKnownSection(UUID sectionId) {
-        courseCatalog
-                .findSection(sectionId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        GradingErrorCode.GRADE_SECTION_NOT_FOUND, "No course section exists with id " + sectionId));
-    }
 
     private void requireTeacherOrAdmin(UUID sectionId) {
         CurrentUser caller = currentUserProvider.require();
-        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
-                || caller.hasRole(SecurityRoles.REGISTRAR)
-                || caller.hasRole(SecurityRoles.FACULTY_ADMIN)) {
-            requireKnownSection(sectionId);
-            return;
-        }
         CourseCatalog.SectionSummary section = courseCatalog
                 .findSection(sectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         GradingErrorCode.GRADE_SECTION_NOT_FOUND, "No course section exists with id " + sectionId));
+        if (isAuthorizedAdmin(caller, section)) {
+            return;
+        }
         if (caller.hasRole(SecurityRoles.LECTURER) && courseCatalog.teaches(caller.userId(), sectionId)) {
             return;
         }
         throw new ForbiddenException(
                 CommonErrorCode.ACCESS_DENIED, "You do not have permission to change this section");
+    }
+
+    /**
+     * A5: SYSTEM_ADMIN/REGISTRAR/FACULTY_ADMIN previously bypassed section-department scoping
+     * unconditionally here — grade entry is the highest-stakes instance of the {@code
+     * requireTeacherOrAdmin} over-reach already fixed in {@code AssessmentService} and {@code
+     * LearningService}. Deliberately a separate check from LECTURER's, which stays gated on {@code
+     * courseCatalog.teaches}, unchanged: department appointment is not the same claim as actually
+     * teaching this section. Same fail-open resolution and SYSTEM_ADMIN carve-out as the other A5
+     * guards.
+     */
+    private boolean isAuthorizedAdmin(CurrentUser caller, CourseCatalog.SectionSummary section) {
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.FACULTY_ADMIN))) {
+            return false;
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return true;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return true;
+        }
+        Optional<UUID> orgUnitId = courseCatalog
+                .departmentOfCourse(section.courseId())
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 
     public Optional<BigDecimal> computeWeightedOverall(UUID studentId, UUID sectionId) {

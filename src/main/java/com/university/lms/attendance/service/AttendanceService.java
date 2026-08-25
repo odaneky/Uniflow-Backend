@@ -18,11 +18,13 @@ import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.staffing.api.StaffAppointments;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,18 +38,21 @@ public class AttendanceService {
     private final CourseCatalog courseCatalog;
     private final EnrollmentDirectory enrollmentDirectory;
     private final CurrentUserProvider currentUserProvider;
+    private final StaffAppointments staffAppointments;
 
     public AttendanceService(
             AttendanceSessionRepository sessionRepository,
             AttendanceMarkRepository markRepository,
             CourseCatalog courseCatalog,
             EnrollmentDirectory enrollmentDirectory,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            StaffAppointments staffAppointments) {
         this.sessionRepository = sessionRepository;
         this.markRepository = markRepository;
         this.courseCatalog = courseCatalog;
         this.enrollmentDirectory = enrollmentDirectory;
         this.currentUserProvider = currentUserProvider;
+        this.staffAppointments = staffAppointments;
     }
 
     public List<AttendanceSessionDetailResponse> sessionsOf(UUID sectionId) {
@@ -156,13 +161,11 @@ public class AttendanceService {
 
     private void requireTeacherOrAdmin(UUID sectionId) {
         CurrentUser caller = currentUserProvider.require();
-        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
-                || caller.hasRole(SecurityRoles.REGISTRAR)
-                || caller.hasRole(SecurityRoles.FACULTY_ADMIN)) {
-            courseCatalog
-                    .findSection(sectionId)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            CommonErrorCode.RESOURCE_NOT_FOUND, "No course section exists with id " + sectionId));
+        CourseCatalog.SectionSummary section = courseCatalog
+                .findSection(sectionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        CommonErrorCode.RESOURCE_NOT_FOUND, "No course section exists with id " + sectionId));
+        if (isAuthorizedAdmin(caller, section)) {
             return;
         }
         if (caller.hasRole(SecurityRoles.LECTURER) && courseCatalog.teaches(caller.userId(), sectionId)) {
@@ -170,5 +173,30 @@ public class AttendanceService {
         }
         throw new ForbiddenException(
                 CommonErrorCode.ACCESS_DENIED, "You do not have permission to manage attendance for this section");
+    }
+
+    /**
+     * A5: SYSTEM_ADMIN/REGISTRAR/FACULTY_ADMIN previously bypassed section-department scoping
+     * unconditionally here, the same {@code requireTeacherOrAdmin} over-reach already fixed in
+     * {@code AssessmentService}, {@code LearningService} and {@code GradeService}. Deliberately a
+     * separate check from LECTURER's, which stays gated on {@code courseCatalog.teaches},
+     * unchanged. Same fail-open resolution and SYSTEM_ADMIN carve-out as the other A5 guards.
+     */
+    private boolean isAuthorizedAdmin(CurrentUser caller, CourseCatalog.SectionSummary section) {
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.FACULTY_ADMIN))) {
+            return false;
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return true;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return true;
+        }
+        Optional<UUID> orgUnitId = courseCatalog
+                .departmentOfCourse(section.courseId())
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 }

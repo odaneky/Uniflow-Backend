@@ -20,6 +20,7 @@ import com.university.lms.grading.repository.GradeScaleRepository;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
@@ -77,6 +78,9 @@ class GradeServiceTest {
 
     @Mock
     private com.university.lms.assessment.repository.AssessmentRepository assessmentRepository;
+
+    @Mock
+    private StaffAppointments staffAppointments;
 
     @InjectMocks
     private GradeService service;

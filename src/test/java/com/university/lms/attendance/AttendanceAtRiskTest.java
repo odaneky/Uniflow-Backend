@@ -17,6 +17,7 @@ import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.enrollment.api.EnrollmentDirectory;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.staffing.api.StaffAppointments;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +47,9 @@ class AttendanceAtRiskTest {
     @Mock
     CurrentUserProvider currentUserProvider;
 
+    @Mock
+    StaffAppointments staffAppointments;
+
     AttendanceService service;
 
     UUID sectionId;
@@ -56,7 +60,8 @@ class AttendanceAtRiskTest {
     @BeforeEach
     void setUp() {
         service = new AttendanceService(
-                sessionRepository, markRepository, courseCatalog, enrollmentDirectory, currentUserProvider);
+                sessionRepository, markRepository, courseCatalog, enrollmentDirectory, currentUserProvider,
+                staffAppointments);
         sectionId = UUID.randomUUID();
         belowThresholdStudent = UUID.randomUUID();
         aboveThresholdStudent = UUID.randomUUID();

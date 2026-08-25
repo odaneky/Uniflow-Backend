@@ -42,6 +42,7 @@ import com.university.lms.finance.api.StudentBilling;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
+import com.university.lms.staffing.api.StaffAppointments;
 import com.university.lms.student.api.StudentDirectory;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -78,6 +80,7 @@ public class QuizService {
     private final DocumentStore documentStore;
     private final CurrentUserProvider currentUserProvider;
     private final StudentBilling studentBilling;
+    private final StaffAppointments staffAppointments;
 
     public QuizService(
             AssessmentRepository assessmentRepository,
@@ -91,7 +94,8 @@ public class QuizService {
             UserDirectory userDirectory,
             DocumentStore documentStore,
             CurrentUserProvider currentUserProvider,
-            StudentBilling studentBilling) {
+            StudentBilling studentBilling,
+            StaffAppointments staffAppointments) {
         this.assessmentRepository = assessmentRepository;
         this.attemptRepository = attemptRepository;
         this.questionRepository = questionRepository;
@@ -104,6 +108,7 @@ public class QuizService {
         this.documentStore = documentStore;
         this.currentUserProvider = currentUserProvider;
         this.studentBilling = studentBilling;
+        this.staffAppointments = staffAppointments;
     }
 
     public QuizStructureResponse structureForStaff(UUID assessmentId) {
@@ -851,21 +856,43 @@ public class QuizService {
 
     private void requireTeacherOrAdmin(UUID sectionId) {
         CurrentUser caller = currentUserProvider.require();
-        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
-                || caller.hasRole(SecurityRoles.REGISTRAR)
-                || caller.hasRole(SecurityRoles.FACULTY_ADMIN)) {
-            requireKnownSection(sectionId);
-            return;
-        }
         CourseCatalog.SectionSummary section = courseCatalog
                 .findSection(sectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         AssessmentErrorCode.ASSESSMENT_SECTION_NOT_FOUND,
                         "No course section exists with id " + sectionId));
+        if (isAuthorizedAdmin(caller, section)) {
+            return;
+        }
         if (caller.hasRole(SecurityRoles.LECTURER) && caller.userId().equals(section.lecturerUserId())) {
             return;
         }
         throw new ForbiddenException(
                 CommonErrorCode.ACCESS_DENIED, "You do not have permission to change this section");
+    }
+
+    /**
+     * A5: SYSTEM_ADMIN/REGISTRAR/FACULTY_ADMIN previously bypassed section-department scoping
+     * unconditionally here, the same {@code requireTeacherOrAdmin} over-reach already fixed in
+     * {@code AssessmentService}, {@code LearningService} and {@code GradeService}. Deliberately a
+     * separate check from LECTURER's, which stays gated on being this section's own lecturer,
+     * unchanged. Same fail-open resolution and SYSTEM_ADMIN carve-out as the other A5 guards.
+     */
+    private boolean isAuthorizedAdmin(CurrentUser caller, CourseCatalog.SectionSummary section) {
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.FACULTY_ADMIN))) {
+            return false;
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return true;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return true;
+        }
+        Optional<UUID> orgUnitId = courseCatalog
+                .departmentOfCourse(section.courseId())
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 }
