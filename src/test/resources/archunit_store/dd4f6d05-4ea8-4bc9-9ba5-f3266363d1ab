@@ -1,0 +1,83 @@
+com.university.lms.academic.service.AcademicStructureService.reconcileOrgUnits() writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.academic.service.AcademicStructureService.replaceCreditLoad(java.util.UUID, com.university.lms.academic.dto.ReplaceProgrammeCreditLoadRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.admissions.service.AdmissionsService.attachDocument(java.util.UUID, com.university.lms.admissions.dto.AttachApplicationDocumentRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.admissions.service.AdmissionsService.attachDocument(java.util.UUID, java.lang.String, com.university.lms.admissions.dto.AttachApplicationDocumentRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.admissions.service.AdmissionsService.findByIdForApplicant(java.util.UUID, java.lang.String) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.admissions.service.AdmissionsService.update(java.util.UUID, java.lang.String, com.university.lms.admissions.dto.UpdateApplicationRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.admissions.service.ProgrammeApplicationFormService.replace(java.util.UUID, com.university.lms.admissions.dto.ReplaceProgrammeApplicationFormRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.AssessmentService.create(java.util.UUID, com.university.lms.assessment.dto.CreateAssessmentRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.AssessmentService.publish(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.AssessmentService.submitOwn(java.util.UUID, org.springframework.web.multipart.MultipartFile) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.addQuestion(java.util.UUID, com.university.lms.assessment.dto.QuizDtos$CreateQuestionRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.deleteQuestion(java.util.UUID, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.gradeQuestion(java.util.UUID, java.util.UUID, java.util.UUID, com.university.lms.assessment.dto.QuizDtos$GradeQuestionRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.reorder(java.util.UUID, com.university.lms.assessment.dto.QuizDtos$ReorderQuestionsRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.saveAnswers(java.util.UUID, java.util.UUID, com.university.lms.assessment.dto.QuizDtos$SaveAnswersRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.startOrResume(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.submit(java.util.UUID, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.updateMeta(java.util.UUID, com.university.lms.assessment.dto.QuizDtos$UpdateAssessmentMetaRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.updateQuestion(java.util.UUID, java.util.UUID, com.university.lms.assessment.dto.QuizDtos$UpdateQuestionRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.assessment.service.QuizService.uploadAnswerFile(java.util.UUID, java.util.UUID, java.util.UUID, org.springframework.web.multipart.MultipartFile) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.attendance.service.AttendanceService.recordSession(java.util.UUID, com.university.lms.attendance.dto.AttendanceDtos$CreateAttendanceSessionRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.CommunicationService.createAnnouncement(com.university.lms.communication.dto.CreateAnnouncementRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.CommunicationService.deleteOwnMessage(java.util.UUID, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.CommunicationService.markAnnouncementRead(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.CommunicationService.markConversationRead(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.CommunicationService.publishAnnouncement(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.CommunicationService.send(java.util.UUID, com.university.lms.communication.dto.CreateMessageRequest, java.lang.String) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.CommunicationService.startConversation(com.university.lms.communication.dto.CreateConversationRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.ForumService.createPost(java.util.UUID, com.university.lms.communication.dto.CreateForumPostRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.ForumService.createTopic(java.util.UUID, com.university.lms.communication.dto.CreateForumTopicRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.ForumService.deletePost(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.communication.service.ForumService.updateTopic(java.util.UUID, com.university.lms.communication.dto.UpdateForumTopicRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.checkSchedule(java.util.UUID, com.university.lms.course.dto.ScheduleCheckRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.closeSection(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.create(com.university.lms.course.dto.CreateCourseRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.deleteSection(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.openSection(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.replaceRequirements(java.util.UUID, com.university.lms.course.dto.ReplaceCourseRequirementsRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.sectionsInTerm(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.CourseService.update(java.util.UUID, com.university.lms.course.dto.UpdateCourseRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.DefaultCourseCatalog.releaseSeat(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.DefaultCourseCatalog.replaceEnrolledCount(java.util.UUID, int) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.course.service.DefaultCourseCatalog.tryReserveSeat(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.document.service.DocumentService.register(com.university.lms.document.dto.CreateDocumentRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.document.service.DocumentService.store(java.util.UUID, java.lang.String, java.lang.String, java.lang.String, [B) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.enrollment.service.DefaultEnrollmentActions.lateAdd(java.util.UUID, java.util.UUID, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.enrollment.service.DefaultEnrollmentActions.withdraw(java.util.UUID, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.enrollment.service.DefaultEnrollmentDirectory.reconcileSeatCount(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.enrollment.service.EnrollmentService.acceptWaitlistOffer(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.enrollment.service.EnrollmentService.complete(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.enrollment.service.SectionRosterService.roster(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.finance.service.FinanceService.payOwn(com.university.lms.finance.dto.CreatePaymentRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.financialaid.service.FinancialAidService.importIsir(java.lang.String) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.financialaid.service.FinancialAidService.packageAwards(java.util.UUID, com.university.lms.financialaid.dto.PackageAwardsRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.financialaid.service.SapService.evaluateAfterGrades(java.util.UUID, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.financialaid.service.ServiceHoldService.clearActiveHoldsOfType(java.util.UUID, com.university.lms.financialaid.domain.HoldType) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.grading.service.TermCloseService.closeTerm(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.learning.service.LearningService.addLesson(java.util.UUID, com.university.lms.learning.dto.CreateLessonRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.learning.service.LearningService.addMaterial(java.util.UUID, com.university.lms.learning.dto.CreateMaterialRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.learning.service.LearningService.addModule(java.util.UUID, com.university.lms.learning.dto.CreateModuleRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.learning.service.LearningService.publishModule(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.learning.service.LearningService.upsertContent(java.util.UUID, com.university.lms.learning.dto.UpsertContentRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.notification.service.MyNotificationsService.markAllRead() writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.notification.service.MyNotificationsService.markRead(java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.notification.service.NotificationPreferenceService.update(java.util.UUID, com.university.lms.notification.dto.UpdateNotificationPreferencesRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.staffing.service.StaffingService.appointStaff(com.university.lms.staffing.dto.AppointStaffRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.staffing.service.StaffingService.createOrgUnit(com.university.lms.staffing.dto.CreateOrgUnitRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.staffing.service.StaffingService.endAppointment(java.util.UUID, java.time.LocalDate) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.staffing.service.StaffingService.ensureAppointment(java.util.UUID, java.lang.String) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.staffing.service.StaffingService.ensureOrgUnitFor(java.lang.String, java.util.UUID, java.lang.String, java.lang.String) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.staffing.service.StaffingService.reconcileAppointments() writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.staffing.service.StaffingService.registerEmployee(com.university.lms.staffing.dto.RegisterEmployeeRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentProgrammeEnrolmentService.addSecondary(java.util.UUID, java.util.UUID, com.university.lms.student.domain.ProgrammeEnrolmentKind, java.time.LocalDate) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentProgrammeEnrolmentService.endSecondary(java.util.UUID, java.time.LocalDate, com.university.lms.student.domain.ProgrammeEnrolmentEndReason, java.lang.String, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentProgrammeEnrolmentService.openInitial(java.util.UUID, java.util.UUID, java.time.LocalDate) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentProgrammeEnrolmentService.transfer(java.util.UUID, java.util.UUID, java.time.LocalDate, java.lang.String, java.util.UUID) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentService.addAdvisingNote(java.util.UUID, com.university.lms.student.dto.CreateAdvisingNoteRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentService.addProgrammeMembership(java.util.UUID, com.university.lms.student.dto.AddProgrammeMembershipRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentService.create(com.university.lms.student.dto.CreateStudentRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentService.endProgrammeMembership(java.util.UUID, java.util.UUID, com.university.lms.student.dto.EndProgrammeMembershipRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentService.updateContactById(java.util.UUID, com.university.lms.student.dto.UpdateOwnProfileRequest) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentService.updateOwnAdvisorOfficeHours(java.lang.String) writes state but is neither @Auditable nor calls AuditTrail.record
+com.university.lms.student.service.StudentService.updateOwnProfile(com.university.lms.student.dto.UpdateOwnProfileRequest) writes state but is neither @Auditable nor calls AuditTrail.record

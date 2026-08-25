@@ -1,5 +1,5 @@
 #
-#Sun Aug 23 20:05:46 EST 2026
+#Tue Aug 25 07:20:33 EST 2026
 classes\ in\ com.university.lms.academic\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ academic\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=9677671c-e12d-4e88-920d-388319f4f253
 classes\ in\ com.university.lms.administration\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ administration\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=7539d18b-9f48-4e8b-b2f7-89f7e0ec1a52
 classes\ in\ com.university.lms.admissions\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ admissions\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=85029684-3729-4e15-86fc-c6b5b461a59e
@@ -21,3 +21,4 @@ classes\ in\ com.university.lms.reporting\ outside\ its\ api\ package\ are\ reac
 classes\ in\ com.university.lms.request\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ request\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=eac8768a-e41a-4dde-9701-67c605e26564
 classes\ in\ com.university.lms.staffing\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ staffing\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=832806f1-bfdc-43ae-9923-88a46c44c82f
 classes\ in\ com.university.lms.student\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ student\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=51852fdc-16f9-4d01-a4b2-5ca9002d3cdb
+every\ @Transactional\ write\ method\ in\ a\ read/write-split\ @Service\ class\ is\ either\ @Auditable\ or\ calls\ AuditTrail.record\ directly\ \u2014\ see\ this\ test's\ own\ javadoc\ for\ what\ it\ does\ and\ does\ not\ see=dd4f6d05-4ea8-4bc9-9ba5-f3266363d1ab
