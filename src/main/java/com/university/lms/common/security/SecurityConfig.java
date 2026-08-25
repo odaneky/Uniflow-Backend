@@ -418,6 +418,9 @@ public class SecurityConfig {
                         // StudentService.requireAssignedAdvisorOrRegistry's role set.
                         .requestMatchers(HttpMethod.GET, "/api/v1/students/*/advising-notes")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR)
+                        // G8: same role set — cancelAdvisingAppointment resolves the same guard.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/students/*/advising-appointments")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR)
                         // A3: none of these four had a service-layer guard at all — purely relying
                         // on this matcher, same shape as the exam-window/payment-plans/tuition-
                         // schedule/fee-catalog rules above. Restricted to what their own

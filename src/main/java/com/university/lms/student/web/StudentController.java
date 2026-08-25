@@ -3,8 +3,11 @@ package com.university.lms.student.web;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.student.domain.StudentStatus;
 import com.university.lms.student.dto.AddProgrammeMembershipRequest;
+import com.university.lms.student.dto.AdvisingAppointmentResponse;
 import com.university.lms.student.dto.AdvisingNoteResponse;
 import com.university.lms.student.dto.AdvisorCandidateResponse;
+import com.university.lms.student.dto.CancelAdvisingAppointmentRequest;
+import com.university.lms.student.dto.CreateAdvisingAppointmentRequest;
 import com.university.lms.student.dto.CreateAdvisingNoteRequest;
 import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.EndProgrammeMembershipRequest;
@@ -168,5 +171,32 @@ public class StudentController {
     public AdvisingNoteResponse addAdvisingNote(
             @PathVariable UUID id, @Valid @RequestBody CreateAdvisingNoteRequest request) {
         return studentService.addAdvisingNote(id, request);
+    }
+
+    /**
+     * Visible only to this student's current advisor and registry staff — same scope as the
+     * advising notes above.
+     */
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/{id}/advising-appointments")
+    public List<AdvisingAppointmentResponse> advisingAppointments(@PathVariable UUID id) {
+        return studentService.listAdvisingAppointments(id);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @PostMapping("/{id}/advising-appointments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AdvisingAppointmentResponse scheduleAdvisingAppointment(
+            @PathVariable UUID id, @Valid @RequestBody CreateAdvisingAppointmentRequest request) {
+        return studentService.scheduleAdvisingAppointment(id, request);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @PostMapping("/{id}/advising-appointments/{appointmentId}/cancel")
+    public AdvisingAppointmentResponse cancelAdvisingAppointment(
+            @PathVariable UUID id,
+            @PathVariable UUID appointmentId,
+            @Valid @RequestBody CancelAdvisingAppointmentRequest request) {
+        return studentService.cancelAdvisingAppointment(appointmentId, request);
     }
 }

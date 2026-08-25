@@ -39,6 +39,8 @@ public interface AuditTrail {
         public static final String ROLE_REVOKED = "ROLE_REVOKED";
         public static final String STUDENT_PROVISIONED = "STUDENT_PROVISIONED";
         public static final String STUDENT_STATUS_CHANGED = "STUDENT_STATUS_CHANGED";
+        public static final String ADVISING_APPOINTMENT_SCHEDULED = "ADVISING_APPOINTMENT_SCHEDULED";
+        public static final String ADVISING_APPOINTMENT_CANCELLED = "ADVISING_APPOINTMENT_CANCELLED";
         public static final String ENROLMENT_CREATED = "ENROLMENT_CREATED";
         public static final String ENROLMENT_DROPPED = "ENROLMENT_DROPPED";
         public static final String ENROLMENT_WITHDRAWN = "ENROLMENT_WITHDRAWN";

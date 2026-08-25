@@ -68,6 +68,9 @@ class StudentAccessTest {
     private AdvisingNoteRepository advisingNoteRepository;
 
     @Mock
+    private com.university.lms.student.repository.AdvisingAppointmentRepository advisingAppointmentRepository;
+
+    @Mock
     private StaffAppointments staffAppointments;
 
     private StudentService service;
@@ -91,6 +94,7 @@ class StudentAccessTest {
                 auditTrail,
                 advisorOfficeHoursRepository,
                 advisingNoteRepository,
+                advisingAppointmentRepository,
                 staffAppointments);
         student = new Student(STUDENT_USER_ID, "20260001", PROGRAMME_ID, LocalDate.of(2026, 9, 1));
         when(studentRepository.findById(student.getId())).thenReturn(Optional.of(student));

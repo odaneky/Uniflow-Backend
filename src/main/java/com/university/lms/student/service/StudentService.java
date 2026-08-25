@@ -1,5 +1,6 @@
 package com.university.lms.student.service;
 
+import com.university.lms.administration.api.Auditable;
 import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.administration.api.RecordAccessLog;
 import com.university.lms.academic.api.AcademicStructure;
@@ -18,9 +19,12 @@ import com.university.lms.student.domain.StudentErrorCode;
 import com.university.lms.student.domain.StudentStatus;
 import com.university.lms.student.dto.AddProgrammeMembershipRequest;
 import com.university.lms.student.dto.AdviseeSummaryResponse;
+import com.university.lms.student.dto.AdvisingAppointmentResponse;
 import com.university.lms.student.dto.AdvisingNoteResponse;
 import com.university.lms.student.dto.AdvisorCandidateResponse;
 import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
+import com.university.lms.student.dto.CancelAdvisingAppointmentRequest;
+import com.university.lms.student.dto.CreateAdvisingAppointmentRequest;
 import com.university.lms.student.dto.CreateAdvisingNoteRequest;
 import com.university.lms.student.dto.CreateStudentRequest;
 import com.university.lms.student.dto.EndProgrammeMembershipRequest;
@@ -29,9 +33,11 @@ import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.StudentSummaryResponse;
 import com.university.lms.student.dto.UpdateOwnProfileRequest;
 import com.university.lms.student.dto.UpdateStudentRequest;
+import com.university.lms.student.domain.AdvisingAppointment;
 import com.university.lms.student.domain.AdvisingNote;
 import com.university.lms.student.domain.AdvisorOfficeHours;
 import com.university.lms.staffing.api.StaffAppointments;
+import com.university.lms.student.repository.AdvisingAppointmentRepository;
 import com.university.lms.student.repository.AdvisingNoteRepository;
 import com.university.lms.student.repository.AdvisorOfficeHoursRepository;
 import com.university.lms.student.repository.StudentRepository;
@@ -71,6 +77,7 @@ public class StudentService {
     private final AuditTrail auditTrail;
     private final AdvisorOfficeHoursRepository advisorOfficeHoursRepository;
     private final AdvisingNoteRepository advisingNoteRepository;
+    private final AdvisingAppointmentRepository advisingAppointmentRepository;
     private final StaffAppointments staffAppointments;
 
     public StudentService(
@@ -83,6 +90,7 @@ public class StudentService {
             AuditTrail auditTrail,
             AdvisorOfficeHoursRepository advisorOfficeHoursRepository,
             AdvisingNoteRepository advisingNoteRepository,
+            AdvisingAppointmentRepository advisingAppointmentRepository,
             StaffAppointments staffAppointments) {
         this.studentRepository = studentRepository;
         this.userDirectory = userDirectory;
@@ -93,6 +101,7 @@ public class StudentService {
         this.auditTrail = auditTrail;
         this.advisorOfficeHoursRepository = advisorOfficeHoursRepository;
         this.advisingNoteRepository = advisingNoteRepository;
+        this.advisingAppointmentRepository = advisingAppointmentRepository;
         this.staffAppointments = staffAppointments;
     }
 
@@ -402,6 +411,73 @@ public class StudentService {
                                 .map(UserDirectory.UserSummary::fullName)
                                 .orElse(null)))
                 .toList();
+    }
+
+    /**
+     * G8: advising had notes but no way to actually schedule a meeting with an advisee, or for the
+     * student to see one coming up. Advisor-initiated, the same direction {@link #addAdvisingNote}
+     * already takes.
+     */
+    @Auditable(
+            action = AuditTrail.Action.ADVISING_APPOINTMENT_SCHEDULED,
+            entityType = AuditTrail.EntityType.STUDENT,
+            entityId = "#studentId")
+    @Transactional
+    public AdvisingAppointmentResponse scheduleAdvisingAppointment(
+            UUID studentId, CreateAdvisingAppointmentRequest request) {
+        Student student = require(studentId);
+        CurrentUser caller = requireAssignedAdvisorOrRegistry(student);
+        AdvisingAppointment saved = advisingAppointmentRepository.save(new AdvisingAppointment(
+                studentId, caller.userId(), request.scheduledAt(), request.durationMinutes(), request.note()));
+        return AdvisingAppointmentResponse.from(saved, caller.fullName());
+    }
+
+    public List<AdvisingAppointmentResponse> listAdvisingAppointments(UUID studentId) {
+        Student student = require(studentId);
+        requireAssignedAdvisorOrRegistry(student);
+        return advisingAppointmentRepository.findByStudentIdOrderByScheduledAtDesc(studentId).stream()
+                .map(appointment -> AdvisingAppointmentResponse.from(
+                        appointment,
+                        userDirectory
+                                .findById(appointment.getAdvisorUserId())
+                                .map(UserDirectory.UserSummary::fullName)
+                                .orElse(null)))
+                .toList();
+    }
+
+    /** The caller's own upcoming and past appointments — self-service, no advisor check needed. */
+    public List<AdvisingAppointmentResponse> listOwnAdvisingAppointments() {
+        UUID userId = currentUserProvider.require().userId();
+        Student student = studentRepository
+                .findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.STUDENT_NOT_FOUND, "You do not have a student record"));
+        return advisingAppointmentRepository.findByStudentIdOrderByScheduledAtDesc(student.getId()).stream()
+                .map(appointment -> AdvisingAppointmentResponse.from(
+                        appointment,
+                        userDirectory
+                                .findById(appointment.getAdvisorUserId())
+                                .map(UserDirectory.UserSummary::fullName)
+                                .orElse(null)))
+                .toList();
+    }
+
+    @Auditable(
+            action = AuditTrail.Action.ADVISING_APPOINTMENT_CANCELLED,
+            entityType = AuditTrail.EntityType.STUDENT,
+            entityId = "#result.studentId()")
+    @Transactional
+    public AdvisingAppointmentResponse cancelAdvisingAppointment(
+            UUID appointmentId, CancelAdvisingAppointmentRequest request) {
+        AdvisingAppointment appointment = advisingAppointmentRepository
+                .findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.ADVISING_APPOINTMENT_NOT_FOUND,
+                        "No advising appointment exists with id " + appointmentId));
+        Student student = require(appointment.getStudentId());
+        CurrentUser caller = requireAssignedAdvisorOrRegistry(student);
+        appointment.cancel(request.reason());
+        return AdvisingAppointmentResponse.from(appointment, caller.fullName());
     }
 
     private CurrentUser requireAssignedAdvisorOrRegistry(Student student) {

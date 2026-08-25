@@ -2,6 +2,7 @@ package com.university.lms.student.web;
 
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.student.dto.AdviseeSummaryResponse;
+import com.university.lms.student.dto.AdvisingAppointmentResponse;
 import com.university.lms.student.dto.AdvisorOfficeHoursResponse;
 import com.university.lms.student.dto.StudentResponse;
 import com.university.lms.student.dto.UpdateAdvisorOfficeHoursRequest;
@@ -10,6 +11,7 @@ import com.university.lms.student.service.StudentService;
 import com.university.lms.common.security.AccessClass;
 import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -69,5 +71,12 @@ public class MyStudentController {
     public AdvisorOfficeHoursResponse updateAdvisorOfficeHours(
             @Valid @RequestBody UpdateAdvisorOfficeHoursRequest request) {
         return studentService.updateOwnAdvisorOfficeHours(request.officeHours());
+    }
+
+    /** The caller's own upcoming and past advising appointments. */
+    @AccessClass(OWN_RECORD_ONLY)
+    @GetMapping("/advising-appointments")
+    public List<AdvisingAppointmentResponse> advisingAppointments() {
+        return studentService.listOwnAdvisingAppointments();
     }
 }

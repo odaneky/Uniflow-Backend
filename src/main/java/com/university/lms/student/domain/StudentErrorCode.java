@@ -16,7 +16,8 @@ public enum StudentErrorCode implements ErrorCode {
     PROGRAMME_MEMBERSHIP_NOT_FOUND,
     PROGRAMME_MEMBERSHIP_ALREADY_OPEN,
     /** The primary membership can only be ended by transferring to a new one. */
-    PROGRAMME_MEMBERSHIP_IS_PRIMARY;
+    PROGRAMME_MEMBERSHIP_IS_PRIMARY,
+    ADVISING_APPOINTMENT_NOT_FOUND;
 
     @Override
     public String code() {
