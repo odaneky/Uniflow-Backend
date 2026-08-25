@@ -1,7 +1,10 @@
 package com.university.lms.grading.web;
 
+import com.university.lms.grading.dto.BulkGradeUploadRequest;
+import com.university.lms.grading.dto.BulkGradeUploadResponse;
 import com.university.lms.grading.dto.CreateGradeRequest;
 import com.university.lms.grading.dto.GradeResponse;
+import com.university.lms.grading.service.BulkGradeUploadService;
 import com.university.lms.grading.service.GradeService;
 import com.university.lms.common.security.AccessClass;
 import static com.university.lms.common.security.AccessClass.Value.*;
@@ -25,9 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class GradeController {
 
     private final GradeService gradeService;
+    private final BulkGradeUploadService bulkGradeUploadService;
 
-    public GradeController(GradeService gradeService) {
+    public GradeController(GradeService gradeService, BulkGradeUploadService bulkGradeUploadService) {
         this.gradeService = gradeService;
+        this.bulkGradeUploadService = bulkGradeUploadService;
     }
 
     @AccessClass(STAFF_ONLY)
@@ -35,6 +40,12 @@ public class GradeController {
     public ResponseEntity<GradeResponse> award(@Valid @RequestBody CreateGradeRequest request) {
         GradeResponse created = gradeService.award(request);
         return ResponseEntity.created(URI.create("/api/v1/grades/" + created.id())).body(created);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @PostMapping("/bulk")
+    public BulkGradeUploadResponse bulkUpload(@Valid @RequestBody BulkGradeUploadRequest request) {
+        return bulkGradeUploadService.upload(request.grades(), request.dryRun());
     }
 
     @AccessClass(STAFF_ONLY)
