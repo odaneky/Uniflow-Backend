@@ -3,6 +3,7 @@ package com.university.lms.common.security;
 import static com.university.lms.common.security.SecurityRoles.ACADEMIC_ADVISOR;
 import static com.university.lms.common.security.SecurityRoles.ADMISSIONS_OFFICER;
 import static com.university.lms.common.security.SecurityRoles.BURSAR;
+import static com.university.lms.common.security.SecurityRoles.EXAMS_OFFICER;
 import static com.university.lms.common.security.SecurityRoles.FACULTY_ADMIN;
 import static com.university.lms.common.security.SecurityRoles.FINANCIAL_AID_OFFICER;
 import static com.university.lms.common.security.SecurityRoles.LECTURER;
@@ -134,9 +135,11 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
                         // Publishing exam dates is the registry's call, like registration. Without
                         // this it would fall through to the broad authenticated rule and any signed-in
-                        // student could move the examination period.
+                        // student could move the examination period. A6 groundwork: also accepts
+                        // EXAMS_OFFICER, never narrowed to exclude REGISTRAR — nobody has been
+                        // granted the narrower role in any real environment yet.
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/exam-window")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, EXAMS_OFFICER)
                         // The office's view of a section's exams includes UNPUBLISHED drafts. Students
                         // read their own timetable through /me/exams, which returns published rows
                         // only; without this rule the broad GET fallback would hand them the drafts.
@@ -145,7 +148,7 @@ public class SecurityConfig {
                                 "/api/v1/courses/sections/*/exams",
                                 "/api/v1/courses/sections/exams",
                                 "/api/v1/courses/sections")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER, EXAMS_OFFICER)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/add-drop-window")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/payment-plans/**")

@@ -356,6 +356,16 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
         }
 
         @Test
+        @DisplayName("A6: EXAMS_OFFICER may also set the examination window, alongside REGISTRAR")
+        void examsOfficerMaySetTheExamWindow() throws Exception {
+            String path = "/api/v1/academic-terms/" + UUID.randomUUID() + "/exam-window";
+            denied(json(put(path).with(as(SecurityRoles.LECTURER)), "{\"startsOn\":\"2026-12-01\",\"endsOn\":\"2026-12-14\"}"));
+            allowed(json(
+                    put(path).with(as(SecurityRoles.EXAMS_OFFICER)),
+                    "{\"startsOn\":\"2026-12-01\",\"endsOn\":\"2026-12-14\"}"));
+        }
+
+        @Test
         @DisplayName("a student may pay their own account through /me")
         void studentsMayPayThemselves() throws Exception {
             allowed(json(post("/api/v1/me/account/payments").with(as(SecurityRoles.STUDENT)), "{}"));
