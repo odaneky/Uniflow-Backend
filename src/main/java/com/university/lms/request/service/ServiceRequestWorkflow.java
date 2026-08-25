@@ -98,6 +98,13 @@ public class ServiceRequestWorkflow {
         if (request.getRequestType() == ServiceRequestType.APPEAL && canReviewAppeal(caller, request)) {
             return;
         }
+        // A6: ServiceRequestType.SAP_APPEAL.reviewStep() already documents "Financial Aid Review"
+        // as the intended reviewer — this catches the check up to that existing, undisputed intent,
+        // not a new mapping invented here. Additive: REGISTRAR still reviews every type, unchanged.
+        if (request.getRequestType() == ServiceRequestType.SAP_APPEAL
+                && caller.hasRole(SecurityRoles.FINANCIAL_AID_OFFICER)) {
+            return;
+        }
         throw new ForbiddenException(CommonErrorCode.ACCESS_DENIED, "You cannot review this request");
     }
 
@@ -112,6 +119,10 @@ public class ServiceRequestWorkflow {
         if (request.getRequestType() == ServiceRequestType.WITHDRAWAL
                 && caller.hasRole(SecurityRoles.ACADEMIC_ADVISOR)
                 && isAdvisorOf(caller.userId(), request.getStudentId())) {
+            return;
+        }
+        if (request.getRequestType() == ServiceRequestType.SAP_APPEAL
+                && caller.hasRole(SecurityRoles.FINANCIAL_AID_OFFICER)) {
             return;
         }
         throw new ForbiddenException(CommonErrorCode.ACCESS_DENIED, "You cannot complete this request");

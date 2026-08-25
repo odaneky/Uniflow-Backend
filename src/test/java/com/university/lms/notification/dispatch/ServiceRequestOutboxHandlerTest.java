@@ -67,6 +67,7 @@ class ServiceRequestOutboxHandlerTest {
                 .thenReturn(Optional.of(new RequestDirectory.RequestSummary(
                         REQUEST_ID, UUID.randomUUID(), UUID.randomUUID(), ServiceRequestType.TRANSCRIPT,
                         ServiceRequestStatus.SUBMITTED, "TR-0001", null, null, Instant.now())));
+        when(requestDirectory.additionalNotificationRole(ServiceRequestType.TRANSCRIPT)).thenReturn(Optional.empty());
         when(userDirectory.findByRealmRole(SecurityRoles.REGISTRAR))
                 .thenReturn(List.of(
                         new UserDirectory.UserSummary(registrarA, "rega", "Reg A", "a@test", true),
@@ -84,6 +85,7 @@ class ServiceRequestOutboxHandlerTest {
                 .thenReturn(Optional.of(new RequestDirectory.RequestSummary(
                         REQUEST_ID, UUID.randomUUID(), UUID.randomUUID(), ServiceRequestType.WITHDRAWAL,
                         ServiceRequestStatus.SUBMITTED, "WD-0001", advisor, null, Instant.now())));
+        when(requestDirectory.additionalNotificationRole(ServiceRequestType.WITHDRAWAL)).thenReturn(Optional.empty());
         when(userDirectory.findByRealmRole(SecurityRoles.REGISTRAR))
                 .thenReturn(List.of(new UserDirectory.UserSummary(advisor, "adv", "Advisor", "adv@test", true)));
 
@@ -99,10 +101,47 @@ class ServiceRequestOutboxHandlerTest {
                 .thenReturn(Optional.of(new RequestDirectory.RequestSummary(
                         REQUEST_ID, UUID.randomUUID(), UUID.randomUUID(), ServiceRequestType.SAP_APPEAL,
                         ServiceRequestStatus.SUBMITTED, "SA-0001", null, null, Instant.now())));
+        when(requestDirectory.additionalNotificationRole(ServiceRequestType.SAP_APPEAL))
+                .thenReturn(Optional.of(SecurityRoles.FINANCIAL_AID_OFFICER));
         when(userDirectory.findByRealmRole(SecurityRoles.REGISTRAR)).thenReturn(List.of());
+        when(userDirectory.findByRealmRole(SecurityRoles.FINANCIAL_AID_OFFICER)).thenReturn(List.of());
 
         handler.handle(rowFor(ServiceRequestType.SAP_APPEAL));
 
         verify(notificationDeliveryService, never()).deliverInApp(any(Notification.class));
+    }
+
+    @Test
+    void aTypeWithAnAdditionalNotificationRoleAlsoNotifiesItsHoldersAlongsideRegistrars() throws Exception {
+        UUID registrar = UUID.randomUUID();
+        UUID officer = UUID.randomUUID();
+        when(requestDirectory.findById(REQUEST_ID))
+                .thenReturn(Optional.of(new RequestDirectory.RequestSummary(
+                        REQUEST_ID, UUID.randomUUID(), UUID.randomUUID(), ServiceRequestType.SAP_APPEAL,
+                        ServiceRequestStatus.SUBMITTED, "SA-0001", null, null, Instant.now())));
+        when(requestDirectory.additionalNotificationRole(ServiceRequestType.SAP_APPEAL))
+                .thenReturn(Optional.of(SecurityRoles.FINANCIAL_AID_OFFICER));
+        when(userDirectory.findByRealmRole(SecurityRoles.REGISTRAR))
+                .thenReturn(List.of(new UserDirectory.UserSummary(registrar, "reg", "Reg", "reg@test", true)));
+        when(userDirectory.findByRealmRole(SecurityRoles.FINANCIAL_AID_OFFICER))
+                .thenReturn(List.of(new UserDirectory.UserSummary(officer, "fao", "FAO", "fao@test", true)));
+
+        handler.handle(rowFor(ServiceRequestType.SAP_APPEAL));
+
+        verify(notificationDeliveryService, times(2)).deliverInApp(any(Notification.class));
+    }
+
+    @Test
+    void aTypeWithNoAdditionalNotificationRoleNeverConsultsOne() throws Exception {
+        when(requestDirectory.findById(REQUEST_ID))
+                .thenReturn(Optional.of(new RequestDirectory.RequestSummary(
+                        REQUEST_ID, UUID.randomUUID(), UUID.randomUUID(), ServiceRequestType.TRANSCRIPT,
+                        ServiceRequestStatus.SUBMITTED, "TR-0001", null, null, Instant.now())));
+        when(requestDirectory.additionalNotificationRole(ServiceRequestType.TRANSCRIPT)).thenReturn(Optional.empty());
+        when(userDirectory.findByRealmRole(SecurityRoles.REGISTRAR)).thenReturn(List.of());
+
+        handler.handle(rowFor(ServiceRequestType.TRANSCRIPT));
+
+        verify(userDirectory, never()).findByRealmRole(SecurityRoles.FINANCIAL_AID_OFFICER);
     }
 }

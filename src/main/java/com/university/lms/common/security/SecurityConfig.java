@@ -279,8 +279,11 @@ public class SecurityConfig {
                         // The union here just has to cover every role that check might accept.
                         .requestMatchers(HttpMethod.POST, "/api/v1/service-holds/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR, FINANCIAL_AID_OFFICER, ACADEMIC_ADVISOR)
+                        // A6: also accepts FINANCIAL_AID_OFFICER — see
+                        // ServiceRequestService.requireStaffReader's javadoc for why, without this,
+                        // the SAP_APPEAL review capability added there would be unreachable.
                         .requestMatchers(HttpMethod.POST, "/api/v1/requests/**", "/api/v1/requests")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR, FINANCIAL_AID_OFFICER)
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/programmes/*/requirement-blocks",

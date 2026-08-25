@@ -1,7 +1,9 @@
 package com.university.lms.request.service;
 
+import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.request.api.RequestDirectory;
 import com.university.lms.request.domain.ServiceRequest;
+import com.university.lms.request.domain.ServiceRequestType;
 import com.university.lms.request.repository.ServiceRequestRepository;
 import com.university.lms.student.api.StudentDirectory;
 import java.util.Optional;
@@ -29,6 +31,13 @@ public class DefaultRequestDirectory implements RequestDirectory {
     @Override
     public Optional<UUID> studentUserIdOf(UUID studentId) {
         return studentDirectory.findById(studentId).map(StudentDirectory.StudentSummary::userId);
+    }
+
+    @Override
+    public Optional<String> additionalNotificationRole(ServiceRequestType type) {
+        return type == ServiceRequestType.SAP_APPEAL
+                ? Optional.of(SecurityRoles.FINANCIAL_AID_OFFICER)
+                : Optional.empty();
     }
 
     private RequestSummary toSummary(ServiceRequest request) {

@@ -23,4 +23,15 @@ public interface RequestDirectory {
     Optional<RequestSummary> findById(UUID requestId);
 
     Optional<UUID> studentUserIdOf(UUID studentId);
+
+    /**
+     * The realm role that should be notified in addition to REGISTRAR when a request of this type
+     * is submitted — e.g. FINANCIAL_AID_OFFICER for SAP_APPEAL, whose review capability is granted
+     * in {@code ServiceRequestWorkflow}. Empty when REGISTRAR is the only intended reviewer.
+     *
+     * <p>Kept behind this api, rather than switched on {@link ServiceRequestType} by callers
+     * outside this module, so the module-boundary rule stays satisfied without freezing a new
+     * violation every time a type gains an additional notified role.
+     */
+    Optional<String> additionalNotificationRole(ServiceRequestType type);
 }

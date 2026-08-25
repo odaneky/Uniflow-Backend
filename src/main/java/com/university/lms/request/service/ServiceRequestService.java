@@ -372,12 +372,19 @@ public class ServiceRequestService {
                         CommonErrorCode.ACCESS_DENIED, "You do not have a student record"));
     }
 
+    /**
+     * A6: the coarse gate before {@link ServiceRequestWorkflow}'s per-type fine check. Widened to
+     * also accept {@code FINANCIAL_AID_OFFICER} — without this, the SAP_APPEAL branch added to
+     * {@code assertCanReview}/{@code assertCanComplete} would be unreachable, since a caller with
+     * only that role would already be refused here before ever reaching the finer check.
+     */
     private CurrentUser requireStaffReader() {
         CurrentUser caller = currentUserProvider.require();
         if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
                 || caller.hasRole(SecurityRoles.REGISTRAR)
                 || caller.hasRole(SecurityRoles.ACADEMIC_ADVISOR)
-                || caller.hasRole(SecurityRoles.LECTURER)) {
+                || caller.hasRole(SecurityRoles.LECTURER)
+                || caller.hasRole(SecurityRoles.FINANCIAL_AID_OFFICER)) {
             return caller;
         }
         throw new ForbiddenException(

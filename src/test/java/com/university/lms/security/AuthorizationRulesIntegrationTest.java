@@ -393,6 +393,27 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
         }
 
         @Test
+        @DisplayName(
+                "A6: FINANCIAL_AID_OFFICER reaches the requests gate, alongside REGISTRAR — "
+                        + "the SAP_APPEAL-only decision is enforced deeper, in ServiceRequestWorkflow")
+        void financialAidOfficerReachesTheRequestsGate() throws Exception {
+            String path = "/api/v1/requests/" + UUID.randomUUID() + "/decide";
+            allowed(json(post(path).with(as(SecurityRoles.FINANCIAL_AID_OFFICER)), "{}"));
+        }
+
+        @Test
+        @DisplayName(
+                "A6: ADMISSIONS_OFFICER may also provision a student record, alongside REGISTRAR — "
+                        + "the fallback path AdmissionsService.matriculate falls through to when the "
+                        + "identity provider is configured to create students directly")
+        void admissionsOfficerMayProvisionAStudentRecord() throws Exception {
+            String body = "{\"studentNumber\":\"20260001\",\"programmeId\":\"" + UUID.randomUUID()
+                    + "\",\"admissionDate\":\"2025-09-01\"}";
+            denied(json(post("/api/v1/students/provision").with(as(SecurityRoles.STUDENT)), body));
+            allowed(json(post("/api/v1/students/provision").with(as(SecurityRoles.ADMISSIONS_OFFICER)), body));
+        }
+
+        @Test
         @DisplayName("curriculum writes sit with faculty administration")
         void studentsCannotWriteRequirementBlocks() throws Exception {
             String path = "/api/v1/programmes/" + UUID.randomUUID() + "/requirement-blocks";

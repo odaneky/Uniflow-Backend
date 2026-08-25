@@ -154,9 +154,19 @@ public class StudentProvisioningService {
         return currentUserProvider.find().map(CurrentUser::userId).orElse(null);
     }
 
+    /**
+     * A6: widened to also accept {@code ADMISSIONS_OFFICER}. {@code AdmissionsService.matriculate}
+     * is reachable by that role ({@code AdmissionsService.requireStaffReader}) and falls back to
+     * this method whenever the identity provider is unavailable — without this, an admissions
+     * officer fully authorized to matriculate an applicant would be refused here, on a path that
+     * only exists because the primary provisioning path failed. {@code REGISTRAR} keeps everything
+     * it has today; nobody has been granted {@code ADMISSIONS_OFFICER} in any real environment yet.
+     */
     private void requireRegistry() {
         CurrentUser caller = currentUserProvider.require();
-        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.ADMISSIONS_OFFICER))) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to provision student records");
         }

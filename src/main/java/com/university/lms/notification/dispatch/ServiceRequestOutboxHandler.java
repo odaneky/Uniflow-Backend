@@ -16,6 +16,7 @@ import com.university.lms.request.domain.ServiceRequestType;
 import com.university.lms.request.service.ServiceRequestOutboxPublisher;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -50,8 +51,15 @@ public class ServiceRequestOutboxHandler implements OutboxEventHandler {
      * with a specific assignee. {@code assigned_to} used to be the only recipient this notified,
      * and it is null for every type but WITHDRAWAL — so ten of eleven request types notified
      * nobody on staff when a student filed one. REGISTRAR can review every type
-     * ({@code ServiceRequestWorkflow.assertCanReview}), so it is the broadcast pool here; the
+     * ({@code ServiceRequestWorkflow.assertCanReview}), so it is always in the broadcast pool; the
      * specific assignee, when there is one, is notified in addition, deduplicated against it.
+     *
+     * <p>A6: some types additionally broadcast to another role — SAP_APPEAL to
+     * FINANCIAL_AID_OFFICER, per {@link RequestDirectory#additionalNotificationRole}, since {@code
+     * ServiceRequestWorkflow.assertCanReview} now grants that role review capability for that type;
+     * without this, they would never see the submission to act on it. The decision of which type
+     * maps to which role lives behind that api call, not a switch here, so this module never reaches
+     * past {@code request.api} into {@code request.domain}.
      */
     @Override
     public void handle(DomainOutbox row) throws Exception {
@@ -76,6 +84,14 @@ public class ServiceRequestOutboxHandler implements OutboxEventHandler {
         for (UserDirectory.UserSummary registrar : userDirectory.findByRealmRole(SecurityRoles.REGISTRAR)) {
             if (notified.add(registrar.id())) {
                 deliver(registrar.id(), title, body, actionUrl, requestId, row.getId(), now);
+            }
+        }
+        Optional<String> additionalRole = requestDirectory.additionalNotificationRole(type);
+        if (additionalRole.isPresent()) {
+            for (UserDirectory.UserSummary holder : userDirectory.findByRealmRole(additionalRole.get())) {
+                if (notified.add(holder.id())) {
+                    deliver(holder.id(), title, body, actionUrl, requestId, row.getId(), now);
+                }
             }
         }
     }

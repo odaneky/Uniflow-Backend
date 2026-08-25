@@ -1,8 +1,10 @@
 package com.university.lms.request.service;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.grading.api.GradeDirectory;
 import com.university.lms.identity.api.CurrentUser;
@@ -72,6 +74,64 @@ class ServiceRequestWorkflowTest {
         when(studentDirectory.adviseeUserIdsOf(advisorId)).thenReturn(List.of(studentUserId));
 
         assertThatCode(() -> workflow.assertStaffAction(advisor, request, ServiceRequestStatus.IN_REVIEW))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void financialAidOfficerMayReviewAndCompleteSapAppeal() {
+        ServiceRequest request = new ServiceRequest(
+                UUID.randomUUID(), ServiceRequestType.SAP_APPEAL, "SA-00001", null, "{}", null);
+        CurrentUser officer = new CurrentUser(
+                UUID.randomUUID(),
+                "sub-fao",
+                "fao",
+                "fao@test.edu",
+                "Financial Aid Officer",
+                Optional.empty(),
+                Set.of("FINANCIAL_AID_OFFICER"),
+                Set.of());
+
+        assertThatCode(() -> workflow.assertStaffAction(officer, request, ServiceRequestStatus.IN_REVIEW))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> workflow.assertStaffAction(officer, request, ServiceRequestStatus.COMPLETED))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void financialAidOfficerCannotReviewOtherRequestTypes() {
+        ServiceRequest request = new ServiceRequest(
+                UUID.randomUUID(), ServiceRequestType.TRANSCRIPT, "TR-00001", null, "{}", null);
+        CurrentUser officer = new CurrentUser(
+                UUID.randomUUID(),
+                "sub-fao",
+                "fao",
+                "fao@test.edu",
+                "Financial Aid Officer",
+                Optional.empty(),
+                Set.of("FINANCIAL_AID_OFFICER"),
+                Set.of());
+
+        assertThatThrownBy(() -> workflow.assertStaffAction(officer, request, ServiceRequestStatus.IN_REVIEW))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void registrarStillReviewsAndCompletesSapAppealUnconditionally() {
+        ServiceRequest request = new ServiceRequest(
+                UUID.randomUUID(), ServiceRequestType.SAP_APPEAL, "SA-00002", null, "{}", null);
+        CurrentUser registrar = new CurrentUser(
+                UUID.randomUUID(),
+                "sub-reg",
+                "reg",
+                "reg@test.edu",
+                "Registrar",
+                Optional.empty(),
+                Set.of("REGISTRAR"),
+                Set.of());
+
+        assertThatCode(() -> workflow.assertStaffAction(registrar, request, ServiceRequestStatus.IN_REVIEW))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> workflow.assertStaffAction(registrar, request, ServiceRequestStatus.COMPLETED))
                 .doesNotThrowAnyException();
     }
 }
