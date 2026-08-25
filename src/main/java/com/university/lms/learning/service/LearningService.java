@@ -208,22 +208,48 @@ public class LearningService {
 
     private void requireTeacherOrAdmin(UUID sectionId) {
         CurrentUser caller = currentUserProvider.require();
-        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
-                || caller.hasRole(SecurityRoles.REGISTRAR)
-                || caller.hasRole(SecurityRoles.FACULTY_ADMIN)) {
-            requireKnownSection(sectionId);
-            return;
-        }
         CourseCatalog.SectionSummary section = courseCatalog
                 .findSection(sectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         LearningErrorCode.LEARNING_SECTION_NOT_FOUND,
                         "No course section exists with id " + sectionId));
+        if (isAuthorizedAdmin(caller, section)) {
+            return;
+        }
         if (caller.hasRole(SecurityRoles.LECTURER) && caller.userId().equals(section.lecturerUserId())) {
             return;
         }
         throw new ForbiddenException(
                 CommonErrorCode.ACCESS_DENIED, "You do not have permission to change this section");
+    }
+
+    /**
+     * A5: SYSTEM_ADMIN/REGISTRAR/FACULTY_ADMIN previously bypassed section-department scoping
+     * unconditionally here — the write-side twin of the over-reach {@link #isAuthorizedStaff}
+     * already fixed on the read side, missed because this guard has a different name and a
+     * narrower role set. Deliberately a separate helper rather than reusing {@code
+     * isAuthorizedStaff}: that one authorizes any staff role including LECTURER by department
+     * alone, which would wrongly let a lecturer edit a section they do not teach as long as it is
+     * in their department — the LECTURER branch below must stay gated on being this section's
+     * lecturer specifically, unchanged. Same fail-open resolution and SYSTEM_ADMIN carve-out as
+     * {@code isAuthorizedStaff} otherwise.
+     */
+    private boolean isAuthorizedAdmin(CurrentUser caller, CourseCatalog.SectionSummary section) {
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN)
+                || caller.hasRole(SecurityRoles.REGISTRAR)
+                || caller.hasRole(SecurityRoles.FACULTY_ADMIN))) {
+            return false;
+        }
+        if (caller.hasRole(SecurityRoles.SYSTEM_ADMIN)) {
+            return true;
+        }
+        if (staffAppointments.activeAppointmentsOf(caller.userId()).isEmpty()) {
+            return true;
+        }
+        Optional<UUID> orgUnitId = courseCatalog
+                .departmentOfCourse(section.courseId())
+                .flatMap(departmentId -> staffAppointments.orgUnitFor("DEPARTMENT", departmentId));
+        return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 
     private void requireEnrolledOrStaff(UUID sectionId) {

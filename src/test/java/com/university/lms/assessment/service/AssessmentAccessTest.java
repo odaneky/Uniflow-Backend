@@ -156,4 +156,70 @@ class AssessmentAccessTest {
 
         assertThat(service.own(SECTION_ID)).isEmpty();
     }
+
+    /**
+     * A5: {@code requireTeacherOrAdmin} (the write-side guard behind {@code forSection}, {@code
+     * create}, publish and delete) let SYSTEM_ADMIN/REGISTRAR/FACULTY_ADMIN bypass section-department
+     * scoping unconditionally — missed when {@code requireEnrolledOrStaff} above was narrowed,
+     * since it is a different method with a narrower role set. LECTURER's "must be this section's
+     * own lecturer" rule is untouched throughout.
+     */
+    @Test
+    @DisplayName("teacherOrAdmin: fails open when a registrar caller has no appointment at all")
+    void teacherOrAdminFailsOpenWithNoAppointmentData() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.REGISTRAR));
+        when(staffAppointments.activeAppointmentsOf(any())).thenReturn(List.of());
+
+        assertThat(service.forSection(SECTION_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("teacherOrAdmin: real narrowing — a registrar appointed elsewhere is refused")
+    void teacherOrAdminRefusesRegistrarAppointedElsewhere() {
+        UUID callerId = UUID.randomUUID();
+        CurrentUser caller = new CurrentUser(
+                callerId, "idp-subject", "caller", "caller@example.edu", "Caller",
+                Optional.empty(), Set.of(SecurityRoles.REGISTRAR), Set.of());
+        when(currentUserProvider.require()).thenReturn(caller);
+        when(staffAppointments.activeAppointmentsOf(callerId))
+                .thenReturn(List.of(new StaffAppointments.Appointment(UUID.randomUUID(), "OTHER-DEPT", "REGISTRAR")));
+        when(courseCatalog.departmentOfCourse(COURSE_ID)).thenReturn(Optional.of(DEPARTMENT_ID));
+        when(staffAppointments.orgUnitFor("DEPARTMENT", DEPARTMENT_ID)).thenReturn(Optional.of(ORG_UNIT_ID));
+        when(staffAppointments.isAppointedOver(callerId, ORG_UNIT_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.forSection(SECTION_ID)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("teacherOrAdmin: a faculty admin appointed over this department is authorized")
+    void teacherOrAdminAllowsFacultyAdminAppointedOverTheDepartment() {
+        UUID callerId = UUID.randomUUID();
+        CurrentUser caller = new CurrentUser(
+                callerId, "idp-subject", "caller", "caller@example.edu", "Caller",
+                Optional.empty(), Set.of(SecurityRoles.FACULTY_ADMIN), Set.of());
+        when(currentUserProvider.require()).thenReturn(caller);
+        when(staffAppointments.activeAppointmentsOf(callerId))
+                .thenReturn(List.of(new StaffAppointments.Appointment(ORG_UNIT_ID, "DEPT:CS", "FACULTY_ADMIN")));
+        when(courseCatalog.departmentOfCourse(COURSE_ID)).thenReturn(Optional.of(DEPARTMENT_ID));
+        when(staffAppointments.orgUnitFor("DEPARTMENT", DEPARTMENT_ID)).thenReturn(Optional.of(ORG_UNIT_ID));
+        when(staffAppointments.isAppointedOver(callerId, ORG_UNIT_ID)).thenReturn(true);
+
+        assertThat(service.forSection(SECTION_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("teacherOrAdmin: SYSTEM_ADMIN always has access, regardless of appointment data")
+    void teacherOrAdminSystemAdminAlwaysAuthorized() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.SYSTEM_ADMIN));
+
+        assertThat(service.forSection(SECTION_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("teacherOrAdmin: a lecturer who does not teach this section is still refused, unchanged")
+    void teacherOrAdminStillRefusesALecturerWhoDoesNotTeachThisSection() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.LECTURER));
+
+        assertThatThrownBy(() -> service.forSection(SECTION_ID)).isInstanceOf(ForbiddenException.class);
+    }
 }
