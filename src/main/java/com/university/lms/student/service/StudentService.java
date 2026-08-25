@@ -446,6 +446,19 @@ public class StudentService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /**
+     * Applies a system-derived academic-standing status change — the entry point {@code
+     * DefaultStudentLifecycle.applyAcademicStanding} calls for the ACTIVE/PROBATION outcomes {@code
+     * TermCloseService} drives automatically at term close. Reuses the same transition-validity,
+     * mandatory-reason and audit path as the direct staff-facing status change: a system-derived
+     * change deserves exactly the same record as a human-entered one, and refusing an illegal
+     * transition here rather than forcing it is what keeps this safe to call unconditionally.
+     */
+    @Transactional
+    public void applyAcademicStanding(UUID studentId, StudentStatus target, String reason) {
+        applyStatusChange(require(studentId), target, reason);
+    }
+
     private void applyStatusChange(Student student, StudentStatus target, String reason) {
         StudentStatus current = student.getStatus();
         if (current == target) {
@@ -471,8 +484,8 @@ public class StudentService {
                 student.getId(),
                 student.getStudentNumber() + ": " + current + " → " + target,
                 reason,
-                current.name(),
-                target.name());
+                "\"" + current.name() + "\"",
+                "\"" + target.name() + "\"");
     }
 
     private static String actorLabel(CurrentUser actor) {

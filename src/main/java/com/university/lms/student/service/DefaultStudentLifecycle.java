@@ -2,6 +2,7 @@ package com.university.lms.student.service;
 
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.exception.ResourceNotFoundException;
+import com.university.lms.student.api.AcademicStandingOutcome;
 import com.university.lms.student.api.StudentLifecycle;
 import com.university.lms.student.domain.Student;
 import com.university.lms.student.domain.StudentErrorCode;
@@ -84,5 +85,22 @@ public class DefaultStudentLifecycle implements StudentLifecycle {
         }
         student.transferToProgramme(newProgrammeId);
         programmeEnrolmentService.transfer(studentId, newProgrammeId, LocalDate.now(), reason, actorUserId);
+    }
+
+    @Override
+    public void applyAcademicStanding(UUID studentId, AcademicStandingOutcome outcome, String reason) {
+        Student student = studentRepository
+                .findById(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        StudentErrorCode.STUDENT_NOT_FOUND, "No student exists with id " + studentId));
+        if (student.getStatus() != StudentStatus.ACTIVE && student.getStatus() != StudentStatus.PROBATION) {
+            return;
+        }
+        StudentStatus target =
+                outcome == AcademicStandingOutcome.PROBATION ? StudentStatus.PROBATION : StudentStatus.ACTIVE;
+        if (student.getStatus() == target) {
+            return;
+        }
+        studentService.applyAcademicStanding(studentId, target, reason);
     }
 }

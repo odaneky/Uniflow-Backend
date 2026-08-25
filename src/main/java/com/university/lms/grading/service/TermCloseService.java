@@ -5,16 +5,21 @@ import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.grading.domain.AcademicStanding;
+import com.university.lms.grading.domain.AcademicStandingEvent;
 import com.university.lms.grading.domain.Grade;
 import com.university.lms.grading.domain.GradeResult;
 import com.university.lms.grading.domain.TermAcademicRecord;
 import com.university.lms.grading.dto.TermCloseResponse;
+import com.university.lms.grading.repository.AcademicStandingEventRepository;
 import com.university.lms.grading.repository.GradeRepository;
 import com.university.lms.grading.repository.TermAcademicRecordRepository;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
+import com.university.lms.student.api.AcademicStandingOutcome;
+import com.university.lms.student.api.StudentLifecycle;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,20 +51,26 @@ public class TermCloseService {
 
     private final GradeRepository gradeRepository;
     private final TermAcademicRecordRepository termAcademicRecordRepository;
+    private final AcademicStandingEventRepository academicStandingEventRepository;
     private final AcademicStructure academicStructure;
     private final GradeService gradeService;
+    private final StudentLifecycle studentLifecycle;
     private final CurrentUserProvider currentUserProvider;
 
     public TermCloseService(
             GradeRepository gradeRepository,
             TermAcademicRecordRepository termAcademicRecordRepository,
+            AcademicStandingEventRepository academicStandingEventRepository,
             AcademicStructure academicStructure,
             GradeService gradeService,
+            StudentLifecycle studentLifecycle,
             CurrentUserProvider currentUserProvider) {
         this.gradeRepository = gradeRepository;
         this.termAcademicRecordRepository = termAcademicRecordRepository;
+        this.academicStandingEventRepository = academicStandingEventRepository;
         this.academicStructure = academicStructure;
         this.gradeService = gradeService;
+        this.studentLifecycle = studentLifecycle;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -129,6 +140,34 @@ public class TermCloseService {
                 creditsEarned,
                 cumulative.creditsEarned(),
                 standing));
+
+        recordStanding(studentId, academicTermId, termOrder, standing, cumulative.gpa());
+    }
+
+    /**
+     * Writes the term's standing decision and, for the two outcomes that are safe to drive
+     * automatically, applies it to the student's status. Kept as its own step from {@link
+     * TermAcademicRecord}: that row is the computed answer, this is the decision log, and only the
+     * second one ever drives a status change.
+     */
+    private void recordStanding(
+            UUID studentId, UUID academicTermId, int termOrder, AcademicStanding standing, BigDecimal cumulativeGpa) {
+        AcademicStanding previous = academicStandingEventRepository
+                .findTopByStudentIdOrderByTermOrderDesc(studentId)
+                .map(AcademicStandingEvent::getToStanding)
+                .orElse(null);
+        String reason = standing == AcademicStanding.PROBATION
+                ? "Cumulative GPA " + cumulativeGpa + " is below the " + GOOD_STANDING_FLOOR + " good-standing floor"
+                : "Cumulative GPA " + (cumulativeGpa == null ? "n/a" : cumulativeGpa) + " meets the " + GOOD_STANDING_FLOOR
+                        + " good-standing floor";
+        academicStandingEventRepository.save(new AcademicStandingEvent(
+                studentId, academicTermId, termOrder, previous, standing, reason, null, LocalDate.now(), null));
+
+        if (previous != standing) {
+            AcademicStandingOutcome outcome =
+                    standing == AcademicStanding.PROBATION ? AcademicStandingOutcome.PROBATION : AcademicStandingOutcome.ACTIVE;
+            studentLifecycle.applyAcademicStanding(studentId, outcome, reason);
+        }
     }
 
     private void requireRegistry() {
