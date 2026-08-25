@@ -19,6 +19,7 @@ import com.university.lms.grading.api.AcademicRecord;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.student.api.ResidencyClassification;
 import com.university.lms.student.api.StudentDirectory;
+import com.university.lms.student.api.StudentProgrammeEnrolments;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -61,6 +62,9 @@ class CurriculumProgressTest {
     private StudentDirectory studentDirectory;
 
     @Mock
+    private StudentProgrammeEnrolments studentProgrammeEnrolments;
+
+    @Mock
     private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
@@ -76,7 +80,7 @@ class CurriculumProgressTest {
 
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, UUID.randomUUID(), "201945001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, UUID.randomUUID(), "201945001", programmeId, null, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-HTM", "Hospitality", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
@@ -120,7 +124,7 @@ class CurriculumProgressTest {
 
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, UUID.randomUUID(), "201945001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, UUID.randomUUID(), "201945001", programmeId, null, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-HTM", "Hospitality", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
@@ -157,7 +161,7 @@ class CurriculumProgressTest {
 
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, UUID.randomUUID(), "201945001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, UUID.randomUUID(), "201945001", programmeId, null, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-HTM", "Hospitality", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
@@ -195,7 +199,7 @@ class CurriculumProgressTest {
 
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, UUID.randomUUID(), "201945001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, UUID.randomUUID(), "201945001", programmeId, null, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-HTM", "Hospitality", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));

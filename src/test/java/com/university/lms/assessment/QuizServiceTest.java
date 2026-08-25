@@ -135,7 +135,7 @@ class QuizServiceTest {
         when(answerRepository.findByAttemptIdWithQuestion(attemptId)).thenReturn(List.of());
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, STUDENT_USER, "202012345", null, true, ResidencyClassification.IN_DISTRICT)));
+                        STUDENT_ID, STUDENT_USER, "202012345", null, null, true, ResidencyClassification.IN_DISTRICT)));
         when(userDirectory.findById(STUDENT_USER))
                 .thenReturn(Optional.of(new UserDirectory.UserSummary(
                         STUDENT_USER, "202012345", "Sam Student", "student@test", true)));

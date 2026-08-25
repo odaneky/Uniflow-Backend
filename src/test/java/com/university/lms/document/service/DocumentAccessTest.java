@@ -128,7 +128,7 @@ class DocumentAccessTest {
         when(studentDirectory.studentIdOfUser(OWNER_ID)).thenReturn(Optional.of(STUDENT_ID));
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, true, null)));
+                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, null, true, null)));
         when(academicStructure.departmentOfProgramme(PROGRAMME_ID)).thenReturn(Optional.of(DEPARTMENT_ID));
         when(staffAppointments.orgUnitFor("DEPARTMENT", DEPARTMENT_ID)).thenReturn(Optional.of(ORG_UNIT_ID));
         when(staffAppointments.isAppointedOver(callerId, ORG_UNIT_ID)).thenReturn(false);
@@ -150,7 +150,7 @@ class DocumentAccessTest {
         when(studentDirectory.studentIdOfUser(OWNER_ID)).thenReturn(Optional.of(STUDENT_ID));
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, true, null)));
+                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, null, true, null)));
         when(academicStructure.departmentOfProgramme(PROGRAMME_ID)).thenReturn(Optional.of(DEPARTMENT_ID));
         when(staffAppointments.orgUnitFor("DEPARTMENT", DEPARTMENT_ID)).thenReturn(Optional.of(ORG_UNIT_ID));
         when(staffAppointments.isAppointedOver(callerId, ORG_UNIT_ID)).thenReturn(true);
@@ -204,7 +204,7 @@ class DocumentAccessTest {
         when(studentDirectory.studentIdOfUser(OWNER_ID)).thenReturn(Optional.of(STUDENT_ID));
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, true, null)));
+                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, null, true, null)));
         when(academicStructure.departmentOfProgramme(PROGRAMME_ID)).thenReturn(Optional.of(DEPARTMENT_ID));
         when(staffAppointments.orgUnitFor("DEPARTMENT", DEPARTMENT_ID)).thenReturn(Optional.of(ORG_UNIT_ID));
         when(staffAppointments.isAppointedOver(callerId, ORG_UNIT_ID)).thenReturn(false);
@@ -226,7 +226,7 @@ class DocumentAccessTest {
         when(studentDirectory.studentIdOfUser(OWNER_ID)).thenReturn(Optional.of(STUDENT_ID));
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, true, null)));
+                        STUDENT_ID, OWNER_ID, "S12345", PROGRAMME_ID, null, true, null)));
         when(academicStructure.departmentOfProgramme(PROGRAMME_ID)).thenReturn(Optional.of(DEPARTMENT_ID));
         when(staffAppointments.orgUnitFor("DEPARTMENT", DEPARTMENT_ID)).thenReturn(Optional.of(ORG_UNIT_ID));
         when(staffAppointments.isAppointedOver(callerId, ORG_UNIT_ID)).thenReturn(true);

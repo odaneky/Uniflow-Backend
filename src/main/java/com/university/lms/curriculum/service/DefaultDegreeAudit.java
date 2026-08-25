@@ -61,7 +61,7 @@ public class DefaultDegreeAudit implements DegreeAudit {
                 blockers.add("Clearance pending: " + item.getItemType());
             }
         }
-        curriculumService.residencyCreditsFor(progress.programmeId())
+        curriculumService.residencyCreditsFor(studentId)
                 .filter(required -> progress.creditsEarned() < required)
                 .ifPresent(required -> blockers.add("Residency requirement not met: " + progress.creditsEarned()
                         + " of " + required + " required credits earned in residence"));

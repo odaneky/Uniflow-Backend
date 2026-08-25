@@ -64,7 +64,7 @@ class TuitionScheduleServiceTest {
     private void studentIs(ResidencyClassification residency) {
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, UUID.randomUUID(), "20260001", PROGRAMME_ID, true, residency)));
+                        STUDENT_ID, UUID.randomUUID(), "20260001", PROGRAMME_ID, null, true, residency)));
     }
 
     @Test

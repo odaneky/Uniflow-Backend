@@ -204,7 +204,7 @@ class GradeServiceTest {
         when(enrollmentDirectory.attemptNumberOf(studentId, sectionId)).thenReturn(Optional.of(1));
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, userId, "20260001", UUID.randomUUID(), true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, userId, "20260001", UUID.randomUUID(), null, true, ResidencyClassification.IN_DISTRICT)));
         when(userDirectory.findById(userId))
                 .thenReturn(Optional.of(new UserDirectory.UserSummary(userId, "student", "Sam Student", "sam@test", true)));
 

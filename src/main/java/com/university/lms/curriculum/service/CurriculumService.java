@@ -29,6 +29,7 @@ import com.university.lms.grading.api.AcademicRecord;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.student.api.StudentDirectory;
+import com.university.lms.student.api.StudentProgrammeEnrolments;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,6 +57,7 @@ public class CurriculumService {
     private final CourseCatalog courseCatalog;
     private final AcademicRecord academicRecord;
     private final StudentDirectory studentDirectory;
+    private final StudentProgrammeEnrolments studentProgrammeEnrolments;
     private final CurrentUserProvider currentUserProvider;
 
     public CurriculumService(
@@ -67,6 +69,7 @@ public class CurriculumService {
             CourseCatalog courseCatalog,
             AcademicRecord academicRecord,
             StudentDirectory studentDirectory,
+            StudentProgrammeEnrolments studentProgrammeEnrolments,
             CurrentUserProvider currentUserProvider) {
         this.blockRepository = blockRepository;
         this.versionRepository = versionRepository;
@@ -76,6 +79,7 @@ public class CurriculumService {
         this.courseCatalog = courseCatalog;
         this.academicRecord = academicRecord;
         this.studentDirectory = studentDirectory;
+        this.studentProgrammeEnrolments = studentProgrammeEnrolments;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -236,7 +240,8 @@ public class CurriculumService {
             }
         }
 
-        List<ProgrammeRequirementBlock> requirementBlocks = findActiveVersion(programme.id())
+        List<ProgrammeRequirementBlock> requirementBlocks = resolveVersionFor(
+                        studentId, programme.id(), student.curriculumVersionId())
                 .map(version -> blockRepository.findByCurriculumVersionIdOrderByPositionAsc(version.getId()))
                 .orElseGet(List::of);
 
@@ -314,12 +319,16 @@ public class CurriculumService {
     }
 
     /**
-     * The active curriculum version's residency requirement — the minimum credits {@link
-     * DegreeProgressResponse#creditsEarned()} must reach without counting transfer credit — if one
-     * is configured. Empty when the programme has no active version, or that version has none set.
+     * The student's resolved curriculum version's residency requirement — the minimum credits
+     * {@link DegreeProgressResponse#creditsEarned()} must reach without counting transfer credit — if
+     * one is configured. Empty when the student has no resolvable version, or that version has none
+     * set.
      */
-    Optional<Integer> residencyCreditsFor(UUID programmeId) {
-        return findActiveVersion(programmeId).map(CurriculumVersion::getResidencyCredits);
+    Optional<Integer> residencyCreditsFor(UUID studentId) {
+        return studentDirectory
+                .findById(studentId)
+                .flatMap(student -> resolveVersionFor(studentId, student.programmeId(), student.curriculumVersionId()))
+                .map(CurriculumVersion::getResidencyCredits);
     }
 
     private void addKnownCourse(ProgrammeRequirementBlock block, UUID courseId) {
@@ -355,6 +364,29 @@ public class CurriculumService {
                             + ") is published and can no longer be changed");
         }
         return block;
+    }
+
+    /**
+     * The curriculum version a student's degree audit is resolved against.
+     *
+     * <p>A student already bound to a version (via {@link StudentProgrammeEnrolments#bindCurriculumVersion})
+     * always resolves to that exact version, published or not — this is what keeps a past audit's
+     * answer from moving when the programme's requirements are later revised. An unbound student
+     * resolves against the programme's current active version, same as before; if that version is
+     * {@code PUBLISHED} (not a still-editable {@code DRAFT}), this also binds it, so the very next
+     * time this student's progress is resolved, it is pinned to today's answer rather than whatever
+     * is active by then. A student who is never read before a version publishes is bound to whichever
+     * version happens to be active on their first read — the same fail-open default the unbound case
+     * already had, just made permanent instead of moving underneath them on every subsequent call.
+     */
+    private Optional<CurriculumVersion> resolveVersionFor(UUID studentId, UUID programmeId, UUID boundVersionId) {
+        if (boundVersionId != null) {
+            return versionRepository.findById(boundVersionId);
+        }
+        Optional<CurriculumVersion> active = findActiveVersion(programmeId);
+        active.filter(version -> version.getStatus() == CurriculumVersionStatus.PUBLISHED)
+                .ifPresent(version -> studentProgrammeEnrolments.bindCurriculumVersion(studentId, version.getId()));
+        return active;
     }
 
     /** Prefers the published version; falls back to the draft when nothing has been published yet. */

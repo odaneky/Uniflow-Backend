@@ -1,8 +1,11 @@
 package com.university.lms.student.service;
 
+import com.university.lms.administration.api.Auditable;
+import com.university.lms.administration.api.AuditTrail;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.common.exception.ValidationException;
+import com.university.lms.student.api.StudentProgrammeEnrolments;
 import com.university.lms.student.domain.ProgrammeEnrolmentEndReason;
 import com.university.lms.student.domain.ProgrammeEnrolmentKind;
 import com.university.lms.student.domain.StudentErrorCode;
@@ -13,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -28,11 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
  * student} (for {@code StudentDirectory}), so this module taking a dependency back on it would be
  * the module graph's first cycle. {@code curriculumVersionId} is written {@code null} here and left
  * for {@code curriculum} to populate later through a write path published from this module's own
- * {@code api} — the dependency can only run the one way it already does.
+ * {@code api} — the dependency can only run the one way it already does. That path is {@link
+ * #bindCurriculumVersion}, implementing {@link StudentProgrammeEnrolments}.
  */
 @Service
 @Transactional(readOnly = true)
-public class StudentProgrammeEnrolmentService {
+public class StudentProgrammeEnrolmentService implements StudentProgrammeEnrolments {
 
     private final StudentProgrammeEnrolmentRepository repository;
 
@@ -109,6 +114,26 @@ public class StudentProgrammeEnrolmentService {
         }
         membership.end(endedOn, endReason, reason, approvedBy);
         repository.save(membership);
+    }
+
+    /**
+     * {@code REQUIRES_NEW}: the caller is {@code CurriculumService.progressOf}, a read whose own
+     * transaction is {@code readOnly}. A binding written to an entity inside a readOnly transaction
+     * is never flushed, so this needs its own genuinely-writable transaction to actually commit —
+     * the same reason {@code DefaultAuditTrail.record} does.
+     */
+    @Override
+    @Auditable(
+            action = AuditTrail.Action.CURRICULUM_VERSION_BOUND,
+            entityType = AuditTrail.EntityType.STUDENT,
+            entityId = "#studentId",
+            details = "#curriculumVersionId")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void bindCurriculumVersion(UUID studentId, UUID curriculumVersionId) {
+        repository
+                .findByStudentIdAndEndedOnIsNullAndPrimaryTrue(studentId)
+                .filter(enrolment -> enrolment.getCurriculumVersionId() == null)
+                .ifPresent(enrolment -> enrolment.bindCurriculumVersion(curriculumVersionId));
     }
 
     private void open(UUID studentId, UUID programmeId, LocalDate startedOn) {

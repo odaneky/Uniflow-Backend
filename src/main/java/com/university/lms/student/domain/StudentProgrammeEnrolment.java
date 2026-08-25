@@ -97,4 +97,16 @@ public class StudentProgrammeEnrolment extends BaseEntity {
         this.reason = reason;
         this.approvedBy = approvedBy;
     }
+
+    /**
+     * Binds this membership to the curriculum version that governs it. Once bound, never rebound —
+     * that is what lets a degree audit resolved against this membership keep returning the answer it
+     * would have returned at the time, even after the programme's requirements are later revised.
+     */
+    public void bindCurriculumVersion(UUID curriculumVersionId) {
+        if (this.curriculumVersionId != null) {
+            throw new IllegalStateException("This membership is already bound to a curriculum version");
+        }
+        this.curriculumVersionId = curriculumVersionId;
+    }
 }

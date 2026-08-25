@@ -2,6 +2,8 @@ package com.university.lms.student.service;
 
 import com.university.lms.student.api.StudentDirectory;
 import com.university.lms.student.domain.Student;
+import com.university.lms.student.domain.StudentProgrammeEnrolment;
+import com.university.lms.student.repository.StudentProgrammeEnrolmentRepository;
 import com.university.lms.student.repository.StudentRepository;
 import java.util.List;
 import java.util.Optional;
@@ -15,9 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultStudentDirectory implements StudentDirectory {
 
     private final StudentRepository studentRepository;
+    private final StudentProgrammeEnrolmentRepository programmeEnrolmentRepository;
 
-    public DefaultStudentDirectory(StudentRepository studentRepository) {
+    public DefaultStudentDirectory(
+            StudentRepository studentRepository, StudentProgrammeEnrolmentRepository programmeEnrolmentRepository) {
         this.studentRepository = studentRepository;
+        this.programmeEnrolmentRepository = programmeEnrolmentRepository;
     }
 
     @Override
@@ -37,6 +42,10 @@ public class DefaultStudentDirectory implements StudentDirectory {
                         student.getUserId(),
                         student.getStudentNumber(),
                         student.getProgrammeId(),
+                        programmeEnrolmentRepository
+                                .findByStudentIdAndEndedOnIsNullAndPrimaryTrue(studentId)
+                                .map(StudentProgrammeEnrolment::getCurriculumVersionId)
+                                .orElse(null),
                         student.canEnrol(),
                         student.getResidencyClassification()));
     }

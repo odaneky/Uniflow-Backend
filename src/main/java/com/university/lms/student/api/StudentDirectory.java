@@ -18,6 +18,7 @@ public interface StudentDirectory {
             UUID userId,
             String studentNumber,
             UUID programmeId,
+            UUID curriculumVersionId,
             boolean eligibleToEnrol,
             ResidencyClassification residencyClassification) {}
 

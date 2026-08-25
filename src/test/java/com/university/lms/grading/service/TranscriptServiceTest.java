@@ -81,7 +81,7 @@ class TranscriptServiceTest {
         lenient()
                 .when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, STUDENT_USER_ID, "20260001", UUID.randomUUID(), true, ResidencyClassification.IN_DISTRICT)));
+                        STUDENT_ID, STUDENT_USER_ID, "20260001", UUID.randomUUID(), null, true, ResidencyClassification.IN_DISTRICT)));
         lenient().when(gradeService.summaryOf(STUDENT_ID)).thenReturn(new AcademicRecord.Summary(null, 0, 0, 0));
         lenient().when(gradeRepository.findAllByStudentIdAndPublishedTrue(STUDENT_ID)).thenReturn(List.of());
         lenient().when(transferCreditRepository.findByStudentIdOrderByAwardedAtDesc(STUDENT_ID)).thenReturn(List.of());

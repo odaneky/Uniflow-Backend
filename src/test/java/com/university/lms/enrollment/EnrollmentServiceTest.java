@@ -554,7 +554,7 @@ class EnrollmentServiceTest {
     void rejectsIneligibleStudent() {
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), false, ResidencyClassification.IN_DISTRICT)));
+                        STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), null, false, ResidencyClassification.IN_DISTRICT)));
 
         assertThatThrownBy(() -> service.enrol(request))
                 .isInstanceOf(BusinessException.class)
@@ -872,7 +872,7 @@ class EnrollmentServiceTest {
         when(studentDirectory.findById(STUDENT_ID))
                 .thenReturn(Optional.of(
                         new StudentDirectory.StudentSummary(
-                                STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), true, ResidencyClassification.IN_DISTRICT)));
+                                STUDENT_ID, UUID.randomUUID(), "20260001", UUID.randomUUID(), null, true, ResidencyClassification.IN_DISTRICT)));
     }
 
     private void givenOpenSection(int capacity, int enrolled) {

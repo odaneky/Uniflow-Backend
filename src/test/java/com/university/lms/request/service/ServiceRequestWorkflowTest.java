@@ -70,7 +70,7 @@ class ServiceRequestWorkflowTest {
                 Set.of());
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, studentUserId, "202012345", UUID.randomUUID(), true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, studentUserId, "202012345", UUID.randomUUID(), null, true, ResidencyClassification.IN_DISTRICT)));
         when(studentDirectory.adviseeUserIdsOf(advisorId)).thenReturn(List.of(studentUserId));
 
         assertThatCode(() -> workflow.assertStaffAction(advisor, request, ServiceRequestStatus.IN_REVIEW))

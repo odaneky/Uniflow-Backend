@@ -53,13 +53,13 @@ class DefaultDegreeAuditTest {
         when(curriculumService.progressOf(studentId)).thenReturn(fullyMetProgress(programmeId));
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, UUID.randomUUID(), "20260001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, UUID.randomUUID(), "20260001", programmeId, null, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-CS", "Computer Science", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
         when(clearanceItemRepository.findByStudentIdOrderByItemTypeAsc(studentId))
                 .thenReturn(List.of(new GraduationClearanceItem(studentId, "LIBRARY_FINES")));
-        when(curriculumService.residencyCreditsFor(programmeId)).thenReturn(Optional.empty());
+        when(curriculumService.residencyCreditsFor(studentId)).thenReturn(Optional.empty());
 
         DegreeAudit.Eligibility eligibility = degreeAudit.eligibility(studentId);
 
@@ -76,14 +76,14 @@ class DefaultDegreeAuditTest {
         when(curriculumService.progressOf(studentId)).thenReturn(fullyMetProgress(programmeId));
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, UUID.randomUUID(), "20260001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, UUID.randomUUID(), "20260001", programmeId, null, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-CS", "Computer Science", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
         GraduationClearanceItem cleared = new GraduationClearanceItem(studentId, "LIBRARY_FINES");
         cleared.clear(UUID.randomUUID(), "Paid in full");
         when(clearanceItemRepository.findByStudentIdOrderByItemTypeAsc(studentId)).thenReturn(List.of(cleared));
-        when(curriculumService.residencyCreditsFor(programmeId)).thenReturn(Optional.empty());
+        when(curriculumService.residencyCreditsFor(studentId)).thenReturn(Optional.empty());
 
         DegreeAudit.Eligibility eligibility = degreeAudit.eligibility(studentId);
 
@@ -99,13 +99,13 @@ class DefaultDegreeAuditTest {
         when(curriculumService.progressOf(studentId)).thenReturn(fullyMetProgress(programmeId));
         when(studentDirectory.findById(studentId))
                 .thenReturn(Optional.of(new StudentDirectory.StudentSummary(
-                        studentId, UUID.randomUUID(), "20260001", programmeId, true, ResidencyClassification.IN_DISTRICT)));
+                        studentId, UUID.randomUUID(), "20260001", programmeId, null, true, ResidencyClassification.IN_DISTRICT)));
         when(academicStructure.findProgramme(programmeId))
                 .thenReturn(Optional.of(new AcademicStructure.ProgrammeSummary(
                         programmeId, "BSC-CS", "Computer Science", "BSc", 120, true, "DEGREE", new BigDecimal("2.00"))));
         when(clearanceItemRepository.findByStudentIdOrderByItemTypeAsc(studentId)).thenReturn(List.of());
         // fullyMetProgress reports 120 creditsEarned; require more in-residence than that.
-        when(curriculumService.residencyCreditsFor(programmeId)).thenReturn(Optional.of(130));
+        when(curriculumService.residencyCreditsFor(studentId)).thenReturn(Optional.of(130));
 
         DegreeAudit.Eligibility eligibility = degreeAudit.eligibility(studentId);
 
