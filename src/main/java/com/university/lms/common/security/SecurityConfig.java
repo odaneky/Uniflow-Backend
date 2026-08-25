@@ -151,8 +151,13 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER, EXAMS_OFFICER)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/add-drop-window")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        // A6: also accepts BURSAR — payment plans are billing administration, the
+                        // same territory as the ledger entries widened to BURSAR below. Neither
+                        // PaymentPlanService nor the two services below have a service-layer guard
+                        // of their own; this matcher is the only gate, same shape as the exam-window
+                        // rule. Never narrowed to exclude REGISTRAR.
                         .requestMatchers(HttpMethod.PUT, "/api/v1/payment-plans/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-policy")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/branding")
@@ -161,16 +166,18 @@ public class SecurityConfig {
                         .hasRole(SYSTEM_ADMIN)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/programmes/*/credit-load")
                         .hasAnyRole(SYSTEM_ADMIN, FACULTY_ADMIN, REGISTRAR)
+                        // A6: also accepts BURSAR — setting tuition rates and the fee catalog is
+                        // bursar's-office work, same reasoning as payment plans above.
                         .requestMatchers(HttpMethod.PUT, "/api/v1/tuition-schedule", "/api/v1/tuition-schedule/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/tuition-schedule/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/fee-catalog", "/api/v1/fee-catalog/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/fee-catalog/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/fee-catalog/**")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/academic-years", "/api/v1/academic-terms")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
 

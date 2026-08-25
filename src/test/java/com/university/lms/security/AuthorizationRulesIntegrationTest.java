@@ -340,6 +340,32 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
         }
 
         @Test
+        @DisplayName(
+                "A6: BURSAR may also administer payment plans, tuition rates and the fee catalog, "
+                        + "alongside REGISTRAR — none of the three has a service-layer guard of its "
+                        + "own, so SecurityConfig is the only gate")
+        void bursarMayAdministerBillingConfiguration() throws Exception {
+            allowed(json(
+                    put("/api/v1/payment-plans/" + UUID.randomUUID()).with(as(SecurityRoles.BURSAR)), "{}"));
+            allowed(json(put("/api/v1/tuition-schedule").with(as(SecurityRoles.BURSAR)), "{}"));
+            allowed(json(
+                    put("/api/v1/tuition-schedule/programmes/" + UUID.randomUUID()).with(as(SecurityRoles.BURSAR)),
+                    "{}"));
+            allowed(delete("/api/v1/tuition-schedule/programmes/" + UUID.randomUUID()).with(as(SecurityRoles.BURSAR)));
+            allowed(json(post("/api/v1/fee-catalog").with(as(SecurityRoles.BURSAR)), "{}"));
+            allowed(json(
+                    patch("/api/v1/fee-catalog/" + UUID.randomUUID()).with(as(SecurityRoles.BURSAR)), "{}"));
+            allowed(delete("/api/v1/fee-catalog/" + UUID.randomUUID()).with(as(SecurityRoles.BURSAR)));
+        }
+
+        @Test
+        @DisplayName("billing configuration is registry work, not a student action")
+        void studentsCannotAdministerBillingConfiguration() throws Exception {
+            denied(json(put("/api/v1/tuition-schedule").with(as(SecurityRoles.STUDENT)), "{}"));
+            denied(json(post("/api/v1/fee-catalog").with(as(SecurityRoles.STUDENT)), "{}"));
+        }
+
+        @Test
         @DisplayName("A6: FINANCIAL_AID_OFFICER may also administer financial aid, alongside REGISTRAR")
         void financialAidOfficerMayAdministerAid() throws Exception {
             allowed(post("/api/v1/financial-aid/isir/import")
