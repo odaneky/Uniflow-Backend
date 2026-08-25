@@ -128,9 +128,16 @@ public class DocumentService implements DocumentStore {
         return orgUnitId.isEmpty() || staffAppointments.isAppointedOver(caller.userId(), orgUnitId.get());
     }
 
+    /**
+     * A5: any staff role could register a document against any student's record, regardless of
+     * department — the same over-reach as {@link #downloadForStaff} and {@link #findMetadata},
+     * just on the write side. Reuses {@link #isAuthorizedStaff} rather than duplicating its
+     * resolution and fail-open behaviour.
+     */
     @Transactional
     public DocumentResponse register(CreateDocumentRequest request) {
-        if (!currentUserProvider.require().isStaff()) {
+        CurrentUser caller = currentUserProvider.require();
+        if (!isAuthorizedStaff(caller, request.ownerUserId())) {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
