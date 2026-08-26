@@ -12,6 +12,7 @@ import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
 import com.university.lms.assessment.dto.ReportExamMisconductRequest;
 import com.university.lms.assessment.repository.ExamInvigilatorRepository;
 import com.university.lms.assessment.repository.ExamMisconductRecordRepository;
+import com.university.lms.assessment.repository.ExamResitCandidateRepository;
 import com.university.lms.assessment.repository.ExamSittingRepository;
 import com.university.lms.common.exception.ResourceNotFoundException;
 import com.university.lms.course.api.CourseCatalog;
@@ -43,6 +44,9 @@ class ExamMisconductTest {
 
     @Mock
     ExamInvigilatorRepository examInvigilatorRepository;
+
+    @Mock
+    ExamResitCandidateRepository examResitCandidateRepository;
 
     @Mock
     CourseCatalog courseCatalog;
@@ -77,6 +81,7 @@ class ExamMisconductTest {
                 examSittingRepository,
                 examMisconductRecordRepository,
                 examInvigilatorRepository,
+                examResitCandidateRepository,
                 courseCatalog,
                 enrollmentDirectory,
                 studentDirectory,

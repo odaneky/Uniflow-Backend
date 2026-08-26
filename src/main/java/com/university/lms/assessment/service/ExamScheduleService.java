@@ -3,14 +3,17 @@ package com.university.lms.assessment.service;
 import com.university.lms.assessment.domain.AssessmentErrorCode;
 import com.university.lms.assessment.domain.ExamInvigilator;
 import com.university.lms.assessment.domain.ExamMisconductRecord;
+import com.university.lms.assessment.domain.ExamResitCandidate;
 import com.university.lms.assessment.domain.ExamSitting;
 import com.university.lms.assessment.dto.ExamInvigilatorResponse;
 import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
+import com.university.lms.assessment.dto.ExamResitCandidateResponse;
 import com.university.lms.assessment.dto.ExamSittingResponse;
 import com.university.lms.assessment.dto.ReportExamMisconductRequest;
 import com.university.lms.assessment.dto.ScheduleExamRequest;
 import com.university.lms.assessment.repository.ExamInvigilatorRepository;
 import com.university.lms.assessment.repository.ExamMisconductRecordRepository;
+import com.university.lms.assessment.repository.ExamResitCandidateRepository;
 import com.university.lms.assessment.repository.ExamSittingRepository;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.ResourceNotFoundException;
@@ -54,6 +57,7 @@ public class ExamScheduleService {
     private final ExamSittingRepository examSittingRepository;
     private final ExamMisconductRecordRepository examMisconductRecordRepository;
     private final ExamInvigilatorRepository examInvigilatorRepository;
+    private final ExamResitCandidateRepository examResitCandidateRepository;
     private final CourseCatalog courseCatalog;
     private final EnrollmentDirectory enrollmentDirectory;
     private final StudentDirectory studentDirectory;
@@ -66,6 +70,7 @@ public class ExamScheduleService {
             ExamSittingRepository examSittingRepository,
             ExamMisconductRecordRepository examMisconductRecordRepository,
             ExamInvigilatorRepository examInvigilatorRepository,
+            ExamResitCandidateRepository examResitCandidateRepository,
             CourseCatalog courseCatalog,
             EnrollmentDirectory enrollmentDirectory,
             StudentDirectory studentDirectory,
@@ -76,6 +81,7 @@ public class ExamScheduleService {
         this.examSittingRepository = examSittingRepository;
         this.examMisconductRecordRepository = examMisconductRecordRepository;
         this.examInvigilatorRepository = examInvigilatorRepository;
+        this.examResitCandidateRepository = examResitCandidateRepository;
         this.courseCatalog = courseCatalog;
         this.enrollmentDirectory = enrollmentDirectory;
         this.studentDirectory = studentDirectory;
@@ -205,13 +211,27 @@ public class ExamScheduleService {
      * must not undo the change that prompted the message.
      */
     private void notifyCandidates(ExamSitting sitting, String title, String body) {
-        for (EnrollmentDirectory.SectionEnrolment enrolment :
-                enrollmentDirectory.rosterOf(sitting.getCourseSectionId())) {
+        for (UUID studentId : candidateStudentIds(sitting)) {
             studentDirectory
-                    .userIdOfStudent(enrolment.studentId())
+                    .userIdOfStudent(studentId)
                     .ifPresent(userId -> notifier.notifyUser(
                             userId, NotificationType.SYSTEM, title, body, "schedule"));
         }
+    }
+
+    /**
+     * G6: the whole section roster, unless this sitting is a resit or deferred paper — signalled by
+     * having any {@link ExamResitCandidate} rows at all — in which case only those named students.
+     */
+    private List<UUID> candidateStudentIds(ExamSitting sitting) {
+        List<ExamResitCandidate> resitCandidates =
+                examResitCandidateRepository.findByExamSittingIdOrderByAddedAtAsc(sitting.getId());
+        if (!resitCandidates.isEmpty()) {
+            return resitCandidates.stream().map(ExamResitCandidate::getStudentId).toList();
+        }
+        return enrollmentDirectory.rosterOf(sitting.getCourseSectionId()).stream()
+                .map(EnrollmentDirectory.SectionEnrolment::studentId)
+                .toList();
     }
 
     private static String describe(ExamSitting sitting) {
@@ -322,6 +342,56 @@ public class ExamScheduleService {
                 sittingId,
                 "Unassigned invigilator " + userId);
         return invigilatorsFor(sittingId);
+    }
+
+    /** G6: who this resit or deferred paper is actually for. Empty means it is visible to the whole section. */
+    @Transactional(readOnly = true)
+    public List<ExamResitCandidateResponse> resitCandidatesFor(UUID sittingId) {
+        require(sittingId);
+        return examResitCandidateRepository.findByExamSittingIdOrderByAddedAtAsc(sittingId).stream()
+                .map(candidate -> ExamResitCandidateResponse.from(candidate, studentNumberOf(candidate.getStudentId())))
+                .toList();
+    }
+
+    @Transactional
+    public List<ExamResitCandidateResponse> addResitCandidate(UUID sittingId, UUID studentId) {
+        require(sittingId);
+        if (!studentDirectory.exists(studentId)) {
+            throw new ResourceNotFoundException(
+                    AssessmentErrorCode.RESIT_CANDIDATE_STUDENT_NOT_FOUND, "No student exists with id " + studentId);
+        }
+        if (!examResitCandidateRepository.existsByExamSittingIdAndStudentId(sittingId, studentId)) {
+            examResitCandidateRepository.save(new ExamResitCandidate(sittingId, studentId, actorId()));
+            auditTrail.record(
+                    actorId(),
+                    AuditTrail.Action.EXAM_RESIT_CANDIDATE_ADDED,
+                    ENTITY,
+                    sittingId,
+                    "Added resit candidate " + studentId);
+        }
+        return resitCandidatesFor(sittingId);
+    }
+
+    @Transactional
+    public List<ExamResitCandidateResponse> removeResitCandidate(UUID sittingId, UUID studentId) {
+        require(sittingId);
+        ExamResitCandidate candidate = examResitCandidateRepository
+                .findById(new ExamResitCandidate.ExamResitCandidateId(sittingId, studentId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        AssessmentErrorCode.RESIT_CANDIDATE_NOT_FOUND,
+                        "Student " + studentId + " is not a resit candidate for sitting " + sittingId));
+        examResitCandidateRepository.delete(candidate);
+        auditTrail.record(
+                actorId(),
+                AuditTrail.Action.EXAM_RESIT_CANDIDATE_REMOVED,
+                ENTITY,
+                sittingId,
+                "Removed resit candidate " + studentId);
+        return resitCandidatesFor(sittingId);
+    }
+
+    private String studentNumberOf(UUID studentId) {
+        return studentDirectory.findById(studentId).map(StudentDirectory.StudentSummary::studentNumber).orElse(null);
     }
 
     @Transactional(readOnly = true)

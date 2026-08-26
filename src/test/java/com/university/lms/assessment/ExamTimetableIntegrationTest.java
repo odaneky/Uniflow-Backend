@@ -417,6 +417,104 @@ class ExamTimetableIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Nested
+    @DisplayName("Resit and deferred papers (G6)")
+    class ResitCandidates {
+
+        /** A resit sitting with candidates named must not appear for a classmate who isn't one. */
+        @Test
+        @DisplayName("only a named candidate sees a resit sitting, not the rest of the section")
+        void onlyTheCandidateSeesTheResit() throws Exception {
+            UUID sectionId = people.openSection();
+            OwnerScopingFixtures.Person candidate = people.student();
+            OwnerScopingFixtures.Person classmate = people.student();
+            enrollmentRepository.saveAndFlush(new Enrollment(candidate.studentId(), sectionId));
+            enrollmentRepository.saveAndFlush(new Enrollment(classmate.studentId(), sectionId));
+
+            String body = objectMapper.writeValueAsString(Map.of(
+                    "title", "Resit",
+                    "startsAt", Instant.now().plus(45, ChronoUnit.DAYS).toString(),
+                    "durationMinutes", 120,
+                    "room", "Hall-" + UUID.randomUUID().toString().substring(0, 6)));
+            String created = mockMvc.perform(post("/api/v1/courses/sections/{id}/exams", sectionId)
+                            .with(asRegistrar())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isCreated())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            String sittingId = objectMapper.readTree(created).path("id").asText();
+
+            mockMvc.perform(post("/api/v1/courses/sections/exams/{id}/resit-candidates", sittingId)
+                            .with(asRegistrar())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    Map.of("studentId", candidate.studentId().toString()))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].studentId").value(candidate.studentId().toString()));
+
+            mockMvc.perform(post("/api/v1/courses/sections/exams/{id}/publish", sittingId).with(asRegistrar()))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(get("/api/v1/me/exams").with(asStudent(candidate.subject())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.exams.length()").value(1))
+                    .andExpect(jsonPath("$.exams[0].title").value("Resit"));
+
+            mockMvc.perform(get("/api/v1/me/exams").with(asStudent(classmate.subject())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.exams").isEmpty());
+        }
+
+        @Test
+        @DisplayName("a sitting with no candidates named stays visible to the whole section, as before")
+        void aSittingWithNoCandidatesIsUnrestricted() throws Exception {
+            OwnerScopingFixtures.Person me = people.student();
+            scheduleExamFor(me, true);
+
+            mockMvc.perform(get("/api/v1/me/exams").with(asStudent(me.subject())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.exams.length()").value(1));
+        }
+
+        @Test
+        @DisplayName("removing a candidate takes them off the sitting's list")
+        void removingACandidateTakesThemOff() throws Exception {
+            OwnerScopingFixtures.Person student = people.student();
+            String sittingId = scheduleExamFor(student, false);
+
+            mockMvc.perform(post("/api/v1/courses/sections/exams/{id}/resit-candidates", sittingId)
+                            .with(asRegistrar())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    Map.of("studentId", student.studentId().toString()))))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                    "/api/v1/courses/sections/exams/{id}/resit-candidates/{studentId}",
+                                    sittingId,
+                                    student.studentId())
+                            .with(asRegistrar()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$").isEmpty());
+        }
+
+        @Test
+        @DisplayName("a student cannot manage resit candidates")
+        void studentsCannotManageResitCandidates() throws Exception {
+            OwnerScopingFixtures.Person me = people.student();
+            String sittingId = scheduleExamFor(me, false);
+
+            mockMvc.perform(post("/api/v1/courses/sections/exams/{id}/resit-candidates", sittingId)
+                            .with(asStudent(me.subject()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    Map.of("studentId", me.studentId().toString()))))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
     @DisplayName("The office view")
     class OfficeView {
 

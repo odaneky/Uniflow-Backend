@@ -22,7 +22,9 @@ public enum AssessmentErrorCode implements ErrorCode {
     QUIZ_GRADE_NOT_MANUAL,
     MISCONDUCT_STUDENT_NOT_FOUND,
     INVIGILATOR_USER_NOT_FOUND,
-    INVIGILATOR_NOT_ASSIGNED;
+    INVIGILATOR_NOT_ASSIGNED,
+    RESIT_CANDIDATE_STUDENT_NOT_FOUND,
+    RESIT_CANDIDATE_NOT_FOUND;
 
     @Override
     public String code() {

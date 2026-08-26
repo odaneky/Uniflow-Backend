@@ -157,7 +157,8 @@ public class SecurityConfig {
                                 "/api/v1/courses/sections/exams/*/misconduct",
                                 // G6: same reach problem as misconduct above — the literal "exams"
                                 // segment followed by more path isn't covered by the broader patterns.
-                                "/api/v1/courses/sections/exams/*/invigilators")
+                                "/api/v1/courses/sections/exams/*/invigilators",
+                                "/api/v1/courses/sections/exams/*/resit-candidates")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER, EXAMS_OFFICER)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/academic-terms/*/add-drop-window")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)

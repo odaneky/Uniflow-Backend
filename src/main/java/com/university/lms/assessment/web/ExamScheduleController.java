@@ -1,10 +1,12 @@
 package com.university.lms.assessment.web;
 
+import com.university.lms.assessment.dto.AddResitCandidateRequest;
 import com.university.lms.assessment.dto.AssignInvigilatorRequest;
 import com.university.lms.assessment.dto.CancelExamRequest;
 import org.springframework.web.bind.annotation.PutMapping;
 import com.university.lms.assessment.dto.ExamInvigilatorResponse;
 import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
+import com.university.lms.assessment.dto.ExamResitCandidateResponse;
 import com.university.lms.assessment.dto.ExamSittingResponse;
 import com.university.lms.assessment.dto.ReportExamMisconductRequest;
 import com.university.lms.assessment.dto.ScheduleExamRequest;
@@ -142,5 +144,29 @@ public class ExamScheduleController {
     public List<ExamInvigilatorResponse> unassignInvigilator(
             @PathVariable UUID sittingId, @PathVariable UUID userId) {
         return examScheduleService.unassignInvigilator(sittingId, userId);
+    }
+
+    /**
+     * Who this resit or deferred paper is actually for. Empty means it is visible to the whole
+     * section — see {@code ExamScheduleService#candidateStudentIds}.
+     */
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/exams/{sittingId}/resit-candidates")
+    public List<ExamResitCandidateResponse> resitCandidates(@PathVariable UUID sittingId) {
+        return examScheduleService.resitCandidatesFor(sittingId);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @PostMapping("/exams/{sittingId}/resit-candidates")
+    public List<ExamResitCandidateResponse> addResitCandidate(
+            @PathVariable UUID sittingId, @Valid @RequestBody AddResitCandidateRequest request) {
+        return examScheduleService.addResitCandidate(sittingId, request.studentId());
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @DeleteMapping("/exams/{sittingId}/resit-candidates/{studentId}")
+    public List<ExamResitCandidateResponse> removeResitCandidate(
+            @PathVariable UUID sittingId, @PathVariable UUID studentId) {
+        return examScheduleService.removeResitCandidate(sittingId, studentId);
     }
 }

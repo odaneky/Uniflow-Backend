@@ -32,6 +32,10 @@ public interface AuditTrail {
         public static final String EXAM_INVIGILATOR_ASSIGNED = "EXAM_INVIGILATOR_ASSIGNED";
         /** G6: a staff member was withdrawn from invigilating a sitting. */
         public static final String EXAM_INVIGILATOR_UNASSIGNED = "EXAM_INVIGILATOR_UNASSIGNED";
+        /** G6: a student was named as needing to sit a resit or deferred paper. */
+        public static final String EXAM_RESIT_CANDIDATE_ADDED = "EXAM_RESIT_CANDIDATE_ADDED";
+        /** G6: a student was removed from a resit or deferred paper's candidate list. */
+        public static final String EXAM_RESIT_CANDIDATE_REMOVED = "EXAM_RESIT_CANDIDATE_REMOVED";
         /** Somebody knowingly scheduled a lecturer or a room into a clash. */
         public static final String SCHEDULE_CONFLICT_OVERRIDDEN = "SCHEDULE_CONFLICT_OVERRIDDEN";
         public static final String IDENTITY_LINKED = "IDENTITY_LINKED";

@@ -5,6 +5,7 @@ import com.university.lms.assessment.domain.ExamSitting;
 import com.university.lms.assessment.domain.ExamSittingStatus;
 import com.university.lms.assessment.dto.ExamSittingResponse;
 import com.university.lms.assessment.dto.ExamTimetableResponse;
+import com.university.lms.assessment.repository.ExamResitCandidateRepository;
 import com.university.lms.assessment.repository.ExamSittingRepository;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
@@ -40,6 +41,7 @@ public class MyExamsService {
     private static final int MAX_SECTIONS = 200;
 
     private final ExamSittingRepository examSittingRepository;
+    private final ExamResitCandidateRepository examResitCandidateRepository;
     private final EnrollmentDirectory enrollmentDirectory;
     private final CurrentUserProvider currentUserProvider;
     private final StudentDirectory studentDirectory;
@@ -48,12 +50,14 @@ public class MyExamsService {
 
     public MyExamsService(
             ExamSittingRepository examSittingRepository,
+            ExamResitCandidateRepository examResitCandidateRepository,
             EnrollmentDirectory enrollmentDirectory,
             CurrentUserProvider currentUserProvider,
             StudentDirectory studentDirectory,
             CourseCatalog courseCatalog,
             AcademicStructure academicStructure) {
         this.examSittingRepository = examSittingRepository;
+        this.examResitCandidateRepository = examResitCandidateRepository;
         this.enrollmentDirectory = enrollmentDirectory;
         this.currentUserProvider = currentUserProvider;
         this.studentDirectory = studentDirectory;
@@ -101,11 +105,26 @@ public class MyExamsService {
             return new ExamTimetableResponse(false, null, null, List.of(), List.of());
         }
 
+        List<ExamSitting> sittings = examSittingRepository.findByCourseSectionIdInAndPublishedTrueAndStatusOrderByStartsAtAsc(
+                sectionIds, ExamSittingStatus.SCHEDULED);
+
+        // G6: a resit or deferred paper is only on the timetable of the specific students it names —
+        // batched across the whole list rather than queried per sitting, the same N+1 concern the
+        // rest of this method is already careful about.
+        List<UUID> sittingIds = sittings.stream().map(ExamSitting::getId).toList();
+        Set<UUID> restrictedSittingIds = sittingIds.isEmpty()
+                ? Set.of()
+                : examResitCandidateRepository.restrictedSittingIdsIn(sittingIds);
+        Set<UUID> ownCandidateSittingIds = restrictedSittingIds.isEmpty()
+                ? Set.of()
+                : examResitCandidateRepository.sittingIdsCandidateFor(restrictedSittingIds, studentId);
+
         List<ExamSittingResponse> exams = new ArrayList<>();
         UUID termId = null;
-        for (ExamSitting sitting :
-                examSittingRepository.findByCourseSectionIdInAndPublishedTrueAndStatusOrderByStartsAtAsc(
-                        sectionIds, ExamSittingStatus.SCHEDULED)) {
+        for (ExamSitting sitting : sittings) {
+            if (restrictedSittingIds.contains(sitting.getId()) && !ownCandidateSittingIds.contains(sitting.getId())) {
+                continue;
+            }
             var section = courseCatalog.findSection(sitting.getCourseSectionId());
             if (section.isEmpty()) {
                 // The section vanished under a published sitting. Skip rather than fail: a student
