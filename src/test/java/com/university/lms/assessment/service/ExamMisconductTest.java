@@ -10,6 +10,7 @@ import com.university.lms.assessment.domain.ExamMisconductRecord;
 import com.university.lms.assessment.domain.ExamSitting;
 import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
 import com.university.lms.assessment.dto.ReportExamMisconductRequest;
+import com.university.lms.assessment.repository.ExamInvigilatorRepository;
 import com.university.lms.assessment.repository.ExamMisconductRecordRepository;
 import com.university.lms.assessment.repository.ExamSittingRepository;
 import com.university.lms.common.exception.ResourceNotFoundException;
@@ -39,6 +40,9 @@ class ExamMisconductTest {
 
     @Mock
     ExamMisconductRecordRepository examMisconductRecordRepository;
+
+    @Mock
+    ExamInvigilatorRepository examInvigilatorRepository;
 
     @Mock
     CourseCatalog courseCatalog;
@@ -72,6 +76,7 @@ class ExamMisconductTest {
         service = new ExamScheduleService(
                 examSittingRepository,
                 examMisconductRecordRepository,
+                examInvigilatorRepository,
                 courseCatalog,
                 enrollmentDirectory,
                 studentDirectory,

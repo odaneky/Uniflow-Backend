@@ -1,7 +1,9 @@
 package com.university.lms.assessment.web;
 
+import com.university.lms.assessment.dto.AssignInvigilatorRequest;
 import com.university.lms.assessment.dto.CancelExamRequest;
 import org.springframework.web.bind.annotation.PutMapping;
+import com.university.lms.assessment.dto.ExamInvigilatorResponse;
 import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
 import com.university.lms.assessment.dto.ExamSittingResponse;
 import com.university.lms.assessment.dto.ReportExamMisconductRequest;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -119,5 +122,25 @@ public class ExamScheduleController {
     @GetMapping("/exams/{sittingId}/misconduct")
     public List<ExamMisconductRecordResponse> misconduct(@PathVariable UUID sittingId) {
         return examScheduleService.misconductFor(sittingId);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/exams/{sittingId}/invigilators")
+    public List<ExamInvigilatorResponse> invigilators(@PathVariable UUID sittingId) {
+        return examScheduleService.invigilatorsFor(sittingId);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @PostMapping("/exams/{sittingId}/invigilators")
+    public List<ExamInvigilatorResponse> assignInvigilator(
+            @PathVariable UUID sittingId, @Valid @RequestBody AssignInvigilatorRequest request) {
+        return examScheduleService.assignInvigilator(sittingId, request.userId());
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @DeleteMapping("/exams/{sittingId}/invigilators/{userId}")
+    public List<ExamInvigilatorResponse> unassignInvigilator(
+            @PathVariable UUID sittingId, @PathVariable UUID userId) {
+        return examScheduleService.unassignInvigilator(sittingId, userId);
     }
 }

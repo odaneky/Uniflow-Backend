@@ -1,12 +1,15 @@
 package com.university.lms.assessment.service;
 
 import com.university.lms.assessment.domain.AssessmentErrorCode;
+import com.university.lms.assessment.domain.ExamInvigilator;
 import com.university.lms.assessment.domain.ExamMisconductRecord;
 import com.university.lms.assessment.domain.ExamSitting;
+import com.university.lms.assessment.dto.ExamInvigilatorResponse;
 import com.university.lms.assessment.dto.ExamMisconductRecordResponse;
 import com.university.lms.assessment.dto.ExamSittingResponse;
 import com.university.lms.assessment.dto.ReportExamMisconductRequest;
 import com.university.lms.assessment.dto.ScheduleExamRequest;
+import com.university.lms.assessment.repository.ExamInvigilatorRepository;
 import com.university.lms.assessment.repository.ExamMisconductRecordRepository;
 import com.university.lms.assessment.repository.ExamSittingRepository;
 import com.university.lms.common.exception.BusinessException;
@@ -50,6 +53,7 @@ public class ExamScheduleService {
 
     private final ExamSittingRepository examSittingRepository;
     private final ExamMisconductRecordRepository examMisconductRecordRepository;
+    private final ExamInvigilatorRepository examInvigilatorRepository;
     private final CourseCatalog courseCatalog;
     private final EnrollmentDirectory enrollmentDirectory;
     private final StudentDirectory studentDirectory;
@@ -61,6 +65,7 @@ public class ExamScheduleService {
     public ExamScheduleService(
             ExamSittingRepository examSittingRepository,
             ExamMisconductRecordRepository examMisconductRecordRepository,
+            ExamInvigilatorRepository examInvigilatorRepository,
             CourseCatalog courseCatalog,
             EnrollmentDirectory enrollmentDirectory,
             StudentDirectory studentDirectory,
@@ -70,6 +75,7 @@ public class ExamScheduleService {
             CurrentUserProvider currentUserProvider) {
         this.examSittingRepository = examSittingRepository;
         this.examMisconductRecordRepository = examMisconductRecordRepository;
+        this.examInvigilatorRepository = examInvigilatorRepository;
         this.courseCatalog = courseCatalog;
         this.enrollmentDirectory = enrollmentDirectory;
         this.studentDirectory = studentDirectory;
@@ -251,7 +257,7 @@ public class ExamScheduleService {
                 sittingId,
                 "Reported candidate " + request.studentId());
         log.info("Recorded misconduct report for student {} in sitting {}", request.studentId(), sittingId);
-        return ExamMisconductRecordResponse.from(saved, reporterName(reporter));
+        return ExamMisconductRecordResponse.from(saved, nameOf(reporter));
     }
 
     @Transactional(readOnly = true)
@@ -260,16 +266,62 @@ public class ExamScheduleService {
         List<ExamMisconductRecordResponse> responses = new ArrayList<>();
         for (ExamMisconductRecord record :
                 examMisconductRecordRepository.findByExamSittingIdOrderByCreatedAtDesc(sittingId)) {
-            responses.add(ExamMisconductRecordResponse.from(record, reporterName(record.getReportedBy())));
+            responses.add(ExamMisconductRecordResponse.from(record, nameOf(record.getReportedBy())));
         }
         return responses;
     }
 
-    private String reporterName(UUID userId) {
+    private String nameOf(UUID userId) {
         if (userId == null) {
             return null;
         }
         return userDirectory.findById(userId).map(UserDirectory.UserSummary::fullName).orElse(null);
+    }
+
+    /** G6: who is invigilating this sitting. */
+    @Transactional(readOnly = true)
+    public List<ExamInvigilatorResponse> invigilatorsFor(UUID sittingId) {
+        require(sittingId);
+        return examInvigilatorRepository.findByExamSittingIdOrderByAssignedAtAsc(sittingId).stream()
+                .map(invigilator -> ExamInvigilatorResponse.from(invigilator, nameOf(invigilator.getUserId())))
+                .toList();
+    }
+
+    @Transactional
+    public List<ExamInvigilatorResponse> assignInvigilator(UUID sittingId, UUID userId) {
+        require(sittingId);
+        if (!userDirectory.exists(userId)) {
+            throw new ResourceNotFoundException(
+                    AssessmentErrorCode.INVIGILATOR_USER_NOT_FOUND, "No user exists with id " + userId);
+        }
+        if (!examInvigilatorRepository.existsByExamSittingIdAndUserId(sittingId, userId)) {
+            examInvigilatorRepository.save(new ExamInvigilator(sittingId, userId, actorId()));
+            auditTrail.record(
+                    actorId(),
+                    AuditTrail.Action.EXAM_INVIGILATOR_ASSIGNED,
+                    ENTITY,
+                    sittingId,
+                    "Assigned invigilator " + userId);
+        }
+        return invigilatorsFor(sittingId);
+    }
+
+    @Transactional
+    public List<ExamInvigilatorResponse> unassignInvigilator(UUID sittingId, UUID userId) {
+        require(sittingId);
+        ExamInvigilator invigilator = examInvigilatorRepository
+                .findById(new ExamInvigilator.ExamInvigilatorId(sittingId, userId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        AssessmentErrorCode.INVIGILATOR_NOT_ASSIGNED,
+                        "User " + userId + " is not assigned to sitting " + sittingId));
+        examInvigilatorRepository.delete(invigilator);
+        auditTrail.record(
+                actorId(),
+                AuditTrail.Action.EXAM_INVIGILATOR_UNASSIGNED,
+                ENTITY,
+                sittingId,
+                "Unassigned invigilator " + userId);
+        return invigilatorsFor(sittingId);
     }
 
     @Transactional(readOnly = true)

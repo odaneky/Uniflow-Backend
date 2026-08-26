@@ -28,6 +28,10 @@ public interface AuditTrail {
         public static final String EXAM_CANCELLED = "EXAM_CANCELLED";
         /** A candidate was reported for a conduct breach during a sitting. */
         public static final String EXAM_MISCONDUCT_REPORTED = "EXAM_MISCONDUCT_REPORTED";
+        /** G6: a staff member was assigned to invigilate a sitting. */
+        public static final String EXAM_INVIGILATOR_ASSIGNED = "EXAM_INVIGILATOR_ASSIGNED";
+        /** G6: a staff member was withdrawn from invigilating a sitting. */
+        public static final String EXAM_INVIGILATOR_UNASSIGNED = "EXAM_INVIGILATOR_UNASSIGNED";
         /** Somebody knowingly scheduled a lecturer or a room into a clash. */
         public static final String SCHEDULE_CONFLICT_OVERRIDDEN = "SCHEDULE_CONFLICT_OVERRIDDEN";
         public static final String IDENTITY_LINKED = "IDENTITY_LINKED";
