@@ -45,6 +45,23 @@ public class AccountEntry extends BaseEntity {
     @Column(name = "academic_term_id")
     private UUID academicTermId;
 
+    /** E3: PENDING only for a manually proposed entry awaiting a second staff member's decision. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private AccountEntryStatus status = AccountEntryStatus.POSTED;
+
+    @Column(name = "proposed_by")
+    private UUID proposedBy;
+
+    @Column(name = "decided_by")
+    private UUID decidedBy;
+
+    @Column(name = "decided_at")
+    private Instant decidedAt;
+
+    @Column(name = "decision_note", length = 500)
+    private String decisionNote;
+
     protected AccountEntry() {}
 
     public AccountEntry(
@@ -81,5 +98,40 @@ public class AccountEntry extends BaseEntity {
         this.occurredAt = occurredAt;
         this.reference = reference;
         this.academicTermId = academicTermId;
+    }
+
+    /** A manually proposed entry: excluded from the balance until a different staff member decides it. */
+    public static AccountEntry propose(
+            StudentAccount account,
+            AccountEntryType entryType,
+            BigDecimal amount,
+            String description,
+            Instant occurredAt,
+            UUID proposedBy) {
+        AccountEntry entry = new AccountEntry(account, entryType, amount, description, occurredAt);
+        entry.status = AccountEntryStatus.PENDING;
+        entry.proposedBy = proposedBy;
+        return entry;
+    }
+
+    public void approve(UUID decidedBy) {
+        requirePending();
+        this.status = AccountEntryStatus.POSTED;
+        this.decidedBy = decidedBy;
+        this.decidedAt = Instant.now();
+    }
+
+    public void reject(UUID decidedBy, String reason) {
+        requirePending();
+        this.status = AccountEntryStatus.REJECTED;
+        this.decidedBy = decidedBy;
+        this.decidedAt = Instant.now();
+        this.decisionNote = reason;
+    }
+
+    private void requirePending() {
+        if (status != AccountEntryStatus.PENDING) {
+            throw new IllegalStateException("This entry was already " + status.name().toLowerCase());
+        }
     }
 }

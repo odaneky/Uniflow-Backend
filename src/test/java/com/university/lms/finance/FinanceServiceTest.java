@@ -15,9 +15,11 @@ import com.university.lms.common.exception.BusinessException;
 import com.university.lms.finance.config.FinanceProperties;
 import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.finance.domain.AccountEntry;
+import com.university.lms.finance.domain.AccountEntryStatus;
 import com.university.lms.finance.domain.AccountEntryType;
 import com.university.lms.finance.domain.FinanceErrorCode;
 import com.university.lms.finance.domain.StudentAccount;
+import com.university.lms.finance.dto.AccountResponse;
 import com.university.lms.finance.dto.CreatePaymentRequest;
 import com.university.lms.finance.repository.AccountEntryRepository;
 import com.university.lms.finance.repository.StudentAccountRepository;
@@ -169,28 +171,83 @@ class FinanceServiceTest {
     }
 
     @Test
-    @DisplayName("E3: a manual ledger entry is recorded on the audit trail")
-    void manualLedgerEntryIsAudited() {
+    @DisplayName("E3: a proposed manual ledger entry does not affect the balance until approved")
+    void proposedLedgerEntryIsPendingAndAudited() {
         when(currentUserProvider.require()).thenReturn(REGISTRAR);
         when(studentDirectory.exists(STUDENT_ID)).thenReturn(true);
         StudentAccount account = new StudentAccount(STUDENT_ID, "USD");
         when(accountRepository.findByStudentId(STUDENT_ID)).thenReturn(Optional.of(account));
         when(entryRepository.save(any(AccountEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(entryRepository.findByAccountIdOrderByOccurredAtAsc(account.getId())).thenAnswer(inv -> List.of());
 
-        service.addEntry(
+        AccountResponse response = service.proposeEntry(
                 STUDENT_ID,
                 new com.university.lms.finance.dto.CreateAccountEntryRequest(
                         AccountEntryType.CREDIT, new BigDecimal("50.00"), "Manual fee waiver", null, null, null));
 
+        // Nothing posted yet — proposing must not move the balance a second staff member has not approved.
+        assertThat(response.balance()).isEqualByComparingTo(BigDecimal.ZERO);
         verify(auditTrail)
                 .record(
                         eq(REGISTRAR_USER_ID),
                         eq("Rita Registrar"),
-                        eq(AuditTrail.Action.LEDGER_ENTRY_POSTED),
+                        eq(AuditTrail.Action.LEDGER_ENTRY_PROPOSED),
                         eq(AuditTrail.EntityType.ACCOUNT_ENTRY),
                         any(UUID.class),
                         any(),
                         eq("Manual fee waiver"),
+                        isNull(),
+                        any());
+    }
+
+    @Test
+    @DisplayName("E3: the same staff member who proposed an entry cannot approve it")
+    void proposerCannotApproveTheirOwnEntry() {
+        when(currentUserProvider.require()).thenReturn(REGISTRAR);
+        StudentAccount account = new StudentAccount(STUDENT_ID, "USD");
+        AccountEntry entry = AccountEntry.propose(
+                account, AccountEntryType.CREDIT, new BigDecimal("-50.00"), "Manual fee waiver", Instant.now(),
+                REGISTRAR_USER_ID);
+        when(accountRepository.findByStudentId(STUDENT_ID)).thenReturn(Optional.of(account));
+        when(entryRepository.findById(any())).thenReturn(Optional.of(entry));
+
+        assertThatThrownBy(() -> service.approveEntry(STUDENT_ID, entry.getId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())
+                        .isEqualTo(FinanceErrorCode.LEDGER_ENTRY_SELF_APPROVAL));
+    }
+
+    @Test
+    @DisplayName("E3: a different staff member approving a proposed entry posts it to the balance")
+    void aDifferentStaffMemberApprovingPostsTheEntry() {
+        UUID otherStaffId = UUID.randomUUID();
+        CurrentUser otherStaff = new CurrentUser(
+                otherStaffId, "sub-other", "other", "other@test.edu", "Other Staff",
+                java.util.Optional.empty(), java.util.Set.of("REGISTRAR"), java.util.Set.of());
+        when(currentUserProvider.require()).thenReturn(otherStaff);
+        StudentAccount account = new StudentAccount(STUDENT_ID, "USD");
+        AccountEntry entry = AccountEntry.propose(
+                account, AccountEntryType.CREDIT, new BigDecimal("-50.00"), "Manual fee waiver", Instant.now(),
+                REGISTRAR_USER_ID);
+        when(accountRepository.findByStudentId(STUDENT_ID)).thenReturn(Optional.of(account));
+        when(entryRepository.findById(any())).thenReturn(Optional.of(entry));
+        when(entryRepository.save(any(AccountEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(entryRepository.findByAccountIdOrderByOccurredAtAsc(account.getId())).thenReturn(List.of(entry));
+
+        AccountResponse response = service.approveEntry(STUDENT_ID, entry.getId());
+
+        assertThat(entry.getStatus()).isEqualTo(AccountEntryStatus.POSTED);
+        assertThat(entry.getDecidedBy()).isEqualTo(otherStaffId);
+        assertThat(response.balance()).isEqualByComparingTo(new BigDecimal("-50.00"));
+        verify(auditTrail)
+                .record(
+                        eq(otherStaffId),
+                        any(),
+                        eq(AuditTrail.Action.LEDGER_ENTRY_APPROVED),
+                        eq(AuditTrail.EntityType.ACCOUNT_ENTRY),
+                        any(UUID.class),
+                        any(),
+                        any(),
                         isNull(),
                         any());
     }

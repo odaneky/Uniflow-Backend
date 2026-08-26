@@ -60,8 +60,15 @@ public interface AuditTrail {
         public static final String APPLICATION_ACCESS_REISSUED = "APPLICATION_ACCESS_REISSUED";
         public static final String APPLICATION_TRANSITIONED = "APPLICATION_TRANSITIONED";
         public static final String APPLICATION_MATRICULATED = "APPLICATION_MATRICULATED";
-        /** A registrar posted a manual, unreviewed charge or credit directly onto a student's ledger. */
+        /** @deprecated superseded by {@link #LEDGER_ENTRY_PROPOSED} — E3 gave manual entries a review step. */
+        @Deprecated
         public static final String LEDGER_ENTRY_POSTED = "LEDGER_ENTRY_POSTED";
+        /** A staff member proposed a manual charge or credit; it does not affect the balance yet. */
+        public static final String LEDGER_ENTRY_PROPOSED = "LEDGER_ENTRY_PROPOSED";
+        /** A different staff member approved a proposed ledger entry, posting it to the balance. */
+        public static final String LEDGER_ENTRY_APPROVED = "LEDGER_ENTRY_APPROVED";
+        /** A different staff member rejected a proposed ledger entry; it never posts. */
+        public static final String LEDGER_ENTRY_REJECTED = "LEDGER_ENTRY_REJECTED";
         public static final String FEE_CREATED = "FEE_CREATED";
         public static final String FEE_UPDATED = "FEE_UPDATED";
         public static final String FEE_DEACTIVATED = "FEE_DEACTIVATED";

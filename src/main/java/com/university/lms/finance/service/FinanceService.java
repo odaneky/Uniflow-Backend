@@ -10,6 +10,7 @@ import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.finance.api.PaymentStanding;
 import com.university.lms.finance.config.FinanceProperties;
 import com.university.lms.finance.domain.AccountEntry;
+import com.university.lms.finance.domain.AccountEntryStatus;
 import com.university.lms.finance.domain.AccountEntryType;
 import com.university.lms.finance.domain.FinanceErrorCode;
 import com.university.lms.finance.domain.StudentAccount;
@@ -95,8 +96,13 @@ public class FinanceService {
                 .orElseGet(() -> emptyAccount(studentId));
     }
 
+    /**
+     * E3: a manual entry no longer posts on submission. It is created PENDING and excluded from the
+     * balance until {@link #approveEntry} or {@link #rejectEntry} decides it — and neither may be
+     * called by the same staff member who proposed it.
+     */
     @Transactional
-    public AccountResponse addEntry(UUID studentId, CreateAccountEntryRequest request) {
+    public AccountResponse proposeEntry(UUID studentId, CreateAccountEntryRequest request) {
         CurrentUser caller = requireRegistry();
         if (!studentDirectory.exists(studentId)) {
             throw new ResourceNotFoundException(
@@ -110,34 +116,98 @@ public class FinanceService {
             account.dueOn(request.dueOn());
         }
         BigDecimal signed = signedAmount(request.entryType(), request.amount());
-        AccountEntry entry = entryRepository.save(new AccountEntry(
+        AccountEntry entry = entryRepository.save(AccountEntry.propose(
                 account,
                 request.entryType(),
                 signed,
                 request.description(),
-                request.occurredAt() == null ? Instant.now() : request.occurredAt()));
-        recordLedgerEntryAudit(caller, studentId, entry, signed);
+                request.occurredAt() == null ? Instant.now() : request.occurredAt(),
+                caller.userId()));
+        recordLedgerEntryAudit(
+                caller, AuditTrail.Action.LEDGER_ENTRY_PROPOSED, studentId, entry, signed, null);
         return toResponse(account);
     }
 
+    @Transactional
+    public AccountResponse approveEntry(UUID studentId, UUID entryId) {
+        CurrentUser caller = requireRegistry();
+        StudentAccount account = requireAccountFor(studentId);
+        AccountEntry entry = requirePendingEntry(account, entryId);
+        requireNotSelfDecision(caller, entry);
+        try {
+            entry.approve(caller.userId());
+        } catch (IllegalStateException ex) {
+            throw new BusinessException(FinanceErrorCode.LEDGER_ENTRY_ALREADY_DECIDED, ex.getMessage());
+        }
+        entryRepository.save(entry);
+        recordLedgerEntryAudit(
+                caller, AuditTrail.Action.LEDGER_ENTRY_APPROVED, studentId, entry, entry.getAmount(), null);
+        return toResponse(account);
+    }
+
+    @Transactional
+    public AccountResponse rejectEntry(UUID studentId, UUID entryId, String reason) {
+        CurrentUser caller = requireRegistry();
+        StudentAccount account = requireAccountFor(studentId);
+        AccountEntry entry = requirePendingEntry(account, entryId);
+        requireNotSelfDecision(caller, entry);
+        try {
+            entry.reject(caller.userId(), reason);
+        } catch (IllegalStateException ex) {
+            throw new BusinessException(FinanceErrorCode.LEDGER_ENTRY_ALREADY_DECIDED, ex.getMessage());
+        }
+        entryRepository.save(entry);
+        recordLedgerEntryAudit(
+                caller, AuditTrail.Action.LEDGER_ENTRY_REJECTED, studentId, entry, entry.getAmount(), reason);
+        return toResponse(account);
+    }
+
+    private StudentAccount requireAccountFor(UUID studentId) {
+        return accountRepository
+                .findByStudentId(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        FinanceErrorCode.ACCOUNT_STUDENT_NOT_FOUND, "No student exists with id " + studentId));
+    }
+
+    private AccountEntry requirePendingEntry(StudentAccount account, UUID entryId) {
+        AccountEntry entry = entryRepository
+                .findById(entryId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        FinanceErrorCode.LEDGER_ENTRY_NOT_FOUND, "No ledger entry exists with id " + entryId));
+        if (!entry.getAccount().getId().equals(account.getId())) {
+            throw new ResourceNotFoundException(
+                    FinanceErrorCode.LEDGER_ENTRY_NOT_FOUND, "No ledger entry exists with id " + entryId);
+        }
+        return entry;
+    }
+
+    /** The whole point of a review step: whoever proposed an entry cannot also be the one who decides it. */
+    private void requireNotSelfDecision(CurrentUser caller, AccountEntry entry) {
+        if (caller.userId().equals(entry.getProposedBy())) {
+            throw new BusinessException(
+                    FinanceErrorCode.LEDGER_ENTRY_SELF_APPROVAL,
+                    "You proposed this entry — a different staff member must approve or reject it");
+        }
+    }
+
     /**
-     * A manual ledger entry posts an arbitrary signed amount with no second-person approval — the
-     * full-form record with a reason and an after-snapshot is exactly what
+     * The full-form record with a reason and an after-snapshot is exactly what
      * {@link AuditTrail#record(UUID, String, String, String, UUID, String, String, String, String)}
      * was written for.
      */
-    private void recordLedgerEntryAudit(CurrentUser caller, UUID studentId, AccountEntry entry, BigDecimal signed) {
+    private void recordLedgerEntryAudit(
+            CurrentUser caller, String action, UUID studentId, AccountEntry entry, BigDecimal signed, String reason) {
         String afterValue = "{\"studentId\":\"" + studentId + "\",\"entryType\":\"" + entry.getEntryType()
-                + "\",\"amount\":\"" + signed + "\",\"description\":\"" + entry.getDescription().replace("\"", "'")
-                + "\"}";
+                + "\",\"amount\":\"" + signed + "\",\"status\":\"" + entry.getStatus()
+                + "\",\"description\":\"" + entry.getDescription().replace("\"", "'") + "\"}";
         auditTrail.record(
                 caller.userId(),
                 caller.fullName(),
-                AuditTrail.Action.LEDGER_ENTRY_POSTED,
+                action,
                 AuditTrail.EntityType.ACCOUNT_ENTRY,
                 entry.getId(),
                 "Manual " + entry.getEntryType() + " of " + signed.abs() + " on student " + studentId,
-                entry.getDescription(),
+                reason == null ? entry.getDescription() : reason,
                 null,
                 afterValue);
     }
@@ -181,7 +251,7 @@ public class FinanceService {
 
     private AccountResponse toResponse(StudentAccount account) {
         List<AccountEntry> entries = entryRepository.findByAccountIdOrderByOccurredAtAsc(account.getId());
-        BigDecimal balance = entries.stream().map(AccountEntry::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal balance = postedBalance(entries);
         return new AccountResponse(
                 account.getId(),
                 account.getStudentId(),
@@ -202,7 +272,13 @@ public class FinanceService {
     }
 
     private BigDecimal balanceOf(StudentAccount account) {
-        return entryRepository.findByAccountIdOrderByOccurredAtAsc(account.getId()).stream()
+        return postedBalance(entryRepository.findByAccountIdOrderByOccurredAtAsc(account.getId()));
+    }
+
+    /** A PENDING entry has not been approved yet and a REJECTED one never will be — neither counts. */
+    private static BigDecimal postedBalance(List<AccountEntry> entries) {
+        return entries.stream()
+                .filter(entry -> entry.getStatus() == AccountEntryStatus.POSTED)
                 .map(AccountEntry::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }

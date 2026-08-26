@@ -2,6 +2,7 @@ package com.university.lms.finance.web;
 
 import com.university.lms.finance.dto.AccountResponse;
 import com.university.lms.finance.dto.CreateAccountEntryRequest;
+import com.university.lms.finance.dto.RejectAccountEntryRequest;
 import com.university.lms.finance.service.FinanceService;
 import com.university.lms.common.security.AccessClass;
 import static com.university.lms.common.security.AccessClass.Value.*;
@@ -32,8 +33,23 @@ public class AccountController {
 
     @AccessClass(REGISTRY_ONLY)
     @PostMapping("/{studentId}/entries")
-    public AccountResponse addEntry(
+    public AccountResponse proposeEntry(
             @PathVariable UUID studentId, @Valid @RequestBody CreateAccountEntryRequest request) {
-        return financeService.addEntry(studentId, request);
+        return financeService.proposeEntry(studentId, request);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/{studentId}/entries/{entryId}/approve")
+    public AccountResponse approveEntry(@PathVariable UUID studentId, @PathVariable UUID entryId) {
+        return financeService.approveEntry(studentId, entryId);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/{studentId}/entries/{entryId}/reject")
+    public AccountResponse rejectEntry(
+            @PathVariable UUID studentId,
+            @PathVariable UUID entryId,
+            @Valid @RequestBody RejectAccountEntryRequest request) {
+        return financeService.rejectEntry(studentId, entryId, request.reason());
     }
 }

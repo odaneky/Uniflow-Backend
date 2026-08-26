@@ -14,7 +14,10 @@ public enum FinanceErrorCode implements ErrorCode {
     FEE_NOT_FOUND,
     FEE_NAME_ALREADY_EXISTS,
     INVALID_FEE,
-    INVALID_REFUND_POLICY;
+    INVALID_REFUND_POLICY,
+    LEDGER_ENTRY_NOT_FOUND,
+    LEDGER_ENTRY_ALREADY_DECIDED,
+    LEDGER_ENTRY_SELF_APPROVAL;
 
     @Override
     public String code() {
