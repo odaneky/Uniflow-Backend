@@ -22,6 +22,16 @@ spring:
 # Administrative access to the identity provider. The secret here is a throwaway matching the
 # imported dev realm; a real environment supplies it from a secret store and never from a file.
 lms:
+  # MinIO from docker-compose.yml — same throwaway-credentials reasoning as Keycloak above.
+  # Proves the BlobStore swap actually works rather than leaving it untested: local dev used to
+  # default to LocalFilesystemBlobStore, which is exactly the single-disk behavior this replaces.
+  storage:
+    provider: ${LMS_STORAGE_PROVIDER:minio}
+    endpoint: ${LMS_STORAGE_ENDPOINT:http://localhost:9000}
+    region: ${LMS_STORAGE_REGION:us-east-1}
+    bucket: ${LMS_STORAGE_BUCKET:university-lms-documents}
+    access-key: ${LMS_STORAGE_ACCESS_KEY:lms-minio}
+    secret-key: ${LMS_STORAGE_SECRET_KEY:lms-minio-secret}
   identity:
     keycloak:
       enabled: ${KEYCLOAK_ADMIN_ENABLED:true}

@@ -1,9 +1,11 @@
 # Local development dependencies for the University LMS backend.
 #
-# PostgreSQL, and Keycloak as the identity provider. Message brokers, caches and object stores are
-# added when a concrete requirement arrives, not in anticipation of one — an unused Kafka in the
-# compose file costs every developer memory and start-up time for no benefit. Keycloak earns its
-# place because authentication is the one remaining deployment blocker (docs/ROADMAP.md, P0.1).
+# PostgreSQL, Keycloak as the identity provider, and MinIO for object storage. Message brokers and
+# caches are added when a concrete requirement arrives, not in anticipation of one — an unused
+# Kafka in the compose file costs every developer memory and start-up time for no benefit. Keycloak
+# earns its place because authentication is the one remaining deployment blocker (docs/ROADMAP.md,
+# P0.1); MinIO earns its because LocalFilesystemBlobStore loses every document on pod restart and
+# cannot be shared across a second replica — see document.storage.BlobStore's javadoc.
 #
 #   docker compose up -d
 #   ./mvnw spring-boot:run
@@ -110,6 +112,28 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Self-hosted S3-API object store — the same client (document.storage.S3BlobStore) works
+  # unchanged against real AWS S3 in production, just without the endpoint override this sets.
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: university-lms-minio
+    command: ["server", "/data", "--console-address", ":9091"]
+    environment:
+      MINIO_ROOT_USER: lms-minio
+      MINIO_ROOT_PASSWORD: lms-minio-secret
+    ports:
+      - "9000:9000"   # S3 API
+      - "9091:9091"   # web console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.114.0
     container_name: university-lms-otel-collector
@@ -192,6 +216,7 @@ services:
 volumes:
   postgres-data:
   keycloak-data:
+  minio-data:
   prometheus-data:
   tempo-data:
   loki-data:
