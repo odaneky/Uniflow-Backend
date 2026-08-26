@@ -2,6 +2,7 @@ package com.university.lms.curriculum.service;
 
 import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.curriculum.api.CurriculumCatalog;
+import com.university.lms.curriculum.domain.CourseSubstitution;
 import com.university.lms.curriculum.domain.CurriculumVersion;
 import com.university.lms.curriculum.domain.CurriculumVersionStatus;
 import com.university.lms.curriculum.domain.ProgrammeRequirementBlock;
@@ -113,6 +114,17 @@ public class DefaultCurriculumCatalog implements CurriculumCatalog {
         return transferCreditRepository.findByStudentIdOrderByAwardedAtDesc(studentId).stream()
                 .map(TransferCredit::getInternalCourseId)
                 .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    @Override
+    public Set<UUID> substitutionSatisfiedCourseIds(UUID studentId) {
+        if (studentId == null) {
+            return Set.of();
+        }
+        return substitutionRepository.findByStudentId(studentId).stream()
+                .filter(substitution -> satisfiedDirectly(studentId, substitution.getSubstituteCourseId()))
+                .map(CourseSubstitution::getRequiredCourseId)
                 .collect(Collectors.toSet());
     }
 

@@ -241,4 +241,38 @@ class CurriculumCatalogTest {
 
         assertThat(catalog.hasPassed(studentId, requiredCourseId)).isFalse();
     }
+
+    @Test
+    @DisplayName("substitutionSatisfiedCourseIds returns the required course once the substitute is passed — D2/G2")
+    void substitutionSatisfiedCourseIdsIncludesTheRequiredCourse() {
+        UUID studentId = UUID.randomUUID();
+        UUID requiredCourseId = UUID.randomUUID();
+        UUID substituteCourseId = UUID.randomUUID();
+        UUID substituteSectionId = UUID.randomUUID();
+        when(academicRecord.publishedOverallOf(studentId))
+                .thenReturn(List.of(new AcademicRecord.PublishedOverall(
+                        substituteSectionId, "B", new BigDecimal("3.00"), true, Instant.parse("2026-01-01T00:00:00Z"))));
+        when(courseCatalog.findSection(substituteSectionId))
+                .thenReturn(Optional.of(new CourseCatalog.SectionSummary(
+                        substituteSectionId, substituteCourseId, "COMP2020", "Advanced", UUID.randomUUID(), "A", 30, 10, true, null, false)));
+        when(substitutionRepository.findByStudentId(studentId))
+                .thenReturn(List.of(new com.university.lms.curriculum.domain.CourseSubstitution(
+                        studentId, requiredCourseId, substituteCourseId, UUID.randomUUID(), UUID.randomUUID())));
+
+        assertThat(catalog.substitutionSatisfiedCourseIds(studentId)).containsExactly(requiredCourseId);
+    }
+
+    @Test
+    @DisplayName("substitutionSatisfiedCourseIds excludes a substitution whose substitute was not passed")
+    void substitutionSatisfiedCourseIdsExcludesAnUnsatisfiedSubstitute() {
+        UUID studentId = UUID.randomUUID();
+        UUID requiredCourseId = UUID.randomUUID();
+        UUID substituteCourseId = UUID.randomUUID();
+        when(academicRecord.publishedOverallOf(studentId)).thenReturn(List.of());
+        when(substitutionRepository.findByStudentId(studentId))
+                .thenReturn(List.of(new com.university.lms.curriculum.domain.CourseSubstitution(
+                        studentId, requiredCourseId, substituteCourseId, UUID.randomUUID(), UUID.randomUUID())));
+
+        assertThat(catalog.substitutionSatisfiedCourseIds(studentId)).isEmpty();
+    }
 }

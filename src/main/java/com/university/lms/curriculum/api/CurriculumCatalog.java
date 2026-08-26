@@ -52,4 +52,15 @@ public interface CurriculumCatalog {
      * history alone miss these; this is how they are added back in.
      */
     Set<UUID> transferCreditedCourseIds(UUID studentId);
+
+    /**
+     * Required-course ids an approved substitution satisfies for this student — present only when
+     * the substitute course is itself passed or transfer-credited.
+     *
+     * <p>The same gap {@link #transferCreditedCourseIds} closes, for the same reason: a student
+     * approved to take a substitute course instead of the required one has no enrolment record for
+     * the required course at all, so a "courses satisfied" set built from enrolment history alone
+     * misses it.
+     */
+    Set<UUID> substitutionSatisfiedCourseIds(UUID studentId);
 }

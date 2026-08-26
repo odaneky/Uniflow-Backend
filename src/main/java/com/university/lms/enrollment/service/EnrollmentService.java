@@ -689,6 +689,16 @@ public class EnrollmentService {
             }
         }
 
+        // D2/G2: the same gap, for a student approved to take a substitute course instead of the
+        // required one — there is no enrolment row for the required course to find from history.
+        Set<UUID> substitutionSatisfied = curriculumCatalog.substitutionSatisfiedCourseIds(studentId);
+        if (!substitutionSatisfied.isEmpty()) {
+            for (CourseCatalog.CourseSummary course : courseCatalog.findCourses(substitutionSatisfied)) {
+                completed.add(course.id());
+                highestCompletedLevel = Math.max(highestCompletedLevel, course.level());
+            }
+        }
+
         List<String> unmet =
                 courseCatalog.unmetRequirements(courseId, completed, inProgress, highestCompletedLevel);
         if (!unmet.isEmpty()) {
