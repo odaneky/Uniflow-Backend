@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.course.api.CourseCatalog;
 import com.university.lms.grading.api.GradeDirectory;
@@ -48,6 +49,19 @@ class ServiceRequestWorkflowTest {
                 UUID.randomUUID(), ServiceRequestType.TRANSCRIPT, "TR-00001", null, "{}", null);
         assertThatCode(() -> workflow.assertTransition(request, ServiceRequestStatus.IN_REVIEW))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void everyRequestTypeFollowsTheSameDefaultGraphUntilOneOverridesIt() {
+        for (ServiceRequestType type : ServiceRequestType.values()) {
+            ServiceRequest submitted = new ServiceRequest(UUID.randomUUID(), type, "X-00001", null, "{}", null);
+            assertThatCode(() -> workflow.assertTransition(submitted, ServiceRequestStatus.IN_REVIEW))
+                    .as("SUBMITTED -> IN_REVIEW for %s", type)
+                    .doesNotThrowAnyException();
+            assertThatThrownBy(() -> workflow.assertTransition(submitted, ServiceRequestStatus.COMPLETED))
+                    .as("SUBMITTED -> COMPLETED must stay blocked for %s", type)
+                    .isInstanceOf(BusinessException.class);
+        }
     }
 
     @Test

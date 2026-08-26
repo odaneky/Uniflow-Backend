@@ -22,7 +22,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ServiceRequestWorkflow {
 
-    private static final Map<ServiceRequestStatus, Set<ServiceRequestStatus>> TRANSITIONS = Map.of(
+    /** What every request type gets unless {@link #TYPE_TRANSITIONS} overrides it for that type. */
+    private static final Map<ServiceRequestStatus, Set<ServiceRequestStatus>> DEFAULT_TRANSITIONS = Map.of(
             ServiceRequestStatus.SUBMITTED,
                     EnumSet.of(
                             ServiceRequestStatus.IN_REVIEW,
@@ -31,6 +32,18 @@ public class ServiceRequestWorkflow {
             ServiceRequestStatus.IN_REVIEW,
                     EnumSet.of(ServiceRequestStatus.APPROVED, ServiceRequestStatus.DENIED),
             ServiceRequestStatus.APPROVED, EnumSet.of(ServiceRequestStatus.COMPLETED));
+
+    /**
+     * D3: {@code DEFAULT_TRANSITIONS} used to be the only graph, applied identically to every
+     * type — so a type needing an extra step (a second sign-off, say) could only get one by adding
+     * a status to {@link ServiceRequestStatus} and deciding what it means for every other type too,
+     * since nothing here read {@code request_type} at all. This map is the seam that removes that
+     * coupling: empty today because no type needs to diverge yet, but a future type can override its
+     * own graph here — reusing whatever new {@code ServiceRequestStatus} values it needs — while
+     * every other type keeps reading {@code DEFAULT_TRANSITIONS} completely unchanged.
+     */
+    private static final Map<ServiceRequestType, Map<ServiceRequestStatus, Set<ServiceRequestStatus>>>
+            TYPE_TRANSITIONS = Map.of();
 
     private final StudentDirectory studentDirectory;
     private final CourseCatalog courseCatalog;
@@ -44,12 +57,17 @@ public class ServiceRequestWorkflow {
     }
 
     public void assertTransition(ServiceRequest request, ServiceRequestStatus target) {
-        Set<ServiceRequestStatus> allowed = TRANSITIONS.getOrDefault(request.getStatus(), Set.of());
+        Set<ServiceRequestStatus> allowed = transitionsFor(request.getRequestType())
+                .getOrDefault(request.getStatus(), Set.of());
         if (!allowed.contains(target)) {
             throw new BusinessException(
                     RequestErrorCode.REQUEST_INVALID_TRANSITION,
                     "Cannot move from " + request.getStatus() + " to " + target);
         }
+    }
+
+    private static Map<ServiceRequestStatus, Set<ServiceRequestStatus>> transitionsFor(ServiceRequestType type) {
+        return TYPE_TRANSITIONS.getOrDefault(type, DEFAULT_TRANSITIONS);
     }
 
     public void assertStaffAction(CurrentUser caller, ServiceRequest request, ServiceRequestStatus target) {
