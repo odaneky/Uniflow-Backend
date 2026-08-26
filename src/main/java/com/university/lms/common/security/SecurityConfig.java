@@ -421,6 +421,25 @@ public class SecurityConfig {
                         // G8: same role set — cancelAdvisingAppointment resolves the same guard.
                         .requestMatchers(HttpMethod.GET, "/api/v1/students/*/advising-appointments")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR)
+                        // G7: DisciplinaryCaseService.requireReadAccess narrows further, per case,
+                        // to the registry or that specific case's filer/assigned officer — any staff
+                        // role can file a case or be assigned one, so this layer cannot narrow past
+                        // "some staff role" the way the advisor-scoped rules above do.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/disciplinary-cases/*",
+                                "/api/v1/disciplinary-cases/*/notes",
+                                "/api/v1/students/*/disciplinary-cases")
+                        .hasAnyRole(
+                                SYSTEM_ADMIN,
+                                REGISTRAR,
+                                FACULTY_ADMIN,
+                                LECTURER,
+                                ACADEMIC_ADVISOR,
+                                BURSAR,
+                                FINANCIAL_AID_OFFICER,
+                                ADMISSIONS_OFFICER,
+                                EXAMS_OFFICER)
                         // A3: none of these four had a service-layer guard at all — purely relying
                         // on this matcher, same shape as the exam-window/payment-plans/tuition-
                         // schedule/fee-catalog rules above. Restricted to what their own

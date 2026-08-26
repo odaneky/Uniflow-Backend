@@ -67,10 +67,6 @@ public class DefaultCurrentUserProvider implements CurrentUserProvider {
 
     @Override
     public CurrentUser require() {
-        CurrentUser cached = cached();
-        if (cached != null) {
-            return cached;
-        }
         Jwt jwt = currentJwt()
                 .orElseThrow(() -> new UnauthorizedException(
                         CommonErrorCode.AUTHENTICATION_REQUIRED, "Authentication is required to access this resource"));
@@ -78,6 +74,11 @@ public class DefaultCurrentUserProvider implements CurrentUserProvider {
         String subject = claims.subject(jwt)
                 .orElseThrow(() -> new UnauthorizedException(
                         CommonErrorCode.AUTHENTICATION_REQUIRED, "Authentication is required to access this resource"));
+
+        CurrentUser cached = cached(subject);
+        if (cached != null) {
+            return cached;
+        }
 
         User user = userRepository
                 .findByKeycloakSubject(subject)
@@ -90,7 +91,11 @@ public class DefaultCurrentUserProvider implements CurrentUserProvider {
 
     @Override
     public Optional<CurrentUser> find() {
-        CurrentUser cached = cached();
+        Optional<String> subject = currentJwt().flatMap(claims::subject);
+        if (subject.isEmpty()) {
+            return Optional.empty();
+        }
+        CurrentUser cached = cached(subject.get());
         if (cached != null) {
             return Optional.of(cached);
         }
@@ -175,11 +180,19 @@ public class DefaultCurrentUserProvider implements CurrentUserProvider {
         return Optional.empty();
     }
 
-    private static CurrentUser cached() {
+    /**
+     * Only a hit if the cached identity's subject still matches the token's — a request-scoped
+     * cache validated solely by presence would otherwise return a stale caller whenever more than
+     * one identity is resolved against the same bound {@link RequestAttributes}, which is exactly
+     * what tests that switch identities within a single method (via {@code RunAs}) do.
+     */
+    private static CurrentUser cached(String subject) {
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
-        return attributes == null
-                ? null
-                : (CurrentUser) attributes.getAttribute(CACHE_KEY, RequestAttributes.SCOPE_REQUEST);
+        if (attributes == null) {
+            return null;
+        }
+        CurrentUser cached = (CurrentUser) attributes.getAttribute(CACHE_KEY, RequestAttributes.SCOPE_REQUEST);
+        return (cached != null && cached.externalIdentityId().equals(subject)) ? cached : null;
     }
 
     private static void cache(CurrentUser user) {

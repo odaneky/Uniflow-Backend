@@ -11,6 +11,7 @@ public interface RecordAccessLog {
         public static final String ENROLLMENT = "Enrollment";
         public static final String FINANCE = "Finance";
         public static final String DOCUMENT = "Document";
+        public static final String DISCIPLINARY = "Disciplinary";
 
         private RecordType() {}
     }

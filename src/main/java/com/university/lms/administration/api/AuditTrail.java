@@ -97,6 +97,10 @@ public interface AuditTrail {
         public static final String ADD_DROP_WINDOW_SET = "ADD_DROP_WINDOW_SET";
         /** The term-level examination period, distinct from EXAM_RESCHEDULED's individual sitting. */
         public static final String EXAM_WINDOW_SET = "EXAM_WINDOW_SET";
+        public static final String DISCIPLINARY_CASE_FILED = "DISCIPLINARY_CASE_FILED";
+        public static final String DISCIPLINARY_CASE_OFFICER_ASSIGNED = "DISCIPLINARY_CASE_OFFICER_ASSIGNED";
+        public static final String DISCIPLINARY_CASE_NOTE_ADDED = "DISCIPLINARY_CASE_NOTE_ADDED";
+        public static final String DISCIPLINARY_CASE_CLOSED = "DISCIPLINARY_CASE_CLOSED";
 
         private Action() {}
     }
@@ -128,6 +132,7 @@ public interface AuditTrail {
         public static final String ACADEMIC_TERM = "AcademicTerm";
         /** No natural id — institution-wide singleton configuration (policy, tuition schedule). */
         public static final String INSTITUTION = "Institution";
+        public static final String DISCIPLINARY_CASE = "DisciplinaryCase";
 
         private EntityType() {}
     }

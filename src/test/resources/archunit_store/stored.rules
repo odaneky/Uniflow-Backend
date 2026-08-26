@@ -1,5 +1,5 @@
 #
-#Tue Aug 25 07:20:33 EST 2026
+#Tue Aug 25 20:23:23 EST 2026
 classes\ in\ com.university.lms.academic\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ academic\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=9677671c-e12d-4e88-920d-388319f4f253
 classes\ in\ com.university.lms.administration\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ administration\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=7539d18b-9f48-4e8b-b2f7-89f7e0ec1a52
 classes\ in\ com.university.lms.admissions\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ admissions\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=85029684-3729-4e15-86fc-c6b5b461a59e
@@ -9,6 +9,7 @@ classes\ in\ com.university.lms.branding\ outside\ its\ api\ package\ are\ reach
 classes\ in\ com.university.lms.communication\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ communication\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=c7e80426-287f-43f2-918b-966e6dee200b
 classes\ in\ com.university.lms.course\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ course\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=3021a285-1df3-4347-b78d-2205ef114537
 classes\ in\ com.university.lms.curriculum\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ curriculum\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=a7fe6484-c761-42f5-9ca5-86c57237e0d5
+classes\ in\ com.university.lms.disciplinary\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ disciplinary\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=777f47a9-a6ad-4aab-8c82-27f6987806ce
 classes\ in\ com.university.lms.document\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ document\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=c10926b6-1aaa-467a-b11b-14a0e071b7a0
 classes\ in\ com.university.lms.enrollment\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ enrollment\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=0f06bfc3-837f-4b62-b0b7-178952952bd5
 classes\ in\ com.university.lms.finance\ outside\ its\ api\ package\ are\ reached\ only\ from\ within\ finance\ (or\ from\ common,\ which\ nothing\ may\ depend\ on,\ so\ it\ cannot\ be\ the\ wrong\ side\ of\ this)=9ceb11a1-9039-4692-b849-087a82030b4f

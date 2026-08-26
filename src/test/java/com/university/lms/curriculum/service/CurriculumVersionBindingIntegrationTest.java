@@ -62,7 +62,7 @@ class CurriculumVersionBindingIntegrationTest extends AbstractPostgresIntegratio
         // Nothing bound yet: no read has happened.
         assertThat(boundVersionOf(student.getId())).isNull();
 
-        DegreeProgressResponse firstRead = curriculumService.progressOf(student.getId());
+        DegreeProgressResponse firstRead = RunAs.staff(() -> curriculumService.progressOf(student.getId()));
         assertThat(firstRead.blocks()).extracting(DegreeProgressResponse.RequirementProgressResponse::name)
                 .containsExactly("Core V1");
 
@@ -81,14 +81,14 @@ class CurriculumVersionBindingIntegrationTest extends AbstractPostgresIntegratio
         assertThat(boundVersionOf(student.getId())).isEqualTo(boundVersionId);
 
         // ...and their degree audit must still show V1's requirements, not V2's.
-        DegreeProgressResponse secondRead = curriculumService.progressOf(student.getId());
+        DegreeProgressResponse secondRead = RunAs.staff(() -> curriculumService.progressOf(student.getId()));
         assertThat(secondRead.blocks()).extracting(DegreeProgressResponse.RequirementProgressResponse::name)
                 .containsExactly("Core V1");
 
         // A brand new student, never read before V2 existed, sees the current requirements instead.
         Student newStudent = academicFixtures.student(programme);
         programmeEnrolmentService.openInitial(newStudent.getId(), programmeId, LocalDate.now());
-        DegreeProgressResponse newStudentRead = curriculumService.progressOf(newStudent.getId());
+        DegreeProgressResponse newStudentRead = RunAs.staff(() -> curriculumService.progressOf(newStudent.getId()));
         assertThat(newStudentRead.blocks())
                 .extracting(DegreeProgressResponse.RequirementProgressResponse::name)
                 .containsExactly("Core V2");
