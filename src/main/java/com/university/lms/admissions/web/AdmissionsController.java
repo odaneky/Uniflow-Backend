@@ -4,6 +4,7 @@ import com.university.lms.admissions.domain.ApplicationStatus;
 import com.university.lms.admissions.dto.ApplicationResponse;
 import com.university.lms.admissions.dto.DecideApplicationRequest;
 import com.university.lms.admissions.dto.MatriculateApplicationRequest;
+import com.university.lms.admissions.dto.RejectApplicationDocumentRequest;
 import com.university.lms.admissions.dto.TransitionApplicationRequest;
 import com.university.lms.admissions.service.AdmissionsService;
 import com.university.lms.common.dto.PageResponse;
@@ -80,5 +81,20 @@ public class AdmissionsController {
     public ApplicationResponse matriculate(
             @PathVariable UUID id, @Valid @RequestBody MatriculateApplicationRequest body) {
         return admissionsService.matriculate(id, body);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/applications/{id}/documents/{documentId}/verify")
+    public ApplicationResponse verifyDocument(@PathVariable UUID id, @PathVariable UUID documentId) {
+        return admissionsService.verifyDocument(id, documentId);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/applications/{id}/documents/{documentId}/reject")
+    public ApplicationResponse rejectDocument(
+            @PathVariable UUID id,
+            @PathVariable UUID documentId,
+            @Valid @RequestBody RejectApplicationDocumentRequest body) {
+        return admissionsService.rejectDocument(id, documentId, body.reason());
     }
 }

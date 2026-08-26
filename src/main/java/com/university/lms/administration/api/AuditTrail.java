@@ -60,6 +60,10 @@ public interface AuditTrail {
         public static final String APPLICATION_ACCESS_REISSUED = "APPLICATION_ACCESS_REISSUED";
         public static final String APPLICATION_TRANSITIONED = "APPLICATION_TRANSITIONED";
         public static final String APPLICATION_MATRICULATED = "APPLICATION_MATRICULATED";
+        /** G5: an admissions officer confirmed an attached document is genuine. */
+        public static final String APPLICATION_DOCUMENT_VERIFIED = "APPLICATION_DOCUMENT_VERIFIED";
+        /** G5: an admissions officer rejected an attached document — the applicant must resubmit it. */
+        public static final String APPLICATION_DOCUMENT_REJECTED = "APPLICATION_DOCUMENT_REJECTED";
         /** @deprecated superseded by {@link #LEDGER_ENTRY_PROPOSED} — E3 gave manual entries a review step. */
         @Deprecated
         public static final String LEDGER_ENTRY_POSTED = "LEDGER_ENTRY_POSTED";

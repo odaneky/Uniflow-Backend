@@ -31,7 +31,8 @@ public record ApplicationResponse(
         Instant createdAt,
         Instant updatedAt,
         List<UUID> documentIds,
-        List<EventStep> events) {
+        List<EventStep> events,
+        List<ApplicationDocumentResponse> documents) {
 
     public record EventStep(
             UUID id,
@@ -48,7 +49,8 @@ public record ApplicationResponse(
             String decidedByName,
             Map<String, Object> payloadMap,
             List<UUID> documentIds,
-            List<EventStep> eventSteps) {
+            List<EventStep> eventSteps,
+            List<ApplicationDocumentResponse> documents) {
         return new ApplicationResponse(
                 application.getId(),
                 application.getReference(),
@@ -71,7 +73,8 @@ public record ApplicationResponse(
                 application.getCreatedAt(),
                 application.getUpdatedAt(),
                 documentIds,
-                eventSteps);
+                eventSteps,
+                documents);
     }
 
     public static List<EventStep> eventSteps(List<ApplicationEvent> history, java.util.function.Function<UUID, String> nameOf) {

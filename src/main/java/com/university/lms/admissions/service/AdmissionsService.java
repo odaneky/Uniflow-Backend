@@ -21,6 +21,7 @@ import com.university.lms.admissions.domain.Application;
 import com.university.lms.admissions.domain.ApplicationDocument;
 import com.university.lms.admissions.domain.ApplicationEvent;
 import com.university.lms.admissions.domain.ApplicationStatus;
+import com.university.lms.admissions.dto.ApplicationDocumentResponse;
 import com.university.lms.admissions.dto.ApplicationResponse;
 import com.university.lms.admissions.dto.AttachApplicationDocumentRequest;
 import com.university.lms.admissions.dto.CreateApplicationRequest;
@@ -497,6 +498,57 @@ public class AdmissionsService {
         return toResponse(application);
     }
 
+    /** G5: an admissions officer confirming an attached document — a transcript, an ID — checks out. */
+    @Transactional
+    public ApplicationResponse verifyDocument(UUID id, UUID documentId) {
+        CurrentUser caller = requireStaffReader();
+        Application application = require(id);
+        ApplicationDocument document = requireDocument(id, documentId);
+        try {
+            document.verify(caller.userId());
+        } catch (IllegalStateException ex) {
+            throw new BusinessException(AdmissionsErrorCode.APPLICATION_DOCUMENT_ALREADY_DECIDED, ex.getMessage());
+        }
+        documentRepository.save(document);
+        auditTrail.record(
+                caller.userId(),
+                caller.fullName(),
+                AuditTrail.Action.APPLICATION_DOCUMENT_VERIFIED,
+                AuditTrail.EntityType.APPLICATION,
+                application.getId(),
+                "Document " + documentId);
+        return toResponse(application);
+    }
+
+    @Transactional
+    public ApplicationResponse rejectDocument(UUID id, UUID documentId, String reason) {
+        CurrentUser caller = requireStaffReader();
+        Application application = require(id);
+        ApplicationDocument document = requireDocument(id, documentId);
+        try {
+            document.reject(caller.userId(), reason);
+        } catch (IllegalStateException ex) {
+            throw new BusinessException(AdmissionsErrorCode.APPLICATION_DOCUMENT_ALREADY_DECIDED, ex.getMessage());
+        }
+        documentRepository.save(document);
+        auditTrail.record(
+                caller.userId(),
+                caller.fullName(),
+                AuditTrail.Action.APPLICATION_DOCUMENT_REJECTED,
+                AuditTrail.EntityType.APPLICATION,
+                application.getId(),
+                "Document " + documentId + ": " + reason);
+        return toResponse(application);
+    }
+
+    private ApplicationDocument requireDocument(UUID applicationId, UUID documentId) {
+        return documentRepository
+                .findById(new ApplicationDocument.ApplicationDocumentId(applicationId, documentId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        AdmissionsErrorCode.APPLICATION_DOCUMENT_NOT_FOUND,
+                        "No document " + documentId + " is attached to application " + applicationId));
+    }
+
     private StudentResponse createStudentForApplication(
             Application application, String studentNumber, LocalDate admissionDate) {
         try {
@@ -577,8 +629,10 @@ public class AdmissionsService {
 
     private ApplicationResponse toResponse(Application application) {
         List<ApplicationEvent> history = eventRepository.findByApplicationIdOrderByCreatedAtAsc(application.getId());
-        List<UUID> documentIds = documentRepository.findByApplicationId(application.getId()).stream()
-                .map(ApplicationDocument::getDocumentId)
+        List<ApplicationDocument> documentRows = documentRepository.findByApplicationId(application.getId());
+        List<UUID> documentIds = documentRows.stream().map(ApplicationDocument::getDocumentId).toList();
+        List<ApplicationDocumentResponse> documents = documentRows.stream()
+                .map(doc -> ApplicationDocumentResponse.from(doc, nameOf(doc.getVerifiedBy())))
                 .toList();
         return ApplicationResponse.from(
                 application,
@@ -586,7 +640,8 @@ public class AdmissionsService {
                 nameOf(application.getDecidedBy()),
                 parsePayload(application.getPayload()),
                 documentIds,
-                ApplicationResponse.eventSteps(history, this::nameOf));
+                ApplicationResponse.eventSteps(history, this::nameOf),
+                documents);
     }
 
     private void validateProgrammeAndTerm(UUID programmeId, UUID academicTermId) {
