@@ -42,6 +42,11 @@ public interface AuditTrail {
         public static final String INVOICE_ISSUED = "INVOICE_ISSUED";
         public static final String INVOICE_MARKED_PAID = "INVOICE_MARKED_PAID";
         public static final String INVOICE_VOIDED = "INVOICE_VOIDED";
+        /** E7: a student started a hosted-checkout payment — nothing has posted to the ledger yet. */
+        public static final String ONLINE_PAYMENT_INITIATED = "ONLINE_PAYMENT_INITIATED";
+        /** E7: the gateway confirmed a payment; the real PAYMENT entry has now posted. */
+        public static final String ONLINE_PAYMENT_SETTLED = "ONLINE_PAYMENT_SETTLED";
+        public static final String ONLINE_PAYMENT_FAILED = "ONLINE_PAYMENT_FAILED";
         /** Somebody knowingly scheduled a lecturer or a room into a clash. */
         public static final String SCHEDULE_CONFLICT_OVERRIDDEN = "SCHEDULE_CONFLICT_OVERRIDDEN";
         public static final String IDENTITY_LINKED = "IDENTITY_LINKED";
@@ -144,6 +149,7 @@ public interface AuditTrail {
         public static final String APPLICATION = "Application";
         public static final String ACCOUNT_ENTRY = "AccountEntry";
         public static final String INVOICE = "Invoice";
+        public static final String PENDING_PAYMENT = "PendingPayment";
         public static final String FEE = "Fee";
         public static final String PAYMENT_PLAN = "PaymentPlan";
         public static final String TUITION_SCHEDULE = "TuitionSchedule";

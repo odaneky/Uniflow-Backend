@@ -20,7 +20,9 @@ public enum FinanceErrorCode implements ErrorCode {
     LEDGER_ENTRY_SELF_APPROVAL,
     INVOICE_NOT_FOUND,
     INVOICE_NO_CHARGES,
-    INVOICE_ALREADY_DECIDED;
+    INVOICE_ALREADY_DECIDED,
+    PAYMENT_GATEWAY_NOT_CONFIGURED,
+    PAYMENT_GATEWAY_ERROR;
 
     @Override
     public String code() {

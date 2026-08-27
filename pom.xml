@@ -148,6 +148,16 @@
             <artifactId>url-connection-client</artifactId>
         </dependency>
 
+        <!-- E7: Stripe Checkout for online payments — hosted checkout, so no card data ever
+             touches this system; see finance.gateway.StripePaymentGateway. Only registered when
+             lms.payments.provider=stripe (finance.gateway.NoopPaymentGateway is the default),
+             same provider-switch pattern as document.storage above. -->
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>29.2.0</version>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

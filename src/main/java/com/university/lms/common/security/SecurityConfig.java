@@ -260,6 +260,10 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/applications/*")
                         .permitAll()
+                        // E7: Stripe cannot hold a bearer token — PaymentGateway.parseWebhook's own
+                        // signature check is this endpoint's only authentication.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/stripe")
+                        .permitAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/applications/*")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/programmes/*/application-form")
