@@ -38,6 +38,10 @@ public interface AuditTrail {
         public static final String EXAM_RESIT_CANDIDATE_REMOVED = "EXAM_RESIT_CANDIDATE_REMOVED";
         /** D8: a staff member downloaded a section's roster — names, emails and student numbers leaving the system as a file. */
         public static final String ROSTER_EXPORTED = "ROSTER_EXPORTED";
+        /** E6: a term's charges were bundled into a billable document. */
+        public static final String INVOICE_ISSUED = "INVOICE_ISSUED";
+        public static final String INVOICE_MARKED_PAID = "INVOICE_MARKED_PAID";
+        public static final String INVOICE_VOIDED = "INVOICE_VOIDED";
         /** Somebody knowingly scheduled a lecturer or a room into a clash. */
         public static final String SCHEDULE_CONFLICT_OVERRIDDEN = "SCHEDULE_CONFLICT_OVERRIDDEN";
         public static final String IDENTITY_LINKED = "IDENTITY_LINKED";
@@ -139,6 +143,7 @@ public interface AuditTrail {
         public static final String SERVICE_REQUEST = "ServiceRequest";
         public static final String APPLICATION = "Application";
         public static final String ACCOUNT_ENTRY = "AccountEntry";
+        public static final String INVOICE = "Invoice";
         public static final String FEE = "Fee";
         public static final String PAYMENT_PLAN = "PaymentPlan";
         public static final String TUITION_SCHEDULE = "TuitionSchedule";

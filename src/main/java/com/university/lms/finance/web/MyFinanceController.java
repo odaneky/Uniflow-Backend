@@ -2,11 +2,14 @@ package com.university.lms.finance.web;
 
 import com.university.lms.finance.dto.AccountResponse;
 import com.university.lms.finance.dto.CreatePaymentRequest;
+import com.university.lms.finance.dto.InvoiceResponse;
 import com.university.lms.finance.dto.PaymentResponse;
 import com.university.lms.finance.service.FinanceService;
+import com.university.lms.finance.service.InvoiceService;
 import com.university.lms.common.security.AccessClass;
 import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MyFinanceController {
 
     private final FinanceService financeService;
+    private final InvoiceService invoiceService;
 
-    public MyFinanceController(FinanceService financeService) {
+    public MyFinanceController(FinanceService financeService, InvoiceService invoiceService) {
         this.financeService = financeService;
+        this.invoiceService = invoiceService;
     }
 
     @AccessClass(OWN_RECORD_ONLY)
@@ -33,5 +38,11 @@ public class MyFinanceController {
     @PostMapping("/account/payments")
     public PaymentResponse pay(@Valid @RequestBody CreatePaymentRequest request) {
         return financeService.payOwn(request);
+    }
+
+    @AccessClass(OWN_RECORD_ONLY)
+    @GetMapping("/invoices")
+    public List<InvoiceResponse> invoices() {
+        return invoiceService.own();
     }
 }

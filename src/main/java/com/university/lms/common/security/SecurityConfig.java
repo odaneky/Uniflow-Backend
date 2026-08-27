@@ -297,6 +297,9 @@ public class SecurityConfig {
                         // real environment yet.
                         .requestMatchers(HttpMethod.POST, "/api/v1/accounts/**", "/api/v1/accounts")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
+                        // E6: invoices live under their own top-level path, not /accounts/**.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/invoices/**")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.POST, "/api/v1/financial-aid/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FINANCIAL_AID_OFFICER)
                         // Coarse gate only — HoldType spans several future owners, so the real,
@@ -427,6 +430,9 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ADMISSIONS_OFFICER)
                         // FinanceService.requireRegistry's role set.
                         .requestMatchers(HttpMethod.GET, "/api/v1/accounts/*")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
+                        // E6: InvoiceService.requireRegistry's role set — the same one, on its own path.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/accounts/*/invoices", "/api/v1/invoices/*")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         // StudentService.requireAssignedAdvisorOrRegistry's role set.
                         .requestMatchers(HttpMethod.GET, "/api/v1/students/*/advising-notes")
