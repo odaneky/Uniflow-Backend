@@ -416,8 +416,14 @@ public class SecurityConfig {
                         // ServiceRequestService.requireStaffReader's role set — see its javadoc.
                         .requestMatchers(HttpMethod.GET, "/api/v1/requests", "/api/v1/requests/*")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR, LECTURER, FINANCIAL_AID_OFFICER)
-                        // AdmissionsService.requireStaffReader's role set.
-                        .requestMatchers(HttpMethod.GET, "/api/v1/admissions/queue", "/api/v1/admissions/applications/*")
+                        // AdmissionsService.requireStaffReader's role set. G5: also covers
+                        // .../applications/*/scores — same literal-segment reach problem as exams'
+                        // misconduct/invigilators/resit-candidates above.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/admissions/queue",
+                                "/api/v1/admissions/applications/*",
+                                "/api/v1/admissions/applications/*/scores")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ADMISSIONS_OFFICER)
                         // FinanceService.requireRegistry's role set.
                         .requestMatchers(HttpMethod.GET, "/api/v1/accounts/*")

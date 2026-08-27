@@ -20,18 +20,22 @@ import org.springframework.beans.factory.annotation.Value;
 import com.university.lms.admissions.domain.Application;
 import com.university.lms.admissions.domain.ApplicationDocument;
 import com.university.lms.admissions.domain.ApplicationEvent;
+import com.university.lms.admissions.domain.ApplicationScore;
 import com.university.lms.admissions.domain.ApplicationStatus;
 import com.university.lms.admissions.dto.ApplicationDocumentResponse;
 import com.university.lms.admissions.dto.ApplicationResponse;
+import com.university.lms.admissions.dto.ApplicationScoreResponse;
 import com.university.lms.admissions.dto.AttachApplicationDocumentRequest;
 import com.university.lms.admissions.dto.CreateApplicationRequest;
 import com.university.lms.admissions.dto.DecideApplicationRequest;
 import com.university.lms.admissions.dto.MatriculateApplicationRequest;
+import com.university.lms.admissions.dto.SubmitApplicationScoreRequest;
 import com.university.lms.admissions.dto.TransitionApplicationRequest;
 import com.university.lms.admissions.dto.UpdateApplicationRequest;
 import com.university.lms.admissions.repository.ApplicationDocumentRepository;
 import com.university.lms.admissions.repository.ApplicationEventRepository;
 import com.university.lms.admissions.repository.ApplicationRepository;
+import com.university.lms.admissions.repository.ApplicationScoreRepository;
 import com.university.lms.common.dto.PageResponse;
 import com.university.lms.common.exception.BusinessException;
 import com.university.lms.common.exception.CommonErrorCode;
@@ -79,6 +83,7 @@ public class AdmissionsService {
     private final ApplicationRepository applicationRepository;
     private final ApplicationEventRepository eventRepository;
     private final ApplicationDocumentRepository documentRepository;
+    private final ApplicationScoreRepository scoreRepository;
     private final AcademicStructure academicStructure;
     private final DocumentStore documentStore;
     private final UserDirectory userDirectory;
@@ -104,6 +109,7 @@ public class AdmissionsService {
             ApplicationRepository applicationRepository,
             ApplicationEventRepository eventRepository,
             ApplicationDocumentRepository documentRepository,
+            ApplicationScoreRepository scoreRepository,
             AcademicStructure academicStructure,
             DocumentStore documentStore,
             UserDirectory userDirectory,
@@ -127,6 +133,7 @@ public class AdmissionsService {
         this.portalBaseUrl = portalBaseUrl;
         this.eventRepository = eventRepository;
         this.documentRepository = documentRepository;
+        this.scoreRepository = scoreRepository;
         this.academicStructure = academicStructure;
         this.documentStore = documentStore;
         this.userDirectory = userDirectory;
@@ -547,6 +554,43 @@ public class AdmissionsService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         AdmissionsErrorCode.APPLICATION_DOCUMENT_NOT_FOUND,
                         "No document " + documentId + " is attached to application " + applicationId));
+    }
+
+    /**
+     * G5: the caller's own independent score for this application — replaces any earlier one of
+     * theirs rather than adding a second row, since a reviewer revising their assessment is not a
+     * second reviewer.
+     */
+    @Transactional
+    public List<ApplicationScoreResponse> submitScore(UUID id, SubmitApplicationScoreRequest request) {
+        CurrentUser caller = requireStaffReader();
+        Application application = require(id);
+        ApplicationScore.ApplicationScoreId scoreId =
+                new ApplicationScore.ApplicationScoreId(id, caller.userId());
+        ApplicationScore score = scoreRepository
+                .findById(scoreId)
+                .map(existing -> {
+                    existing.update(request.score(), request.comment());
+                    return existing;
+                })
+                .orElseGet(() -> new ApplicationScore(id, caller.userId(), request.score(), request.comment()));
+        scoreRepository.save(score);
+        auditTrail.record(
+                caller.userId(),
+                caller.fullName(),
+                AuditTrail.Action.APPLICATION_SCORE_SUBMITTED,
+                AuditTrail.EntityType.APPLICATION,
+                application.getId(),
+                "Score " + request.score() + "/5");
+        return scoresFor(id);
+    }
+
+    public List<ApplicationScoreResponse> scoresFor(UUID id) {
+        requireStaffReader();
+        require(id);
+        return scoreRepository.findByApplicationIdOrderByScoredAtAsc(id).stream()
+                .map(score -> ApplicationScoreResponse.from(score, nameOf(score.getReviewerUserId())))
+                .toList();
     }
 
     private StudentResponse createStudentForApplication(

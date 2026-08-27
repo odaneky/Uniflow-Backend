@@ -4,7 +4,9 @@ import com.university.lms.admissions.domain.ApplicationStatus;
 import com.university.lms.admissions.dto.ApplicationResponse;
 import com.university.lms.admissions.dto.DecideApplicationRequest;
 import com.university.lms.admissions.dto.MatriculateApplicationRequest;
+import com.university.lms.admissions.dto.ApplicationScoreResponse;
 import com.university.lms.admissions.dto.RejectApplicationDocumentRequest;
+import com.university.lms.admissions.dto.SubmitApplicationScoreRequest;
 import com.university.lms.admissions.dto.TransitionApplicationRequest;
 import com.university.lms.admissions.service.AdmissionsService;
 import com.university.lms.common.dto.PageResponse;
@@ -96,5 +98,18 @@ public class AdmissionsController {
             @PathVariable UUID documentId,
             @Valid @RequestBody RejectApplicationDocumentRequest body) {
         return admissionsService.rejectDocument(id, documentId, body.reason());
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/applications/{id}/scores")
+    public List<ApplicationScoreResponse> scores(@PathVariable UUID id) {
+        return admissionsService.scoresFor(id);
+    }
+
+    @AccessClass(REGISTRY_ONLY)
+    @PostMapping("/applications/{id}/scores")
+    public List<ApplicationScoreResponse> submitScore(
+            @PathVariable UUID id, @Valid @RequestBody SubmitApplicationScoreRequest body) {
+        return admissionsService.submitScore(id, body);
     }
 }
