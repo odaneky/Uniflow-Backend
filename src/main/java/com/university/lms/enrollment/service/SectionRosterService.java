@@ -1,5 +1,7 @@
 package com.university.lms.enrollment.service;
 
+import com.university.lms.administration.api.AuditTrail;
+import com.university.lms.administration.api.Auditable;
 import com.university.lms.common.exception.CommonErrorCode;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceNotFoundException;
@@ -62,6 +64,41 @@ public class SectionRosterService {
                             row.status());
                 })
                 .toList();
+    }
+
+    /**
+     * D8: the roster as a downloadable sheet — registrars and advisors routinely need this in a
+     * spreadsheet, not just on screen. Mirrors {@code GradeService.exportGradebookCsv}'s escaping.
+     *
+     * <p>Its own {@code @Transactional}, not the class's read-only default: it calls {@link
+     * #roster}, which reconciles the seat count — a write self-invocation would not pick up
+     * {@code roster}'s own transactional annotation, and this method is reached directly through
+     * the Spring proxy, so it must carry the write requirement itself.
+     *
+     * <p>{@code @Auditable}: names, emails and student numbers leaving the system as a file is
+     * exactly the kind of disclosure worth being able to answer "who exported this, and when" for.
+     */
+    @Auditable(
+            action = AuditTrail.Action.ROSTER_EXPORTED,
+            entityType = AuditTrail.EntityType.COURSE_SECTION,
+            entityId = "#sectionId")
+    @Transactional
+    public String rosterCsv(UUID sectionId) {
+        List<RosterEntryResponse> rows = roster(sectionId);
+        StringBuilder csv = new StringBuilder("Student Number,Full Name,Email,Status\n");
+        for (RosterEntryResponse row : rows) {
+            csv.append(csvField(row.studentNumber())).append(',')
+                    .append(csvField(row.fullName())).append(',')
+                    .append(csvField(row.email())).append(',')
+                    .append(csvField(row.status()))
+                    .append('\n');
+        }
+        return csv.toString();
+    }
+
+    /** RFC 4180: quote every field and double up any embedded quote. Simplest rule that is always correct. */
+    private static String csvField(String value) {
+        return "\"" + (value == null ? "" : value.replace("\"", "\"\"")) + "\"";
     }
 
     private void requireStaffForSection(UUID sectionId) {

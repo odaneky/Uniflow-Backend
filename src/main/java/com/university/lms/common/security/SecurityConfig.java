@@ -408,7 +408,10 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
                         // SectionRosterService.requireStaffForSection additionally accepts
                         // ACADEMIC_ADVISOR, unlike the group above.
-                        .requestMatchers(HttpMethod.GET, "/api/v1/courses/sections/*/roster")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/courses/sections/*/roster",
+                                "/api/v1/courses/sections/*/roster/export")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, ACADEMIC_ADVISOR, LECTURER)
                         // ServiceRequestService.requireStaffReader's role set — see its javadoc.
                         .requestMatchers(HttpMethod.GET, "/api/v1/requests", "/api/v1/requests/*")

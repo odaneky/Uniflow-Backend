@@ -36,6 +36,8 @@ public interface AuditTrail {
         public static final String EXAM_RESIT_CANDIDATE_ADDED = "EXAM_RESIT_CANDIDATE_ADDED";
         /** G6: a student was removed from a resit or deferred paper's candidate list. */
         public static final String EXAM_RESIT_CANDIDATE_REMOVED = "EXAM_RESIT_CANDIDATE_REMOVED";
+        /** D8: a staff member downloaded a section's roster — names, emails and student numbers leaving the system as a file. */
+        public static final String ROSTER_EXPORTED = "ROSTER_EXPORTED";
         /** Somebody knowingly scheduled a lecturer or a room into a clash. */
         public static final String SCHEDULE_CONFLICT_OVERRIDDEN = "SCHEDULE_CONFLICT_OVERRIDDEN";
         public static final String IDENTITY_LINKED = "IDENTITY_LINKED";
