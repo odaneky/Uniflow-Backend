@@ -10,13 +10,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Writes object bytes to a local directory — the default {@link BlobStore}, and the only one this
- * codebase implements today. A remote provider (S3, MinIO, GCS, Azure Blob — {@link StorageProvider}
- * already enumerates the candidates) is real follow-on work, not yet built: it needs a provider
- * choice, a credentials strategy and a bucket/container naming scheme decided first, none of which
- * this class should decide unilaterally. What this class guarantees is that adding one later is a
- * new {@code BlobStore} implementation selected by configuration, not a rewrite of
- * {@code DocumentService}.
+ * Writes object bytes to a local directory — the default {@link BlobStore}, and the only one that
+ * keeps a pod's disk as its store. {@link S3BlobStore} is the real remote provider: set {@code
+ * lms.storage.provider=minio} (self-hosted MinIO, dev/test) or {@code s3} (real AWS) to register it
+ * instead. What this class demonstrates is that the choice is a {@code BlobStore} implementation
+ * selected by configuration, not a rewrite of {@code DocumentService}.
  */
 @Component
 @ConditionalOnProperty(name = "lms.storage.provider", havingValue = "local", matchIfMissing = true)

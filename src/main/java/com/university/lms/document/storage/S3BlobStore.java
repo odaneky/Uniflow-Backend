@@ -4,7 +4,7 @@ import com.university.lms.document.config.StorageProperties;
 import com.university.lms.document.domain.DocumentStoreException;
 import com.university.lms.document.domain.StorageProvider;
 import java.net.URI;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -21,20 +21,24 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
- * Blob storage against any S3-API-compatible endpoint: self-hosted MinIO in dev/test (this is the
- * bean this class registers as, {@link StorageProvider#MINIO}), or real AWS S3 in production by
- * leaving {@code lms.storage.endpoint} unset and pointing {@code lms.storage.provider} at a bean
- * registered for {@link StorageProvider#S3} instead — same client, same {@code storageKey} scheme,
- * a different endpoint and credentials source is the only change either needs.
+ * Blob storage against any S3-API-compatible endpoint: self-hosted MinIO in dev/test ({@code
+ * lms.storage.provider=minio}, {@link StorageProvider#MINIO}) or real AWS S3 in production ({@code
+ * lms.storage.provider=s3}, {@link StorageProvider#S3}) — same client either way. Set {@code
+ * lms.storage.endpoint} to point at MinIO; leave it unset for S3 to resolve {@code
+ * *.amazonaws.com} normally. A different endpoint and credentials source is the only change either
+ * mode needs.
  */
 @Component
-@ConditionalOnProperty(name = "lms.storage.provider", havingValue = "minio")
+@ConditionalOnExpression(
+        "'${lms.storage.provider:local}' == 'minio' or '${lms.storage.provider:local}' == 's3'")
 public class S3BlobStore implements BlobStore {
 
     private final S3Client client;
     private final String bucket;
+    private final StorageProvider provider;
 
     S3BlobStore(StorageProperties properties) {
+        this.provider = "s3".equalsIgnoreCase(properties.provider()) ? StorageProvider.S3 : StorageProvider.MINIO;
         this.bucket = require(properties.bucket(), "lms.storage.bucket");
         S3ClientBuilder builder =
                 S3Client.builder().region(regionOf(properties)).httpClient(UrlConnectionHttpClient.create());
@@ -74,7 +78,7 @@ public class S3BlobStore implements BlobStore {
 
     @Override
     public StorageProvider provider() {
-        return StorageProvider.MINIO;
+        return provider;
     }
 
     // MinIO does not pre-create buckets; a fresh dev/test instance needs one on first use. Real S3
@@ -98,7 +102,7 @@ public class S3BlobStore implements BlobStore {
 
     private static String require(String value, String property) {
         if (value == null || value.isBlank()) {
-            throw new IllegalStateException(property + " must be set when lms.storage.provider=minio");
+            throw new IllegalStateException(property + " must be set when lms.storage.provider is minio or s3");
         }
         return value;
     }

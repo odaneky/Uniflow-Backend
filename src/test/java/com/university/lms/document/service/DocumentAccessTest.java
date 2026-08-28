@@ -76,7 +76,7 @@ class DocumentAccessTest {
                 currentUserProvider,
                 userDirectory,
                 blobStore,
-                new StorageProperties(null, 0, null, null, null, null, null),
+                new StorageProperties(null, 0, null, null, null, null, null, null),
                 staffAppointments,
                 studentDirectory,
                 academicStructure);

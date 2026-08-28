@@ -43,7 +43,8 @@ class S3BlobStoreIntegrationTest {
                     null,
                     "test-bucket-" + UUID.randomUUID(),
                     TestObjectStore.accessKey(),
-                    TestObjectStore.secretKey());
+                    TestObjectStore.secretKey(),
+                    "minio");
         } else {
             Assumptions.assumeTrue(
                     dockerAvailable(),
@@ -52,7 +53,14 @@ class S3BlobStoreIntegrationTest {
             container = new MinIOContainer(DockerImageName.parse("minio/minio:RELEASE.2024-11-07T00-52-20Z"));
             container.start();
             properties = new StorageProperties(
-                    null, 0, container.getS3URL(), null, "test-bucket", container.getUserName(), container.getPassword());
+                    null,
+                    0,
+                    container.getS3URL(),
+                    null,
+                    "test-bucket",
+                    container.getUserName(),
+                    container.getPassword(),
+                    "minio");
         }
         store = new S3BlobStore(properties);
     }
@@ -83,6 +91,28 @@ class S3BlobStoreIntegrationTest {
     @Test
     void reportsItsProviderAsMinio() {
         assertThat(store.provider()).isEqualTo(StorageProvider.MINIO);
+    }
+
+    /**
+     * Pins a real bug: this bean used to report {@link StorageProvider#MINIO} unconditionally, and
+     * {@code lms.storage.provider=s3} did not even activate it — only {@code minio} did, despite
+     * the class's own javadoc describing S3 as supported. Same client, same endpoint override (S3
+     * setups leave {@code endpoint} unset in production; this test still points it at MinIO purely
+     * to reuse the container), only the reported {@link StorageProvider} should differ.
+     */
+    @Test
+    void reportsItsProviderAsS3WhenConfiguredForS3() {
+        StorageProperties s3Properties = new StorageProperties(
+                properties.localRoot(),
+                properties.maxUploadBytes(),
+                properties.endpoint(),
+                properties.region(),
+                properties.bucket(),
+                properties.accessKey(),
+                properties.secretKey(),
+                "s3");
+        S3BlobStore s3Store = new S3BlobStore(s3Properties);
+        assertThat(s3Store.provider()).isEqualTo(StorageProvider.S3);
     }
 
     @Test
