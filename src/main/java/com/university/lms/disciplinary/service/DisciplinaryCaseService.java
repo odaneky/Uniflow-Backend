@@ -66,11 +66,15 @@ public class DisciplinaryCaseService {
             entityId = "#result.id()")
     @Transactional
     public DisciplinaryCaseResponse fileCase(CreateDisciplinaryCaseRequest request) {
+        CurrentUser caller = currentUserProvider.require();
+        if (!caller.isStaff()) {
+            throw new ForbiddenException(
+                    CommonErrorCode.ACCESS_DENIED, "Only a staff member may file a disciplinary case");
+        }
         if (!studentDirectory.exists(request.studentId())) {
             throw new ResourceNotFoundException(
                     DisciplinaryErrorCode.CASE_NOT_FOUND, "No student exists with id " + request.studentId());
         }
-        CurrentUser caller = currentUserProvider.require();
         DisciplinaryCase saved = caseRepository.save(new DisciplinaryCase(
                 nextCaseNumber(), request.studentId(), request.category(), request.summary(), caller.userId()));
         return toResponse(saved);

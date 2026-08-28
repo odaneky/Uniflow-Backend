@@ -106,6 +106,20 @@ class DisciplinaryCaseIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    @DisplayName("a student cannot file a disciplinary case against another student — only staff may file")
+    void aStudentCannotFileACase() throws Exception {
+        OwnerScopingFixtures.Person attacker = ownerScopingFixtures.student();
+        UUID victimId = aStudent();
+
+        assertThatThrownBy(() -> RunAs.as(
+                        attacker.subject(),
+                        SecurityRoles.STUDENT,
+                        () -> service.fileCase(new CreateDisciplinaryCaseRequest(
+                                victimId, DisciplinaryCategory.HARASSMENT, "Fabricated by another student"))))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
     @DisplayName("only the registry may assign a case officer")
     void onlyRegistryMayAssign() throws Exception {
         UUID studentId = aStudent();

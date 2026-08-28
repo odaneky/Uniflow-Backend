@@ -483,6 +483,29 @@ public class SecurityConfig {
                                 FINANCIAL_AID_OFFICER,
                                 ADMISSIONS_OFFICER,
                                 EXAMS_OFFICER)
+                        // G7: same role set as the GET rule above, for the write side. Before this,
+                        // POST here had no matcher of its own and fell through to the final
+                        // anyRequest().authenticated() — any signed-in caller, student included,
+                        // could reach it; DisciplinaryCaseService.fileCase had no role guard of its
+                        // own either, so a student really could file a fabricated case against
+                        // another student. That gap is closed at the service layer too now, but this
+                        // matcher is the same defense-in-depth the GET rule already had.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/disciplinary-cases",
+                                "/api/v1/disciplinary-cases/*/assign",
+                                "/api/v1/disciplinary-cases/*/close",
+                                "/api/v1/disciplinary-cases/*/notes")
+                        .hasAnyRole(
+                                SYSTEM_ADMIN,
+                                REGISTRAR,
+                                FACULTY_ADMIN,
+                                LECTURER,
+                                ACADEMIC_ADVISOR,
+                                BURSAR,
+                                FINANCIAL_AID_OFFICER,
+                                ADMISSIONS_OFFICER,
+                                EXAMS_OFFICER)
                         // A3: none of these four had a service-layer guard at all — purely relying
                         // on this matcher, same shape as the exam-window/payment-plans/tuition-
                         // schedule/fee-catalog rules above. Restricted to what their own
