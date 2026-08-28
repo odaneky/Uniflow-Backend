@@ -8,6 +8,8 @@ import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.request.domain.ServiceRequest;
 import com.university.lms.request.domain.ServiceRequestType;
 import com.university.lms.student.api.StudentLifecycle;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -40,7 +42,8 @@ class ProgrammeTransferFulfillmentApplierTest {
                 "PT-000001",
                 null,
                 "{\"newProgrammeId\":\"" + newProgrammeId + "\",\"reason\":\"Changing majors\"}",
-                null);
+                null,
+                Instant.now().plus(14, ChronoUnit.DAYS));
         CurrentUser actor = new CurrentUser(
                 actorId, "subject", "registrar", "registrar@university.test", "Rita Registrar", Optional.empty(), Set.of(), Set.of());
 
@@ -53,7 +56,13 @@ class ProgrammeTransferFulfillmentApplierTest {
     @DisplayName("a payload missing the target programme is refused before anything is applied")
     void missingProgrammeIdIsRefused() {
         ServiceRequest request = new ServiceRequest(
-                UUID.randomUUID(), ServiceRequestType.PROGRAMME_TRANSFER, "PT-000002", null, "{}", null);
+                UUID.randomUUID(),
+                ServiceRequestType.PROGRAMME_TRANSFER,
+                "PT-000002",
+                null,
+                "{}",
+                null,
+                Instant.now().plus(14, ChronoUnit.DAYS));
         CurrentUser actor = new CurrentUser(
                 UUID.randomUUID(), "subject", "registrar", "registrar@university.test", "Rita Registrar", Optional.empty(), Set.of(), Set.of());
 

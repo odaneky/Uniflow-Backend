@@ -9,6 +9,8 @@ import com.university.lms.curriculum.api.CourseSubstitutions;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.request.domain.ServiceRequest;
 import com.university.lms.request.domain.ServiceRequestType;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -44,7 +46,8 @@ class CourseSubstitutionFulfillmentApplierTest {
                 null,
                 "{\"requiredCourseId\":\"" + requiredCourseId + "\",\"substituteCourseId\":\"" + substituteCourseId
                         + "\"}",
-                null);
+                null,
+                Instant.now().plus(10, ChronoUnit.DAYS));
         CurrentUser actor = new CurrentUser(
                 actorId, "subject", "registrar", "registrar@university.test", "Rita Registrar", Optional.empty(), Set.of(), Set.of());
 
@@ -57,7 +60,13 @@ class CourseSubstitutionFulfillmentApplierTest {
     @DisplayName("a payload missing either course is refused before anything is recorded")
     void missingPayloadIsRefused() {
         ServiceRequest request = new ServiceRequest(
-                UUID.randomUUID(), ServiceRequestType.COURSE_SUBSTITUTION, "CS-000002", null, "{}", null);
+                UUID.randomUUID(),
+                ServiceRequestType.COURSE_SUBSTITUTION,
+                "CS-000002",
+                null,
+                "{}",
+                null,
+                Instant.now().plus(10, ChronoUnit.DAYS));
         CurrentUser actor = new CurrentUser(
                 UUID.randomUUID(), "subject", "registrar", "registrar@university.test", "Rita Registrar", Optional.empty(), Set.of(), Set.of());
 

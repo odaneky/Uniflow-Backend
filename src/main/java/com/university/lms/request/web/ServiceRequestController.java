@@ -5,17 +5,24 @@ import com.university.lms.request.domain.ServiceRequestStatus;
 import com.university.lms.request.domain.ServiceRequestType;
 import com.university.lms.request.dto.CompleteServiceRequestRequest;
 import com.university.lms.request.dto.DecideServiceRequestRequest;
+import com.university.lms.request.dto.EscalateServiceRequestRequest;
+import com.university.lms.request.dto.ReassignServiceRequestRequest;
 import com.university.lms.request.dto.ServiceRequestResponse;
 import com.university.lms.request.dto.TransitionServiceRequestRequest;
 import com.university.lms.request.service.ServiceRequestService;
 import com.university.lms.common.security.AccessClass;
 import static com.university.lms.common.security.AccessClass.Value.*;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -92,5 +99,41 @@ public class ServiceRequestController {
     public ServiceRequestResponse decide(
             @PathVariable UUID id, @Valid @RequestBody DecideServiceRequestRequest request) {
         return serviceRequestService.decide(id, request);
+    }
+
+    @PostMapping("/{id}/escalate")
+    @AccessClass(STAFF_ONLY)
+    public ServiceRequestResponse escalate(
+            @PathVariable UUID id, @Valid @RequestBody EscalateServiceRequestRequest body) {
+        return serviceRequestService.escalate(id, body);
+    }
+
+    @PostMapping("/{id}/reassign")
+    @AccessClass(STAFF_ONLY)
+    public ServiceRequestResponse reassign(
+            @PathVariable UUID id, @Valid @RequestBody ReassignServiceRequestRequest body) {
+        return serviceRequestService.reassign(id, body);
+    }
+
+    @AccessClass(STAFF_ONLY)
+    @GetMapping("/{id}/attachments/{documentId}/download")
+    public ResponseEntity<byte[]> downloadAttachment(@PathVariable UUID id, @PathVariable UUID documentId) {
+        return fileResponse(serviceRequestService.downloadAttachmentForStaff(id, documentId));
+    }
+
+    static ResponseEntity<byte[]> fileResponse(ServiceRequestService.StoredRequestAttachment stored) {
+        MediaType type;
+        try {
+            type = MediaType.parseMediaType(stored.contentType());
+        } catch (Exception ex) {
+            type = MediaType.APPLICATION_OCTET_STREAM;
+        }
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(stored.fileName(), StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentType(type)
+                .body(stored.content());
     }
 }

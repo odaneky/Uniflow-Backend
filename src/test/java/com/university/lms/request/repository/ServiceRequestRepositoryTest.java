@@ -7,6 +7,8 @@ import com.university.lms.request.domain.ServiceRequest;
 import com.university.lms.request.domain.ServiceRequestType;
 import com.university.lms.security.OwnerScopingFixtures;
 import com.university.lms.support.AbstractPostgresIntegrationTest;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,6 +70,7 @@ class ServiceRequestRepositoryTest extends AbstractPostgresIntegrationTest {
                 reference,
                 null,
                 "{\"gradeId\":\"" + gradeId + "\"}",
-                null);
+                null,
+                Instant.now().plus(14, ChronoUnit.DAYS));
     }
 }

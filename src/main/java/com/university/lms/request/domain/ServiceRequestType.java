@@ -62,4 +62,21 @@ public enum ServiceRequestType {
             case PROGRAMME_TRANSFER -> "Registrar Review";
         };
     }
+
+    /**
+     * D9: the service-level window a submission of this type is expected to be decided within,
+     * used to compute {@code ServiceRequest.dueAt} at creation. A rough operational target, not a
+     * contractual SLA — nothing currently escalates automatically when it passes; a request past
+     * its {@code dueAt} is simply reported as overdue for staff to triage.
+     */
+    public int slaDays() {
+        return switch (this) {
+            case VERIFICATION, LATE_ADD -> 3;
+            case TRANSCRIPT, PROFILE_CORRECTION -> 5;
+            case WITHDRAWAL -> 7;
+            case COURSE_SUBSTITUTION, LEAVE_OF_ABSENCE -> 10;
+            case APPEAL, SAP_APPEAL, READMISSION, PROGRAMME_TRANSFER -> 14;
+            case GRADUATION -> 21;
+        };
+    }
 }

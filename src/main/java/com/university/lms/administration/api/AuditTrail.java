@@ -74,6 +74,11 @@ public interface AuditTrail {
         public static final String SERVICE_REQUEST_CREATED = "SERVICE_REQUEST_CREATED";
         public static final String SERVICE_REQUEST_TRANSITIONED = "SERVICE_REQUEST_TRANSITIONED";
         public static final String SERVICE_REQUEST_FULFILLED = "SERVICE_REQUEST_FULFILLED";
+        /** D9 */
+        public static final String SERVICE_REQUEST_ESCALATED = "SERVICE_REQUEST_ESCALATED";
+
+        public static final String SERVICE_REQUEST_REASSIGNED = "SERVICE_REQUEST_REASSIGNED";
+        public static final String SERVICE_REQUEST_ATTACHMENT_ADDED = "SERVICE_REQUEST_ATTACHMENT_ADDED";
         public static final String APPLICATION_CREATED = "APPLICATION_CREATED";
         /** A resume link was reissued; the previous capability token stopped working. */
         public static final String APPLICATION_ACCESS_REISSUED = "APPLICATION_ACCESS_REISSUED";

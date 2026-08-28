@@ -444,6 +444,18 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
 
         @Test
         @DisplayName(
+                "D9: LECTURER reaches the requests gate too — ServiceRequestWorkflow.canReviewAppeal "
+                        + "already lets a lecturer review/decide a grade appeal against their own "
+                        + "section, but this matcher used to omit LECTURER entirely, so every such call "
+                        + "403'd before ever reaching that check. The GET matcher already included "
+                        + "LECTURER for the same reason; this pins POST matching it")
+        void lecturerReachesTheRequestsGate() throws Exception {
+            String path = "/api/v1/requests/" + UUID.randomUUID() + "/decide";
+            allowed(json(post(path).with(as(SecurityRoles.LECTURER)), "{}"));
+        }
+
+        @Test
+        @DisplayName(
                 "A6: ADMISSIONS_OFFICER may also provision a student record, alongside REGISTRAR — "
                         + "the fallback path AdmissionsService.matriculate falls through to when the "
                         + "identity provider is configured to create students directly")

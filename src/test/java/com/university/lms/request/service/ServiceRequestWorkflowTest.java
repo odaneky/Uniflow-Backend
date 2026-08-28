@@ -46,7 +46,7 @@ class ServiceRequestWorkflowTest {
     @Test
     void allowsSubmittedToInReview() {
         ServiceRequest request = new ServiceRequest(
-                UUID.randomUUID(), ServiceRequestType.TRANSCRIPT, "TR-00001", null, "{}", null);
+                UUID.randomUUID(), ServiceRequestType.TRANSCRIPT, "TR-00001", null, "{}", null, dueAt());
         assertThatCode(() -> workflow.assertTransition(request, ServiceRequestStatus.IN_REVIEW))
                 .doesNotThrowAnyException();
     }
@@ -54,7 +54,8 @@ class ServiceRequestWorkflowTest {
     @Test
     void everyRequestTypeFollowsTheSameDefaultGraphUntilOneOverridesIt() {
         for (ServiceRequestType type : ServiceRequestType.values()) {
-            ServiceRequest submitted = new ServiceRequest(UUID.randomUUID(), type, "X-00001", null, "{}", null);
+            ServiceRequest submitted =
+                    new ServiceRequest(UUID.randomUUID(), type, "X-00001", null, "{}", null, dueAt());
             assertThatCode(() -> workflow.assertTransition(submitted, ServiceRequestStatus.IN_REVIEW))
                     .as("SUBMITTED -> IN_REVIEW for %s", type)
                     .doesNotThrowAnyException();
@@ -70,7 +71,7 @@ class ServiceRequestWorkflowTest {
         UUID studentUserId = UUID.randomUUID();
         UUID studentId = UUID.randomUUID();
         ServiceRequest request = new ServiceRequest(
-                studentId, ServiceRequestType.WITHDRAWAL, "WD-00001", null, "{}", advisorId);
+                studentId, ServiceRequestType.WITHDRAWAL, "WD-00001", null, "{}", advisorId, dueAt());
         request.transitionTo(ServiceRequestStatus.SUBMITTED, null, null, java.time.Instant.now());
 
         CurrentUser advisor = new CurrentUser(
@@ -94,7 +95,7 @@ class ServiceRequestWorkflowTest {
     @Test
     void financialAidOfficerMayReviewAndCompleteSapAppeal() {
         ServiceRequest request = new ServiceRequest(
-                UUID.randomUUID(), ServiceRequestType.SAP_APPEAL, "SA-00001", null, "{}", null);
+                UUID.randomUUID(), ServiceRequestType.SAP_APPEAL, "SA-00001", null, "{}", null, dueAt());
         CurrentUser officer = new CurrentUser(
                 UUID.randomUUID(),
                 "sub-fao",
@@ -114,7 +115,7 @@ class ServiceRequestWorkflowTest {
     @Test
     void financialAidOfficerCannotReviewOtherRequestTypes() {
         ServiceRequest request = new ServiceRequest(
-                UUID.randomUUID(), ServiceRequestType.TRANSCRIPT, "TR-00001", null, "{}", null);
+                UUID.randomUUID(), ServiceRequestType.TRANSCRIPT, "TR-00001", null, "{}", null, dueAt());
         CurrentUser officer = new CurrentUser(
                 UUID.randomUUID(),
                 "sub-fao",
@@ -132,7 +133,7 @@ class ServiceRequestWorkflowTest {
     @Test
     void registrarStillReviewsAndCompletesSapAppealUnconditionally() {
         ServiceRequest request = new ServiceRequest(
-                UUID.randomUUID(), ServiceRequestType.SAP_APPEAL, "SA-00002", null, "{}", null);
+                UUID.randomUUID(), ServiceRequestType.SAP_APPEAL, "SA-00002", null, "{}", null, dueAt());
         CurrentUser registrar = new CurrentUser(
                 UUID.randomUUID(),
                 "sub-reg",
@@ -147,5 +148,9 @@ class ServiceRequestWorkflowTest {
                 .doesNotThrowAnyException();
         assertThatCode(() -> workflow.assertStaffAction(registrar, request, ServiceRequestStatus.COMPLETED))
                 .doesNotThrowAnyException();
+    }
+
+    private static java.time.Instant dueAt() {
+        return java.time.Instant.now().plus(14, java.time.temporal.ChronoUnit.DAYS);
     }
 }

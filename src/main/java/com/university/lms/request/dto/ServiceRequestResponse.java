@@ -31,6 +31,14 @@ public record ServiceRequestResponse(
         Instant decidedAt,
         Instant fulfilledAt,
         String fulfillmentError,
+        Instant dueAt,
+        boolean overdue,
+        boolean escalated,
+        Instant escalatedAt,
+        UUID escalatedBy,
+        String escalatedByName,
+        String escalationReason,
+        List<ServiceRequestAttachmentResponse> attachments,
         List<EventStep> events,
         List<TimelineStep> timeline) {
 
@@ -51,9 +59,11 @@ public record ServiceRequestResponse(
             String studentName,
             String decidedByName,
             String assignedToName,
+            String escalatedByName,
             List<ServiceRequestEvent> history,
             Map<String, Object> payloadMap,
-            List<EventStep> eventSteps) {
+            List<EventStep> eventSteps,
+            List<ServiceRequestAttachmentResponse> attachments) {
         return new ServiceRequestResponse(
                 request.getId(),
                 request.getStudentId(),
@@ -76,6 +86,16 @@ public record ServiceRequestResponse(
                 request.getDecidedAt(),
                 request.getFulfilledAt(),
                 request.getFulfillmentError(),
+                request.getDueAt(),
+                !request.getStatus().terminal()
+                        && request.getDueAt() != null
+                        && Instant.now().isAfter(request.getDueAt()),
+                request.getEscalatedAt() != null,
+                request.getEscalatedAt(),
+                request.getEscalatedBy(),
+                escalatedByName,
+                request.getEscalationReason(),
+                attachments,
                 eventSteps,
                 timeline(request, history));
     }

@@ -73,6 +73,19 @@ public class ServiceRequest extends BaseEntity {
     @Column(name = "fulfillment_error", length = 500)
     private String fulfillmentError;
 
+    /** D9: when this request is expected to be decided by — {@link ServiceRequestType#slaDays()} from submission. */
+    @Column(name = "due_at", nullable = false)
+    private Instant dueAt;
+
+    @Column(name = "escalated_at")
+    private Instant escalatedAt;
+
+    @Column(name = "escalated_by")
+    private UUID escalatedBy;
+
+    @Column(name = "escalation_reason", length = 1000)
+    private String escalationReason;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -87,13 +100,15 @@ public class ServiceRequest extends BaseEntity {
             String reference,
             String note,
             String payloadJson,
-            UUID assignedTo) {
+            UUID assignedTo,
+            Instant dueAt) {
         this.studentId = studentId;
         this.requestType = requestType;
         this.reference = reference;
         this.note = note;
         this.payload = payloadJson == null || payloadJson.isBlank() ? "{}" : payloadJson;
         this.assignedTo = assignedTo;
+        this.dueAt = dueAt;
     }
 
     public void transitionTo(ServiceRequestStatus target, UUID actorUserId, String transitionNote, Instant at) {
@@ -126,6 +141,21 @@ public class ServiceRequest extends BaseEntity {
 
     public void markFulfillmentFailed(String error) {
         this.fulfillmentError = error == null ? "Unknown error" : error.substring(0, Math.min(error.length(), 500));
+    }
+
+    /**
+     * D9: flags this request for supervisory attention. Idempotent by design, not a one-shot
+     * toggle — re-escalating an already-escalated request simply updates who raised it, when, and
+     * why, so a second, more urgent reason is never silently dropped. Refused only once the request
+     * is closed, since there is nothing left to triage.
+     */
+    public void escalate(UUID by, String reason, Instant at) {
+        if (status.terminal()) {
+            throw new IllegalStateException("A closed request cannot be escalated");
+        }
+        this.escalatedAt = at;
+        this.escalatedBy = by;
+        this.escalationReason = reason;
     }
 
     /** @deprecated legacy decide path — prefer {@link #transitionTo}. */

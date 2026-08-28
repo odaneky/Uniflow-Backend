@@ -323,8 +323,18 @@ public class SecurityConfig {
                         // A6: also accepts FINANCIAL_AID_OFFICER — see
                         // ServiceRequestService.requireStaffReader's javadoc for why, without this,
                         // the SAP_APPEAL review capability added there would be unreachable.
+                        //
+                        // D9: also accepts LECTURER — ServiceRequestWorkflow.canReviewAppeal already
+                        // lets a lecturer review/decide a grade appeal against their own section, but
+                        // this matcher previously excluded LECTURER entirely, so every such call 403'd
+                        // before ever reaching that check. The GET matcher below already includes
+                        // LECTURER for exactly this reason; this brings POST in line with it.
                         .requestMatchers(HttpMethod.POST, "/api/v1/requests/**", "/api/v1/requests")
-                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR, FINANCIAL_AID_OFFICER)
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR, FINANCIAL_AID_OFFICER, LECTURER)
+                        // D9: staff download of a student-submitted attachment on a request. Same
+                        // role set as ServiceRequestService.requireStaffReader.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/requests/*/attachments/*/download")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR, LECTURER, FINANCIAL_AID_OFFICER)
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/programmes/*/requirement-blocks",
