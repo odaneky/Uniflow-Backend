@@ -13,7 +13,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * {@link com.university.lms.finance.gateway.StripePaymentGateway} instead.
  *
  * @param successUrl where Stripe redirects the browser after a completed checkout; {@code
- *     {CHECKOUT_SESSION_ID}} is appended as a query parameter by the gateway itself
+ *     {CHECKOUT_SESSION_ID}} is appended as a query parameter by the gateway itself. Defaults to
+ *     the reference frontend's own return route — {@code finance/pay/return}, which polls the
+ *     account for the webhook-driven settlement to land rather than assuming it already has.
  * @param cancelUrl where Stripe redirects the browser if the customer abandons checkout
  */
 @ConfigurationProperties("lms.payments")
@@ -21,5 +23,5 @@ public record PaymentGatewayProperties(
         @DefaultValue("none") String provider,
         String stripeSecretKey,
         String stripeWebhookSecret,
-        @DefaultValue("http://localhost:5173/account/payment-complete") String successUrl,
-        @DefaultValue("http://localhost:5173/account") String cancelUrl) {}
+        @DefaultValue("http://localhost:5173/finance/pay/return?status=success") String successUrl,
+        @DefaultValue("http://localhost:5173/finance/pay/return?status=cancelled") String cancelUrl) {}

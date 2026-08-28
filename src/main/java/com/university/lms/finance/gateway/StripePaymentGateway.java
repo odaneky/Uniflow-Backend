@@ -41,7 +41,7 @@ public class StripePaymentGateway implements PaymentGateway {
         SessionCreateParams params = SessionCreateParams.builder()
                 .setMode(SessionCreateParams.Mode.PAYMENT)
                 .setClientReferenceId(pendingPaymentId.toString())
-                .setSuccessUrl(properties.successUrl() + "?session_id={CHECKOUT_SESSION_ID}")
+                .setSuccessUrl(appendQueryParam(properties.successUrl(), "session_id={CHECKOUT_SESSION_ID}"))
                 .setCancelUrl(properties.cancelUrl())
                 .putMetadata("pendingPaymentId", pendingPaymentId.toString())
                 .addLineItem(SessionCreateParams.LineItem.builder()
@@ -104,5 +104,10 @@ public class StripePaymentGateway implements PaymentGateway {
             throw new IllegalStateException(property + " is required when lms.payments.provider=stripe");
         }
         return value;
+    }
+
+    /** {@code lms.payments.successUrl} may already carry its own query string (a status flag, say). */
+    static String appendQueryParam(String url, String param) {
+        return url + (url.contains("?") ? "&" : "?") + param;
     }
 }
