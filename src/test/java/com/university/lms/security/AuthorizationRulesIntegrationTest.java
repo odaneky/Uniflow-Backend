@@ -711,4 +711,99 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
                     .andExpect(jsonPath("$.paths['/api/v1/students']").exists());
         }
     }
+
+    /**
+     * G7 follow-up: A3 inverted the GET catch-all to {@code denyAll()} but left every
+     * POST/PUT/PATCH/DELETE with no explicit rule falling through to
+     * {@code anyRequest().authenticated()} — the same fail-open pattern, for writes. Every write
+     * endpoint under {@code com.university.lms.**.web} now has its own matcher, and the write
+     * catch-all is {@code denyAll()} too.
+     *
+     * <p>Three of the newly-matched endpoints — {@code reconcileOrgUnits},
+     * {@code students/*&#47;programmes} and {@code students/*&#47;programmes/*&#47;end} — had no
+     * service-layer guard either, so a student really could reach them; those are pinned at the
+     * service layer in {@code AcademicOrgUnitProvisioningTest} and
+     * {@code StudentProgrammeMembershipAccessTest}. The rest already had a service guard, so these
+     * matchers are defense in depth — asserted here so a future reshuffle that dropped one is a
+     * failure, not a silent widening.
+     */
+    @Nested
+    @DisplayName("G7 follow-up: explicit write matchers ahead of the catch-all")
+    class ExplicitWriteMatchersAheadOfCatchAll {
+
+        @Test
+        @DisplayName("registry-only writes with no service guard of their own are now actually restricted")
+        void registryOnlyWritesWithNoServiceGuardAreNowRestricted() throws Exception {
+            String termId = UUID.randomUUID().toString();
+            String studentId = UUID.randomUUID().toString();
+            denied(post("/api/v1/faculties/reconcile-org-units").with(as(SecurityRoles.STUDENT)));
+            allowed(post("/api/v1/faculties/reconcile-org-units").with(as(SecurityRoles.REGISTRAR)));
+            denied(json(post("/api/v1/students/" + studentId + "/programmes").with(as(SecurityRoles.STUDENT)), "{}"));
+            allowed(json(post("/api/v1/students/" + studentId + "/programmes").with(as(SecurityRoles.REGISTRAR)), "{}"));
+            denied(json(
+                    post("/api/v1/students/" + studentId + "/programmes/" + UUID.randomUUID() + "/end")
+                            .with(as(SecurityRoles.STUDENT)),
+                    "{}"));
+            denied(post("/api/v1/academic-terms/" + termId + "/close").with(as(SecurityRoles.LECTURER)));
+            allowed(post("/api/v1/academic-terms/" + termId + "/close").with(as(SecurityRoles.REGISTRAR)));
+        }
+
+        @Test
+        @DisplayName("term rollover and every staffing write are registry-only, not a student action")
+        void staffingAndRolloverWritesAreRegistryOnly() throws Exception {
+            denied(post("/api/v1/academic-terms/" + UUID.randomUUID() + "/rollover").with(as(SecurityRoles.STUDENT)));
+            denied(json(post("/api/v1/org-units").with(as(SecurityRoles.STUDENT)), "{}"));
+            denied(json(post("/api/v1/employees").with(as(SecurityRoles.LECTURER)), "{}"));
+            denied(json(post("/api/v1/staff-appointments").with(as(SecurityRoles.STUDENT)), "{}"));
+            denied(post("/api/v1/staff-appointments/" + UUID.randomUUID() + "/end")
+                    .param("validTo", "2026-12-31")
+                    .with(as(SecurityRoles.STUDENT)));
+            allowed(json(post("/api/v1/org-units").with(as(SecurityRoles.REGISTRAR)), "{}"));
+        }
+
+        @Test
+        @DisplayName("advising-note and advising-appointment writes reach an advisor, not a student")
+        void advisingWritesReachAnAdvisor() throws Exception {
+            String studentId = UUID.randomUUID().toString();
+            denied(json(post("/api/v1/students/" + studentId + "/advising-notes").with(as(SecurityRoles.STUDENT)), "{}"));
+            denied(json(
+                    post("/api/v1/students/" + studentId + "/advising-notes").with(as(SecurityRoles.LECTURER)), "{}"));
+            allowed(json(
+                    post("/api/v1/students/" + studentId + "/advising-notes").with(as(SecurityRoles.ACADEMIC_ADVISOR)),
+                    "{}"));
+            denied(json(
+                    post("/api/v1/students/" + studentId + "/advising-appointments").with(as(SecurityRoles.STUDENT)),
+                    "{}"));
+        }
+
+        @Test
+        @DisplayName("a student may still post to a forum thread; editing the thread is moderator-only")
+        void forumPostStaysOpenThreadEditIsModeratorOnly() throws Exception {
+            String topicId = UUID.randomUUID().toString();
+            // assertCanPostForum lets an enrolled student post — the coarse gate must not block it.
+            allowed(json(post("/api/v1/forum/topics/" + topicId + "/posts").with(as(SecurityRoles.STUDENT)), "{}"));
+            denied(json(patch("/api/v1/forum/topics/" + topicId).with(as(SecurityRoles.STUDENT)), "{}"));
+        }
+
+        @Test
+        @DisplayName("A6: ADMISSIONS_OFFICER still reaches student provisioning; a student does not")
+        void studentProvisioningKeepsItsRoleSet() throws Exception {
+            denied(json(post("/api/v1/students/provision").with(as(SecurityRoles.STUDENT)), "{}"));
+            allowed(json(post("/api/v1/students/provision").with(as(SecurityRoles.ADMISSIONS_OFFICER)), "{}"));
+        }
+
+        /**
+         * The point of the change: a write path with no matcher of its own no longer rides
+         * {@code anyRequest().authenticated()}. {@code PUT /api/v1/faculties/{id}} and
+         * {@code DELETE /api/v1/enrollments/{id}} have no rule (and no controller method) — before
+         * this they reached the authenticated fallback, so a SYSTEM_ADMIN got a 404/405 from the
+         * dispatcher; now the filter chain refuses them outright.
+         */
+        @Test
+        @DisplayName("an unmatched write path is denied by the catch-all, even for a system admin")
+        void unmatchedWritePathHitsTheDenyAllCatchAll() throws Exception {
+            denied(json(put("/api/v1/faculties/" + UUID.randomUUID()).with(as(SecurityRoles.SYSTEM_ADMIN)), "{}"));
+            denied(delete("/api/v1/enrollments/" + UUID.randomUUID()).with(as(SecurityRoles.SYSTEM_ADMIN)));
+        }
+    }
 }

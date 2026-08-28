@@ -18,8 +18,13 @@ import com.university.lms.academic.repository.DepartmentRepository;
 import com.university.lms.academic.repository.FacultyRepository;
 import com.university.lms.academic.repository.ProgrammeRepository;
 import com.university.lms.common.dto.PageResponse;
+import com.university.lms.common.exception.CommonErrorCode;
+import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.exception.ResourceNotFoundException;
+import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.identity.api.CurrentUser;
+import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
 import java.util.Locale;
 import java.util.UUID;
@@ -53,6 +58,7 @@ public class AcademicStructureService {
     private final UserDirectory userDirectory;
     private final AcademicPolicyService academicPolicyService;
     private final AcademicOutboxPublisher academicOutboxPublisher;
+    private final CurrentUserProvider currentUserProvider;
 
     public AcademicStructureService(
             FacultyRepository facultyRepository,
@@ -60,13 +66,15 @@ public class AcademicStructureService {
             ProgrammeRepository programmeRepository,
             UserDirectory userDirectory,
             AcademicPolicyService academicPolicyService,
-            AcademicOutboxPublisher academicOutboxPublisher) {
+            AcademicOutboxPublisher academicOutboxPublisher,
+            CurrentUserProvider currentUserProvider) {
         this.facultyRepository = facultyRepository;
         this.departmentRepository = departmentRepository;
         this.programmeRepository = programmeRepository;
         this.userDirectory = userDirectory;
         this.academicPolicyService = academicPolicyService;
         this.academicOutboxPublisher = academicOutboxPublisher;
+        this.currentUserProvider = currentUserProvider;
     }
 
     // ------------------------------------------------------------------
@@ -243,6 +251,7 @@ public class AcademicStructureService {
      */
     @Transactional
     public int reconcileOrgUnits() {
+        requireRegistry();
         int published = 0;
         for (Faculty faculty : facultyRepository.findAll()) {
             academicOutboxPublisher.publishOrgUnitNeeded("FACULTY", faculty.getId(), faculty.getCode(), faculty.getName());
@@ -279,6 +288,21 @@ public class AcademicStructureService {
                 .findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         AcademicErrorCode.PROGRAMME_NOT_FOUND, "No programme exists with id " + id));
+    }
+
+    /**
+     * Registry-level gate, identical in shape to {@code TermRolloverService.requireRegistry} and its
+     * siblings. {@code reconcileOrgUnits} carries {@code @AccessClass(REGISTRY_ONLY)} but had no
+     * check of its own and no {@code SecurityConfig} matcher, so it fell through to the broad
+     * authenticated fallback — any signed-in caller could trigger it. The matcher is added too; this
+     * is the defense in depth the rest of this file's write paths already have.
+     */
+    private void requireRegistry() {
+        CurrentUser caller = currentUserProvider.require();
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
+            throw new ForbiddenException(
+                    CommonErrorCode.ACCESS_DENIED, "You do not have permission to reconcile org units");
+        }
     }
 
     /** Cross-module check, made through identity's published contract rather than its tables. */
