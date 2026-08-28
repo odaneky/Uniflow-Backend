@@ -145,9 +145,13 @@ public class AcademicTerm extends BaseEntity {
                 && moment.isBefore(addDropClosesAt);
     }
 
-    /** Students may add a section during priority registration or the add/drop period. */
+    /**
+     * Students may add a section only during priority registration. Add/drop exists to let a
+     * student correct their schedule downward after registration closes — a second add window,
+     * open to everyone regardless of what they already registered for, was never the intent.
+     */
     public boolean canAddAt(Instant moment) {
-        return isRegistrationOpenAt(moment) || isAddDropOpenAt(moment);
+        return isRegistrationOpenAt(moment);
     }
 
     /**
