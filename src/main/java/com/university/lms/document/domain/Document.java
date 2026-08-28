@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 
@@ -59,6 +60,15 @@ public class Document extends BaseEntity {
     @Column(name = "checksum_sha256", length = 64)
     private String checksumSha256;
 
+    /** F4: when retention says this document's bytes should be purged. {@code null} = never. */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    /** F4: honest default is {@link VirusScanStatus#NOT_SCANNED}, not a faked clean bill. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "virus_scan_status", nullable = false, length = 20)
+    private VirusScanStatus virusScanStatus = VirusScanStatus.NOT_SCANNED;
+
     protected Document() {
         // for JPA
     }
@@ -82,5 +92,13 @@ public class Document extends BaseEntity {
 
     public void recordChecksum(String checksumSha256) {
         this.checksumSha256 = checksumSha256;
+    }
+
+    public void scheduleExpiry(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public void recordScanResult(VirusScanStatus virusScanStatus) {
+        this.virusScanStatus = virusScanStatus;
     }
 }

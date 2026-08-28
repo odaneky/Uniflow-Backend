@@ -1,14 +1,23 @@
 package com.university.lms.document.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.university.lms.common.exception.BusinessException;
 import com.university.lms.document.api.DocumentStore.StoredFile;
+import com.university.lms.document.config.DocumentRetentionProperties;
 import com.university.lms.document.config.StorageProperties;
 import com.university.lms.document.domain.Document;
+import com.university.lms.document.domain.DocumentErrorCode;
 import com.university.lms.document.domain.StorageProvider;
+import com.university.lms.document.domain.VirusScanStatus;
 import com.university.lms.document.repository.DocumentRepository;
+import com.university.lms.document.scan.VirusScanner;
+import com.university.lms.document.scan.VirusScanner.ScanResult;
 import com.university.lms.document.storage.BlobStore;
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.identity.api.CurrentUserProvider;
@@ -19,6 +28,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -54,6 +64,9 @@ class DocumentServiceTest {
     @Mock
     private AcademicStructure academicStructure;
 
+    @Mock
+    private VirusScanner virusScanner;
+
     private DocumentService service;
 
     @BeforeEach
@@ -66,8 +79,12 @@ class DocumentServiceTest {
                 new StorageProperties(null, 0, null, null, null, null, null, null),
                 staffAppointments,
                 studentDirectory,
-                academicStructure);
-        when(documentRepository.saveAndFlush(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
+                academicStructure,
+                new DocumentRetentionProperties(365, 730),
+                virusScanner);
+        org.mockito.Mockito.lenient()
+                .when(documentRepository.saveAndFlush(any(Document.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -91,5 +108,70 @@ class DocumentServiceTest {
         org.mockito.ArgumentCaptor<Document> captor = org.mockito.ArgumentCaptor.forClass(Document.class);
         org.mockito.Mockito.verify(documentRepository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getStorageProvider()).isEqualTo(StorageProvider.LOCAL_FILESYSTEM);
+    }
+
+    @Test
+    void refusesAContentTypeOutsideTheAllowlistBeforeTouchingTheBlobStore() {
+        assertThatThrownBy(() -> service.store(
+                        OWNER_ID, "ASSESSMENT_SUBMISSION", "payload.exe", "application/x-msdownload", "content".getBytes()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(DocumentErrorCode.DOCUMENT_CONTENT_TYPE_NOT_ALLOWED));
+        verify(blobStore, never()).put(any(), any());
+        verify(documentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void refusesAnInfectedFileBeforeTouchingTheBlobStore() {
+        when(virusScanner.scan(any())).thenReturn(ScanResult.INFECTED);
+
+        assertThatThrownBy(() -> service.store(
+                        OWNER_ID, "ASSESSMENT_SUBMISSION", "evidence.pdf", "application/pdf", "content".getBytes()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(DocumentErrorCode.DOCUMENT_INFECTED));
+        verify(blobStore, never()).put(any(), any());
+        verify(documentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void recordsACleanScanResultWhenTheScannerSaysSo() {
+        when(blobStore.provider()).thenReturn(StorageProvider.LOCAL_FILESYSTEM);
+        when(virusScanner.scan(any())).thenReturn(ScanResult.CLEAN);
+
+        service.store(OWNER_ID, "ASSESSMENT_SUBMISSION", "evidence.pdf", "application/pdf", "content".getBytes());
+
+        ArgumentCaptor<Document> captor = ArgumentCaptor.forClass(Document.class);
+        verify(documentRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getVirusScanStatus()).isEqualTo(VirusScanStatus.CLEAN);
+    }
+
+    @Test
+    void recordsNotScannedWhenNoScannerIsConfigured() {
+        when(blobStore.provider()).thenReturn(StorageProvider.LOCAL_FILESYSTEM);
+        when(virusScanner.scan(any())).thenReturn(ScanResult.NOT_SCANNED);
+
+        service.store(OWNER_ID, "ASSESSMENT_SUBMISSION", "evidence.pdf", "application/pdf", "content".getBytes());
+
+        ArgumentCaptor<Document> captor = ArgumentCaptor.forClass(Document.class);
+        verify(documentRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getVirusScanStatus()).isEqualTo(VirusScanStatus.NOT_SCANNED);
+    }
+
+    @Test
+    void schedulesExpiryForAnIdentificationDocumentButNeverForAssessmentEvidence() {
+        when(blobStore.provider()).thenReturn(StorageProvider.LOCAL_FILESYSTEM);
+
+        service.store(OWNER_ID, "IDENTIFICATION", "license.pdf", "application/pdf", "content".getBytes());
+        ArgumentCaptor<Document> identification = ArgumentCaptor.forClass(Document.class);
+        verify(documentRepository).saveAndFlush(identification.capture());
+        assertThat(identification.getValue().getExpiresAt()).isNotNull();
+
+        org.mockito.Mockito.reset(documentRepository);
+        when(documentRepository.saveAndFlush(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.store(OWNER_ID, "ASSESSMENT_SUBMISSION", "evidence.pdf", "application/pdf", "content".getBytes());
+        ArgumentCaptor<Document> evidence = ArgumentCaptor.forClass(Document.class);
+        verify(documentRepository).saveAndFlush(evidence.capture());
+        assertThat(evidence.getValue().getExpiresAt()).isNull();
     }
 }

@@ -9,13 +9,17 @@ import com.university.lms.common.exception.ResourceAlreadyExistsException;
 import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.document.api.DocumentStore;
 import com.university.lms.document.api.DocumentStore.StoredFile;
+import com.university.lms.document.config.DocumentRetentionProperties;
 import com.university.lms.document.config.StorageProperties;
 import com.university.lms.document.domain.Document;
 import com.university.lms.document.domain.DocumentErrorCode;
 import com.university.lms.document.domain.DocumentType;
+import com.university.lms.document.domain.VirusScanStatus;
 import com.university.lms.document.dto.CreateDocumentRequest;
 import com.university.lms.document.dto.DocumentResponse;
 import com.university.lms.document.repository.DocumentRepository;
+import com.university.lms.document.scan.VirusScanner;
+import com.university.lms.document.scan.VirusScanner.ScanResult;
 import com.university.lms.document.storage.BlobStore;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
@@ -25,8 +29,10 @@ import com.university.lms.student.api.StudentDirectory;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +43,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class DocumentService implements DocumentStore {
 
+    /**
+     * F4: shared by both write paths ({@link #register} and {@link #store}) so a document can never
+     * enter the system claiming a content type neither path is willing to serve back out.
+     */
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "text/plain",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
     private final DocumentRepository documentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final UserDirectory userDirectory;
@@ -45,6 +64,8 @@ public class DocumentService implements DocumentStore {
     private final StaffAppointments staffAppointments;
     private final StudentDirectory studentDirectory;
     private final AcademicStructure academicStructure;
+    private final DocumentRetentionProperties retentionProperties;
+    private final VirusScanner virusScanner;
 
     public DocumentService(
             DocumentRepository documentRepository,
@@ -54,7 +75,9 @@ public class DocumentService implements DocumentStore {
             StorageProperties storageProperties,
             StaffAppointments staffAppointments,
             StudentDirectory studentDirectory,
-            AcademicStructure academicStructure) {
+            AcademicStructure academicStructure,
+            DocumentRetentionProperties retentionProperties,
+            VirusScanner virusScanner) {
         this.documentRepository = documentRepository;
         this.currentUserProvider = currentUserProvider;
         this.userDirectory = userDirectory;
@@ -63,6 +86,8 @@ public class DocumentService implements DocumentStore {
         this.staffAppointments = staffAppointments;
         this.studentDirectory = studentDirectory;
         this.academicStructure = academicStructure;
+        this.retentionProperties = retentionProperties;
+        this.virusScanner = virusScanner;
     }
 
     public PageResponse<DocumentResponse> own(Pageable pageable) {
@@ -145,6 +170,7 @@ public class DocumentService implements DocumentStore {
             throw new ForbiddenException(
                     CommonErrorCode.ACCESS_DENIED, "You do not have permission to access this record");
         }
+        requireAllowedContentType(request.contentType());
         if (documentRepository.findByStorageKey(request.storageKey()).isPresent()) {
             throw new ResourceAlreadyExistsException(
                     DocumentErrorCode.DOCUMENT_STORAGE_KEY_EXISTS, "A document already uses that storage key");
@@ -157,6 +183,7 @@ public class DocumentService implements DocumentStore {
                 request.storageKey(),
                 request.storageProvider(),
                 request.ownerUserId());
+        document.scheduleExpiry(retentionProperties.expiryFor(request.documentType(), Instant.now()));
         try {
             return DocumentResponse.from(documentRepository.saveAndFlush(document));
         } catch (DataIntegrityViolationException ex) {
@@ -177,15 +204,32 @@ public class DocumentService implements DocumentStore {
             throw new BusinessException(
                     DocumentErrorCode.DOCUMENT_TOO_LARGE, "File must be at most " + max + " bytes");
         }
+        requireAllowedContentType(contentType);
         DocumentType type = DocumentType.valueOf(documentType);
+        // Scan before the bytes ever reach the blob store. An unreachable scanner propagates as
+        // DocumentStoreException rather than being treated as an implicit pass — see VirusScanner.
+        ScanResult scanResult = virusScanner.scan(content);
+        if (scanResult == ScanResult.INFECTED) {
+            throw new BusinessException(DocumentErrorCode.DOCUMENT_INFECTED, "This file failed a virus scan");
+        }
         String safeName = safeFileName(fileName);
         String key = "uploads/" + ownerUserId + "/" + UUID.randomUUID();
         blobStore.put(key, content);
         Document document =
                 new Document(type, safeName, contentType, content.length, key, blobStore.provider(), ownerUserId);
         document.recordChecksum(sha256(content));
+        document.recordScanResult(scanResult == ScanResult.CLEAN ? VirusScanStatus.CLEAN : VirusScanStatus.NOT_SCANNED);
+        document.scheduleExpiry(retentionProperties.expiryFor(type, Instant.now()));
         Document saved = documentRepository.saveAndFlush(document);
         return toStored(saved);
+    }
+
+    private static void requireAllowedContentType(String contentType) {
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
+            throw new BusinessException(
+                    DocumentErrorCode.DOCUMENT_CONTENT_TYPE_NOT_ALLOWED,
+                    "Content type " + contentType + " is not allowed");
+        }
     }
 
     @Override

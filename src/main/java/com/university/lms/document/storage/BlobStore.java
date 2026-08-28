@@ -24,6 +24,14 @@ public interface BlobStore {
 
     byte[] get(String storageKey);
 
+    /**
+     * F4: retention purge is the first real caller — a document past its {@code expiresAt} needs
+     * its bytes actually gone, not just its metadata row. Idempotent: deleting an already-gone key
+     * is not an error, the same way {@code S3BlobStore.ensureBucketExists} treats "already there"
+     * as success rather than failure.
+     */
+    void delete(String storageKey);
+
     /** Which {@link StorageProvider} this instance is, so callers stop hard-coding one. */
     StorageProvider provider();
 }

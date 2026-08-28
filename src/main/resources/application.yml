@@ -80,14 +80,29 @@ spring:
 # environment; the issuer and JWK set URI do, and are set per profile.
 lms:
   storage:
-    # "local" is the only implementation today (LocalFilesystemBlobStore) — a real deployment needs
-    # this to be durable, shared storage, not a pod's local disk, but which remote provider (S3,
-    # MinIO, GCS, Azure Blob — see StorageProvider) is a decision this file does not make. Adding one
-    # is a new document.storage.BlobStore bean selected by this property; DocumentService does not
-    # change.
+    # "local" (LocalFilesystemBlobStore) is the default; a real deployment needs this to be durable,
+    # shared storage, not a pod's local disk — set "minio" (self-hosted, dev/test) or "s3" (real AWS)
+    # to register S3BlobStore instead. Adding a further remote provider (GCS, Azure Blob — see
+    # StorageProvider) is a new document.storage.BlobStore bean selected by this property;
+    # DocumentService does not change.
     provider: ${LMS_STORAGE_PROVIDER:local}
     local-root: ${LMS_STORAGE_ROOT:./data/blobs}
     max-upload-bytes: 12582912
+  virus-scan:
+    # Off by default: NoopVirusScanner reports every file NOT_SCANNED rather than faking a clean
+    # bill. Set enabled=true with a reachable ClamAV daemon (host/port) to register
+    # ClamAvVirusScanner instead — same DocumentService.store() call site either way.
+    enabled: ${LMS_VIRUS_SCAN_ENABLED:false}
+    host: ${LMS_VIRUS_SCAN_HOST:localhost}
+    port: ${LMS_VIRUS_SCAN_PORT:3310}
+  documents:
+    retention:
+      # How long a purgeable document's bytes are kept before DocumentRetentionSweeper deletes them.
+      # COURSE_MATERIAL, ASSESSMENT_SUBMISSION, TRANSCRIPT and CERTIFICATE are academic-record
+      # evidence and are never purged, regardless of these values — see
+      # DocumentRetentionProperties.expiryFor.
+      identification-days: ${LMS_DOCUMENT_RETENTION_IDENTIFICATION_DAYS:365}
+      other-days: ${LMS_DOCUMENT_RETENTION_OTHER_DAYS:730}
   # Single-tenant white-label defaults. Admin overrides via PUT /api/v1/branding (System settings).
   # Keycloak's uniflow theme reads the same tokens at deploy time — see docker/keycloak/themes/uniflow.
   branding:

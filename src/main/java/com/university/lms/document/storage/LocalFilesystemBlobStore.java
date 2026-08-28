@@ -50,6 +50,16 @@ public class LocalFilesystemBlobStore implements BlobStore {
     }
 
     @Override
+    public void delete(String storageKey) {
+        Path target = resolve(storageKey);
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException ex) {
+            throw new DocumentStoreException("Could not delete object " + storageKey, ex);
+        }
+    }
+
+    @Override
     public StorageProvider provider() {
         return StorageProvider.LOCAL_FILESYSTEM;
     }

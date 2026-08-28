@@ -7,12 +7,14 @@ import static org.mockito.Mockito.when;
 import com.university.lms.academic.api.AcademicStructure;
 import com.university.lms.common.exception.ForbiddenException;
 import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.document.config.DocumentRetentionProperties;
 import com.university.lms.document.config.StorageProperties;
 import com.university.lms.document.domain.Document;
 import com.university.lms.document.domain.DocumentType;
 import com.university.lms.document.domain.StorageProvider;
 import com.university.lms.document.dto.CreateDocumentRequest;
 import com.university.lms.document.repository.DocumentRepository;
+import com.university.lms.document.scan.VirusScanner;
 import com.university.lms.document.storage.BlobStore;
 import com.university.lms.identity.api.CurrentUser;
 import com.university.lms.identity.api.CurrentUserProvider;
@@ -60,6 +62,9 @@ class DocumentAccessTest {
     @Mock
     private AcademicStructure academicStructure;
 
+    @Mock
+    private VirusScanner virusScanner;
+
     private DocumentService service;
 
     private static final UUID OWNER_ID = UUID.randomUUID();
@@ -79,7 +84,9 @@ class DocumentAccessTest {
                 new StorageProperties(null, 0, null, null, null, null, null, null),
                 staffAppointments,
                 studentDirectory,
-                academicStructure);
+                academicStructure,
+                new DocumentRetentionProperties(365, 730),
+                virusScanner);
         Document document = new Document(
                 DocumentType.TRANSCRIPT, "t.pdf", "application/pdf", 10, "key", StorageProvider.LOCAL_FILESYSTEM, OWNER_ID);
         org.mockito.Mockito.lenient().when(documentRepository.findById(DOCUMENT_ID)).thenReturn(Optional.of(document));
@@ -180,6 +187,24 @@ class DocumentAccessTest {
         return new CreateDocumentRequest(
                 ownerUserId, DocumentType.TRANSCRIPT, "t.pdf", "application/pdf", 10L, "new-key",
                 StorageProvider.LOCAL_FILESYSTEM);
+    }
+
+    private static CreateDocumentRequest registerRequestWithContentType(UUID ownerUserId, String contentType) {
+        return new CreateDocumentRequest(
+                ownerUserId, DocumentType.TRANSCRIPT, "t.exe", contentType, 10L, "new-key",
+                StorageProvider.LOCAL_FILESYSTEM);
+    }
+
+    @Test
+    @DisplayName("register: refuses a content type outside the shared allowlist even for an otherwise-authorized staff caller")
+    void registerRefusesADisallowedContentType() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.SYSTEM_ADMIN));
+        when(userDirectory.exists(OWNER_ID)).thenReturn(true);
+
+        assertThatThrownBy(
+                        () -> service.register(registerRequestWithContentType(OWNER_ID, "application/x-msdownload")))
+                .isInstanceOf(com.university.lms.common.exception.BusinessException.class);
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
