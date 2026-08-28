@@ -1,6 +1,7 @@
 package com.university.lms.academic.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -14,9 +15,14 @@ import com.university.lms.academic.dto.CreateFacultyRequest;
 import com.university.lms.academic.repository.DepartmentRepository;
 import com.university.lms.academic.repository.FacultyRepository;
 import com.university.lms.academic.repository.ProgrammeRepository;
+import com.university.lms.common.exception.ForbiddenException;
+import com.university.lms.common.security.SecurityRoles;
+import com.university.lms.identity.api.CurrentUser;
+import com.university.lms.identity.api.CurrentUserProvider;
 import com.university.lms.identity.api.UserDirectory;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,8 +57,17 @@ class AcademicOrgUnitProvisioningTest {
     @Mock
     private AcademicOutboxPublisher academicOutboxPublisher;
 
+    @Mock
+    private CurrentUserProvider currentUserProvider;
+
     @InjectMocks
     private AcademicStructureService service;
+
+    private static CurrentUser callerWithRole(String role) {
+        return new CurrentUser(
+                UUID.randomUUID(), "idp-subject", "caller", "caller@example.edu", "Caller",
+                Optional.empty(), Set.of(role), Set.of());
+    }
 
     @BeforeEach
     void setUp() {
@@ -88,6 +103,7 @@ class AcademicOrgUnitProvisioningTest {
     @Test
     @DisplayName("reconcileOrgUnits republishes for every existing faculty and department")
     void reconcileRepublishesForEveryExistingUnit() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.REGISTRAR));
         Faculty faculty = new Faculty("SCI", "Science");
         Department department = new Department(faculty, "CS", "Computer Science");
         when(facultyRepository.findAll()).thenReturn(List.of(faculty));
@@ -99,5 +115,13 @@ class AcademicOrgUnitProvisioningTest {
         verify(academicOutboxPublisher, times(1)).publishOrgUnitNeeded(eq("FACULTY"), any(), eq("SCI"), eq("Science"));
         verify(academicOutboxPublisher, times(1))
                 .publishOrgUnitNeeded(eq("DEPARTMENT"), any(), eq("CS"), eq("Computer Science"));
+    }
+
+    @Test
+    @DisplayName("a student cannot trigger an org-unit reconcile — it is REGISTRY_ONLY")
+    void aStudentCannotReconcileOrgUnits() {
+        when(currentUserProvider.require()).thenReturn(callerWithRole(SecurityRoles.STUDENT));
+
+        assertThatThrownBy(() -> service.reconcileOrgUnits()).isInstanceOf(ForbiddenException.class);
     }
 }

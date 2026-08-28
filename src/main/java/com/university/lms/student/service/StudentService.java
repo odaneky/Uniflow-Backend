@@ -336,6 +336,7 @@ public class StudentService {
     /** Adds a minor, specialisation, or second major — never the primary membership. */
     @Transactional
     public ProgrammeMembershipResponse addProgrammeMembership(UUID studentId, AddProgrammeMembershipRequest request) {
+        requireRegistry();
         require(studentId);
         if (!academicStructure.programmeExists(request.programmeId())) {
             throw new ResourceNotFoundException(
@@ -349,6 +350,7 @@ public class StudentService {
     /** Ends one secondary programme membership. The primary membership can only be ended by transfer. */
     @Transactional
     public void endProgrammeMembership(UUID studentId, UUID membershipId, EndProgrammeMembershipRequest request) {
+        requireRegistry();
         require(studentId);
         UUID approvedBy = currentUserProvider.find().map(CurrentUser::userId).orElse(null);
         programmeEnrolmentService.endSecondary(
@@ -478,6 +480,22 @@ public class StudentService {
         CurrentUser caller = requireAssignedAdvisorOrRegistry(student);
         appointment.cancel(request.reason());
         return AdvisingAppointmentResponse.from(appointment, caller.fullName());
+    }
+
+    /**
+     * G7 follow-up: {@code addProgrammeMembership} and {@code endProgrammeMembership} are
+     * {@code @AccessClass(REGISTRY_ONLY)} — the same class as {@code create} and {@code update} —
+     * but had no check of their own and no {@code SecurityConfig} POST matcher (only the GET on
+     * {@code /students/*&#47;programmes} was covered by A3), so both fell through to the broad
+     * authenticated fallback. A student could add or end a secondary membership on anyone's record.
+     * Guarded here now, mirrored by an explicit matcher, exactly like the disciplinary-cases fix.
+     */
+    private void requireRegistry() {
+        CurrentUser caller = currentUserProvider.require();
+        if (!(caller.hasRole(SecurityRoles.SYSTEM_ADMIN) || caller.hasRole(SecurityRoles.REGISTRAR))) {
+            throw new ForbiddenException(
+                    CommonErrorCode.ACCESS_DENIED, "Only the registry may change a student's programme memberships");
+        }
     }
 
     private CurrentUser requireAssignedAdvisorOrRegistry(Student student) {

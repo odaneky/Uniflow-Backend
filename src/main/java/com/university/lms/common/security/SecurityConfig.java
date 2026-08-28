@@ -543,6 +543,72 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/students/*")
                         .authenticated()
 
+                        // -------- writes with no explicit matcher until now (G7 follow-up) --------
+                        // The disciplinary-cases fix closed one POST that fell through to
+                        // anyRequest().authenticated(); A3 only ever inverted the catch-all for GET.
+                        // Every @PostMapping/@PutMapping/@DeleteMapping/@PatchMapping under
+                        // com.university.lms.**.web was inventoried and cross-checked against the
+                        // ordered list above, simulating Ant-style path matching, the same way the
+                        // GET inventory was. These are the ones that had no rule of their own.
+                        //
+                        // Three had no service-layer guard either — AcademicStructureService
+                        // .reconcileOrgUnits, StudentService.addProgrammeMembership and
+                        // .endProgrammeMembership — so a student could reach all three with zero
+                        // authorization check anywhere in the stack, exactly the disciplinary-cases
+                        // shape (a student really could add or end a programme membership on another
+                        // student's record). Guarded at the service layer now too; these matchers
+                        // are the same defense in depth the rest of this section carries.
+                        //
+                        // reconcileOrgUnits + term rollover/close + every staffing write:
+                        // @AccessClass(REGISTRY_ONLY), and StaffingService/TermRolloverService/
+                        // TermCloseService.requireRegistry all check SYSTEM_ADMIN||REGISTRAR.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/faculties/reconcile-org-units",
+                                "/api/v1/academic-terms/*/rollover",
+                                "/api/v1/academic-terms/*/close",
+                                "/api/v1/org-units",
+                                "/api/v1/employees",
+                                "/api/v1/staff-appointments",
+                                "/api/v1/staff-appointments/*/end",
+                                "/api/v1/staff-appointments/reconcile")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        // A6: StudentProvisioningService.requireRegistry also accepts
+                        // ADMISSIONS_OFFICER — see admissionsOfficerMayProvisionAStudentRecord.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/students/provision")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ADMISSIONS_OFFICER)
+                        // Secondary programme memberships: @AccessClass(REGISTRY_ONLY), matching the
+                        // GET /api/v1/students/*/programmes rule above and the requireRegistry check
+                        // now in StudentService.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/students/*/programmes",
+                                "/api/v1/students/*/programmes/*/end")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
+                        // Advising notes and appointments: StudentService
+                        // .requireAssignedAdvisorOrRegistry, the same role set as the matching GET
+                        // rules above (the per-record advisor scoping is service-layer work).
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/students/*/advising-notes",
+                                "/api/v1/students/*/advising-appointments",
+                                "/api/v1/students/*/advising-appointments/*/cancel")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, ACADEMIC_ADVISOR)
+                        // Forum writes: DefaultForumAccess narrows each to section membership —
+                        // assertCanPostForum lets an enrolled student post, deletePost lets an
+                        // author remove their own post — so the coarse gate only matches the
+                        // @AccessClass label, exactly like the GET forum reads above. Listed so the
+                        // write catch-all below has something to enumerate against. updateTopic is
+                        // moderator-only: assertCanModerateForum is admin/registrar/faculty-admin or
+                        // the section's own teaching lecturer, the same shape as the teaching-section
+                        // GET group.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/forum/topics/*/posts")
+                        .authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/forum/posts/*")
+                        .authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/forum/topics/*")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FACULTY_ADMIN, LECTURER)
+
                         // A3: every GET under /api/v1/** now has its own explicit rule above —
                         // AccessClassCoverageTest guarantees every controller method carries an
                         // @AccessClass, and this file's own inventory (all 104 GET endpoints,
@@ -553,6 +619,23 @@ public class SecurityConfig {
                         // — is now denyAll(). A forgotten rule for a future endpoint is a 403 in
                         // AuthorizationRulesIntegrationTest, not a silent disclosure.
                         .requestMatchers(HttpMethod.GET, "/api/v1/**")
+                        .denyAll()
+                        // G7 follow-up: the same inversion for writes. Every POST/PUT/PATCH/DELETE
+                        // under /api/v1 now has an explicit rule above — the inventory described in
+                        // the writes section confirmed zero fall through to here — so what was a
+                        // fail-open reliance on anyRequest().authenticated() (a forgotten matcher for
+                        // a new write endpoint silently reachable by any signed-in caller, which is
+                        // how the disciplinary-cases hole and the three unguarded endpoints above
+                        // stayed open) is now denyAll(): a forgotten rule is a 403 in
+                        // AuthorizationRulesIntegrationTest, not a silent grant. Kept method-scoped
+                        // rather than a bare "/api/v1/**" so OPTIONS/HEAD are untouched.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/**")
+                        .denyAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/**")
+                        .denyAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/**")
+                        .denyAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/**")
                         .denyAll()
                         .anyRequest()
                         .authenticated())
