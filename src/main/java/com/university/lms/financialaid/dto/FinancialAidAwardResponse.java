@@ -15,7 +15,9 @@ public record FinancialAidAwardResponse(
         BigDecimal amount,
         AwardStatus status,
         Instant disbursedAt,
-        Instant createdAt) {
+        Instant createdAt,
+        UUID scholarshipProgrammeId,
+        UUID renewedFromAwardId) {
 
     public static FinancialAidAwardResponse from(FinancialAidAward award) {
         return new FinancialAidAwardResponse(
@@ -26,6 +28,8 @@ public record FinancialAidAwardResponse(
                 award.getAmount(),
                 award.getStatus(),
                 award.getDisbursedAt(),
-                award.getCreatedAt());
+                award.getCreatedAt(),
+                award.getScholarshipProgrammeId(),
+                award.getRenewedFromAwardId());
     }
 }

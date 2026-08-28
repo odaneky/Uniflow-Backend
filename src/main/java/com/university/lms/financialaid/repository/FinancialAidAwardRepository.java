@@ -21,4 +21,8 @@ public interface FinancialAidAwardRepository extends JpaRepository<FinancialAidA
      * courtesy check exists to avoid tripping under normal (non-concurrent) retry. */
     Optional<FinancialAidAward> findByStudentIdAndAcademicTermIdAndAwardType(
             UUID studentId, UUID academicTermId, AwardType awardType);
+
+    /** E9: the scholarship equivalent — at most one award per student, per term, per programme. */
+    Optional<FinancialAidAward> findByStudentIdAndAcademicTermIdAndScholarshipProgrammeId(
+            UUID studentId, UUID academicTermId, UUID scholarshipProgrammeId);
 }

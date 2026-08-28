@@ -20,12 +20,15 @@ public record StaffAwardActionRequest(
         @DecimalMin(value = "0.01", message = "must be greater than zero") BigDecimal amount,
         HoldType holdType,
         @Size(max = 500, message = "must be at most 500 characters") String reason,
-        UUID holdId) {
+        UUID holdId,
+        UUID scholarshipProgrammeId) {
 
     public enum Action {
         PACKAGE,
         DISBURSE,
         PLACE_HOLD,
-        CLEAR_HOLD
+        CLEAR_HOLD,
+        AWARD_SCHOLARSHIP,
+        RENEW_SCHOLARSHIP
     }
 }

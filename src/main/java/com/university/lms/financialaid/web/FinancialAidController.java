@@ -44,6 +44,24 @@ public class FinancialAidController {
             }
             return List.of(financialAidService.disburse(request.awardId()));
         }
+        if (request.action() == StaffAwardActionRequest.Action.AWARD_SCHOLARSHIP) {
+            if (request.academicTermId() == null || request.scholarshipProgrammeId() == null) {
+                throw new ValidationException(
+                        FinancialAidErrorCode.AWARD_INVALID_STATE,
+                        "academicTermId and scholarshipProgrammeId are required to award a scholarship");
+            }
+            return List.of(financialAidService.awardScholarship(
+                    studentId, request.academicTermId(), request.scholarshipProgrammeId(), request.amount()));
+        }
+        if (request.action() == StaffAwardActionRequest.Action.RENEW_SCHOLARSHIP) {
+            if (request.awardId() == null || request.academicTermId() == null) {
+                throw new ValidationException(
+                        FinancialAidErrorCode.AWARD_INVALID_STATE,
+                        "awardId and academicTermId are required to renew a scholarship");
+            }
+            return List.of(financialAidService.renewScholarship(
+                    request.awardId(), request.academicTermId(), request.amount()));
+        }
         if (request.academicTermId() == null) {
             throw new ValidationException(
                     FinancialAidErrorCode.AWARD_INVALID_STATE, "academicTermId is required to package awards");

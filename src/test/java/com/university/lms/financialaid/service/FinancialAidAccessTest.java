@@ -61,6 +61,9 @@ class FinancialAidAccessTest {
     @Mock
     private StaffAppointments staffAppointments;
 
+    @Mock
+    private ScholarshipProgrammeService scholarshipProgrammeService;
+
     private FinancialAidService service;
 
     private static final UUID STUDENT_ID = UUID.randomUUID();
@@ -78,7 +81,8 @@ class FinancialAidAccessTest {
                 studentDirectory,
                 academicStructure,
                 currentUserProvider,
-                staffAppointments);
+                staffAppointments,
+                scholarshipProgrammeService);
         when(studentDirectory.exists(STUDENT_ID)).thenReturn(true);
         org.mockito.Mockito.lenient()
                 .when(awardRepository.findByStudentIdOrderByCreatedAtDesc(STUDENT_ID))

@@ -192,6 +192,15 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/fee-catalog/**")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, BURSAR)
+                        // E9: the scholarship-programme catalog is financial-aid's-office work, same
+                        // role set as FinancialAidService.requireRegistry — never narrowed to exclude
+                        // REGISTRAR, matching the rest of this block.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/scholarship-programmes", "/api/v1/scholarship-programmes/**")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FINANCIAL_AID_OFFICER)
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/scholarship-programmes/**")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FINANCIAL_AID_OFFICER)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/scholarship-programmes/**")
+                        .hasAnyRole(SYSTEM_ADMIN, REGISTRAR, FINANCIAL_AID_OFFICER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/academic-years", "/api/v1/academic-terms")
                         .hasAnyRole(SYSTEM_ADMIN, REGISTRAR)
 
@@ -378,6 +387,7 @@ public class SecurityConfig {
                                 "/api/v1/faculties",
                                 "/api/v1/faculties/*",
                                 "/api/v1/fee-catalog",
+                                "/api/v1/scholarship-programmes",
                                 "/api/v1/payment-plans/*",
                                 "/api/v1/programmes/*/requirement-blocks",
                                 "/api/v1/tuition-schedule",

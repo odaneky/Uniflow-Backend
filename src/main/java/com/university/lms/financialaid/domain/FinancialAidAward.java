@@ -39,6 +39,14 @@ public class FinancialAidAward extends BaseEntity {
     @Column(name = "disbursed_at")
     private Instant disbursedAt;
 
+    /** E9: which {@link ScholarshipProgramme} this award is drawn from — null unless {@link #awardType} is SCHOLARSHIP. */
+    @Column(name = "scholarship_programme_id")
+    private UUID scholarshipProgrammeId;
+
+    /** E9: the prior term's award this one renews, if any — chains a scholarship across terms. */
+    @Column(name = "renewed_from_award_id")
+    private UUID renewedFromAwardId;
+
     protected FinancialAidAward() {}
 
     public FinancialAidAward(
@@ -48,6 +56,18 @@ public class FinancialAidAward extends BaseEntity {
         this.awardType = awardType;
         this.amount = amount;
         this.status = status == null ? AwardStatus.OFFERED : status;
+    }
+
+    /** E9: an award drawn from a named scholarship programme, optionally renewing a prior term's award. */
+    public FinancialAidAward(
+            UUID studentId,
+            UUID academicTermId,
+            BigDecimal amount,
+            UUID scholarshipProgrammeId,
+            UUID renewedFromAwardId) {
+        this(studentId, academicTermId, AwardType.SCHOLARSHIP, amount, AwardStatus.OFFERED);
+        this.scholarshipProgrammeId = scholarshipProgrammeId;
+        this.renewedFromAwardId = renewedFromAwardId;
     }
 
     public void accept() {

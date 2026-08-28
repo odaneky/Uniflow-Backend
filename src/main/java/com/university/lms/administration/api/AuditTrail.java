@@ -103,6 +103,14 @@ public interface AuditTrail {
         public static final String AWARD_ACCEPTED = "AWARD_ACCEPTED";
         /** A Title IV or institutional award was marked as paid out. */
         public static final String AWARD_DISBURSED = "AWARD_DISBURSED";
+        /** E9: a named scholarship fund was created, edited or retired. */
+        public static final String SCHOLARSHIP_PROGRAMME_CREATED = "SCHOLARSHIP_PROGRAMME_CREATED";
+        public static final String SCHOLARSHIP_PROGRAMME_UPDATED = "SCHOLARSHIP_PROGRAMME_UPDATED";
+        public static final String SCHOLARSHIP_PROGRAMME_DEACTIVATED = "SCHOLARSHIP_PROGRAMME_DEACTIVATED";
+        /** E9: a student was offered a scholarship award drawn from a named programme. */
+        public static final String SCHOLARSHIP_AWARDED = "SCHOLARSHIP_AWARDED";
+        /** E9: a prior term's scholarship award was carried forward into a new one. */
+        public static final String SCHOLARSHIP_RENEWED = "SCHOLARSHIP_RENEWED";
         public static final String SERVICE_HOLD_PLACED = "SERVICE_HOLD_PLACED";
         public static final String SERVICE_HOLD_CLEARED = "SERVICE_HOLD_CLEARED";
         public static final String REQUIREMENT_BLOCK_CREATED = "REQUIREMENT_BLOCK_CREATED";
@@ -155,6 +163,7 @@ public interface AuditTrail {
         public static final String TUITION_SCHEDULE = "TuitionSchedule";
         public static final String REFUND_POLICY = "RefundPolicy";
         public static final String FINANCIAL_AID_AWARD = "FinancialAidAward";
+        public static final String SCHOLARSHIP_PROGRAMME = "ScholarshipProgramme";
         public static final String SERVICE_HOLD = "ServiceHold";
         public static final String REQUIREMENT_BLOCK = "RequirementBlock";
         public static final String PROGRAMME = "Programme";

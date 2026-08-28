@@ -19,6 +19,7 @@ import com.university.lms.financialaid.domain.AwardType;
 import com.university.lms.financialaid.domain.FinancialAidAward;
 import com.university.lms.financialaid.domain.FinancialAidErrorCode;
 import com.university.lms.financialaid.domain.IsirSnapshot;
+import com.university.lms.financialaid.domain.ScholarshipProgramme;
 import com.university.lms.financialaid.dto.FinancialAidAwardResponse;
 import com.university.lms.financialaid.dto.IsirImportResponse;
 import com.university.lms.financialaid.dto.IsirSnapshotResponse;
@@ -59,6 +60,7 @@ public class FinancialAidService {
     private final AcademicStructure academicStructure;
     private final CurrentUserProvider currentUserProvider;
     private final StaffAppointments staffAppointments;
+    private final ScholarshipProgrammeService scholarshipProgrammeService;
 
     public FinancialAidService(
             IsirSnapshotRepository isirRepository,
@@ -68,7 +70,8 @@ public class FinancialAidService {
             StudentDirectory studentDirectory,
             AcademicStructure academicStructure,
             CurrentUserProvider currentUserProvider,
-            StaffAppointments staffAppointments) {
+            StaffAppointments staffAppointments,
+            ScholarshipProgrammeService scholarshipProgrammeService) {
         this.isirRepository = isirRepository;
         this.awardRepository = awardRepository;
         this.accountRepository = accountRepository;
@@ -77,6 +80,7 @@ public class FinancialAidService {
         this.academicStructure = academicStructure;
         this.currentUserProvider = currentUserProvider;
         this.staffAppointments = staffAppointments;
+        this.scholarshipProgrammeService = scholarshipProgrammeService;
     }
 
     public List<FinancialAidAwardResponse> awardsForStudent(UUID studentId) {
@@ -180,6 +184,90 @@ public class FinancialAidService {
                 .findByStudentIdAndAcademicTermIdAndAwardType(studentId, academicTermId, type)
                 .orElseGet(() -> awardRepository.save(
                         new FinancialAidAward(studentId, academicTermId, type, amount, AwardStatus.OFFERED)));
+    }
+
+    /**
+     * E9: offers a student a scholarship award drawn from a named {@link ScholarshipProgramme}.
+     * Idempotent per (student, term, programme), the scholarship equivalent of {@link #packageOne}
+     * — {@code uk_financial_aid_awards_student_term_scholarship} is the actual guarantee.
+     */
+    @Auditable(
+            action = AuditTrail.Action.SCHOLARSHIP_AWARDED,
+            entityType = AuditTrail.EntityType.FINANCIAL_AID_AWARD,
+            entityId = "#result.id()")
+    @Transactional
+    public FinancialAidAwardResponse awardScholarship(
+            UUID studentId, UUID academicTermId, UUID scholarshipProgrammeId, BigDecimal amountOverride) {
+        requireRegistry();
+        requireStudentExists(studentId);
+        requireTerm(academicTermId);
+        ScholarshipProgramme programme = scholarshipProgrammeService.require(scholarshipProgrammeId);
+        if (!programme.isActive()) {
+            throw new BusinessException(
+                    FinancialAidErrorCode.SCHOLARSHIP_PROGRAMME_INACTIVE,
+                    "\"" + programme.getName() + "\" is no longer accepting awards");
+        }
+        BigDecimal amount = amountOverride == null ? programme.getDefaultAmount() : amountOverride;
+        FinancialAidAward award = awardRepository
+                .findByStudentIdAndAcademicTermIdAndScholarshipProgrammeId(studentId, academicTermId, scholarshipProgrammeId)
+                .orElseGet(() -> awardRepository.save(
+                        new FinancialAidAward(studentId, academicTermId, amount, scholarshipProgrammeId, null)));
+        return FinancialAidAwardResponse.from(award);
+    }
+
+    /**
+     * E9: carries a scholarship forward into a new term. Only a prior award the student actually
+     * took up (accepted or already disbursed) may be renewed — an award they never accepted has
+     * nothing to carry forward — and only while the programme itself still permits it.
+     */
+    @Auditable(
+            action = AuditTrail.Action.SCHOLARSHIP_RENEWED,
+            entityType = AuditTrail.EntityType.FINANCIAL_AID_AWARD,
+            entityId = "#result.id()")
+    @Transactional
+    public FinancialAidAwardResponse renewScholarship(
+            UUID priorAwardId, UUID newAcademicTermId, BigDecimal amountOverride) {
+        requireRegistry();
+        FinancialAidAward prior = requireAward(priorAwardId);
+        if (prior.getAwardType() != AwardType.SCHOLARSHIP || prior.getScholarshipProgrammeId() == null) {
+            throw new BusinessException(
+                    FinancialAidErrorCode.SCHOLARSHIP_RENEWAL_INVALID_STATE, "That award is not a scholarship");
+        }
+        if (prior.getStatus() != AwardStatus.ACCEPTED && prior.getStatus() != AwardStatus.DISBURSED) {
+            throw new BusinessException(
+                    FinancialAidErrorCode.SCHOLARSHIP_RENEWAL_INVALID_STATE,
+                    "Only an accepted or disbursed award can be renewed");
+        }
+        requireTerm(newAcademicTermId);
+        ScholarshipProgramme programme = scholarshipProgrammeService.require(prior.getScholarshipProgrammeId());
+        if (!programme.isRenewable()) {
+            throw new BusinessException(
+                    FinancialAidErrorCode.SCHOLARSHIP_NOT_RENEWABLE,
+                    "\"" + programme.getName() + "\" does not offer renewals");
+        }
+        if (programme.getMaxRenewals() != null && renewalChainLength(prior) >= programme.getMaxRenewals()) {
+            throw new BusinessException(
+                    FinancialAidErrorCode.SCHOLARSHIP_RENEWAL_LIMIT_REACHED,
+                    "\"" + programme.getName() + "\" allows at most " + programme.getMaxRenewals() + " renewal(s)");
+        }
+        BigDecimal amount = amountOverride == null ? prior.getAmount() : amountOverride;
+        FinancialAidAward award = awardRepository
+                .findByStudentIdAndAcademicTermIdAndScholarshipProgrammeId(
+                        prior.getStudentId(), newAcademicTermId, programme.getId())
+                .orElseGet(() -> awardRepository.save(new FinancialAidAward(
+                        prior.getStudentId(), newAcademicTermId, amount, programme.getId(), prior.getId())));
+        return FinancialAidAwardResponse.from(award);
+    }
+
+    /** How many renewals already precede {@code award} — walks {@code renewedFromAwardId} back to the original. */
+    private int renewalChainLength(FinancialAidAward award) {
+        int length = 0;
+        UUID cursor = award.getRenewedFromAwardId();
+        while (cursor != null) {
+            length++;
+            cursor = awardRepository.findById(cursor).map(FinancialAidAward::getRenewedFromAwardId).orElse(null);
+        }
+        return length;
     }
 
     @Auditable(
