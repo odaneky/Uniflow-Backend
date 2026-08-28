@@ -11,9 +11,14 @@ import com.university.lms.common.security.SecurityRoles;
 import com.university.lms.course.domain.Course;
 import com.university.lms.curriculum.domain.CourseSubstitution;
 import com.university.lms.curriculum.repository.CourseSubstitutionRepository;
+import com.university.lms.request.domain.ServiceRequest;
+import com.university.lms.request.domain.ServiceRequestType;
+import com.university.lms.request.repository.ServiceRequestRepository;
 import com.university.lms.student.domain.Student;
 import com.university.lms.support.AbstractPostgresIntegrationTest;
 import com.university.lms.support.AcademicFixtures;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,10 +48,19 @@ class CourseSubstitutionReadIntegrationTest extends AbstractPostgresIntegrationT
     @Autowired
     private CourseSubstitutionRepository substitutionRepository;
 
+    @Autowired
+    private ServiceRequestRepository serviceRequestRepository;
+
     private static RequestPostProcessor asRegistrar() {
-        return jwt().authorities(new GrantedAuthority[] {
-            new SimpleGrantedAuthority(SecurityRoles.authority(SecurityRoles.REGISTRAR))
-        });
+        String subject = "registrar-" + UUID.randomUUID();
+        return jwt().jwt(token -> token.claim("sub", subject)
+                        .claim("preferred_username", subject)
+                        .claim("email", subject + "@university.test")
+                        .claim("given_name", "Rita")
+                        .claim("family_name", "Registrar"))
+                .authorities(new GrantedAuthority[] {
+                    new SimpleGrantedAuthority(SecurityRoles.authority(SecurityRoles.REGISTRAR))
+                });
     }
 
     private static RequestPostProcessor asStudent() {
@@ -55,17 +69,28 @@ class CourseSubstitutionReadIntegrationTest extends AbstractPostgresIntegrationT
         });
     }
 
-    private UUID createBlockWithCourse(UUID programmeId, UUID courseId) throws Exception {
-        String response = mockMvc.perform(post("/api/v1/programmes/{id}/requirement-blocks", programmeId)
+    private void createPublishedBlockWithCourse(UUID programmeId, UUID courseId) throws Exception {
+        mockMvc.perform(post("/api/v1/programmes/{id}/requirement-blocks", programmeId)
                         .with(asRegistrar())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Core\",\"kind\":\"CORE\",\"requiredCredits\":3,\"courseIds\":[\""
                                 + courseId + "\"]}"))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return UUID.fromString(JsonPath.read(response, "$.id"));
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/programmes/{id}/requirement-blocks/publish", programmeId).with(asRegistrar()))
+                .andExpect(status().isNoContent());
+    }
+
+    /** A persisted COURSE_SUBSTITUTION request — the FK target for {@code service_request_id}. */
+    private UUID approvedRequest(UUID studentId) {
+        ServiceRequest request = new ServiceRequest(
+                studentId,
+                ServiceRequestType.COURSE_SUBSTITUTION,
+                "CS-" + UUID.randomUUID().toString().substring(0, 8),
+                null,
+                "{}",
+                null,
+                Instant.now().plus(10, ChronoUnit.DAYS));
+        return serviceRequestRepository.saveAndFlush(request).getId();
     }
 
     @Test
@@ -76,13 +101,14 @@ class CourseSubstitutionReadIntegrationTest extends AbstractPostgresIntegrationT
         Course substitute = academicFixtures.course(programme);
         Student student = academicFixtures.student(programme);
 
-        createBlockWithCourse(programme.getId(), required.getId());
-        mockMvc.perform(post("/api/v1/programmes/{id}/requirement-blocks/publish", programme.getId())
-                        .with(asRegistrar()))
-                .andExpect(status().isNoContent());
+        createPublishedBlockWithCourse(programme.getId(), required.getId());
 
         substitutionRepository.saveAndFlush(new CourseSubstitution(
-                student.getId(), required.getId(), substitute.getId(), UUID.randomUUID(), UUID.randomUUID()));
+                student.getId(),
+                required.getId(),
+                substitute.getId(),
+                approvedRequest(student.getId()),
+                UUID.randomUUID()));
 
         mockMvc.perform(get("/api/v1/programmes/{id}/course-substitutions", programme.getId()).with(asRegistrar()))
                 .andExpect(status().isOk())
@@ -103,13 +129,14 @@ class CourseSubstitutionReadIntegrationTest extends AbstractPostgresIntegrationT
         Course substitute = academicFixtures.course(programme);
         Student student = academicFixtures.student(programme);
 
-        createBlockWithCourse(programme.getId(), required.getId());
-        mockMvc.perform(post("/api/v1/programmes/{id}/requirement-blocks/publish", programme.getId())
-                        .with(asRegistrar()))
-                .andExpect(status().isNoContent());
+        createPublishedBlockWithCourse(programme.getId(), required.getId());
 
         substitutionRepository.saveAndFlush(new CourseSubstitution(
-                student.getId(), unrelated.getId(), substitute.getId(), UUID.randomUUID(), UUID.randomUUID()));
+                student.getId(),
+                unrelated.getId(),
+                substitute.getId(),
+                approvedRequest(student.getId()),
+                UUID.randomUUID()));
 
         mockMvc.perform(get("/api/v1/programmes/{id}/course-substitutions", programme.getId()).with(asRegistrar()))
                 .andExpect(status().isOk())
