@@ -1,6 +1,7 @@
 package com.university.lms.curriculum.repository;
 
 import com.university.lms.curriculum.domain.CourseSubstitution;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,4 +13,7 @@ public interface CourseSubstitutionRepository extends JpaRepository<CourseSubsti
     List<CourseSubstitution> findByStudentId(UUID studentId);
 
     Optional<CourseSubstitution> findByStudentIdAndRequiredCourseId(UUID studentId, UUID requiredCourseId);
+
+    /** Every substitution excusing one of the given required courses, newest approval first. */
+    List<CourseSubstitution> findByRequiredCourseIdInOrderByApprovedAtDesc(Collection<UUID> requiredCourseIds);
 }

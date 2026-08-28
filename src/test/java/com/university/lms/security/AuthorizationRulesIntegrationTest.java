@@ -489,6 +489,14 @@ class AuthorizationRulesIntegrationTest extends AbstractPostgresIntegrationTest 
             denied(delete(path).with(as(SecurityRoles.STUDENT)));
             allowed(delete(path).with(as(SecurityRoles.REGISTRAR)));
         }
+
+        @Test
+        @DisplayName("a programme's granted course substitutions are a staff read, not a student one")
+        void studentsCannotListProgrammeCourseSubstitutions() throws Exception {
+            String path = "/api/v1/programmes/" + UUID.randomUUID() + "/course-substitutions";
+            denied(get(path).with(as(SecurityRoles.STUDENT)));
+            allowed(get(path).with(as(SecurityRoles.REGISTRAR)));
+        }
     }
 
     @Nested

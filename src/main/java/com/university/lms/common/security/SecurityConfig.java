@@ -342,6 +342,13 @@ public class SecurityConfig {
                         .hasAnyRole(SYSTEM_ADMIN, FACULTY_ADMIN, REGISTRAR)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/programmes/*/requirement-blocks/*")
                         .hasAnyRole(SYSTEM_ADMIN, FACULTY_ADMIN, REGISTRAR)
+                        // The programme's granted course substitutions — a staff-facing read of
+                        // per-student academic exceptions, never a student-visible list. Same
+                        // curriculum-editor role set as the requirement-block rules above; there is
+                        // no service-layer guard beyond requireProgramme, so this matcher is what
+                        // enforces @AccessClass(STAFF_ONLY) on ProgrammeSubstitutionController.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/programmes/*/course-substitutions")
+                        .hasAnyRole(SYSTEM_ADMIN, FACULTY_ADMIN, REGISTRAR)
 
                         // -------- audit trail --------
                         // Listed before the catch-all authenticated GET. The trail is a history of

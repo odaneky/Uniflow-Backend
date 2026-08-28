@@ -14,7 +14,9 @@ import com.university.lms.curriculum.domain.CurriculumErrorCode;
 import com.university.lms.curriculum.domain.CurriculumVersion;
 import com.university.lms.curriculum.domain.CurriculumVersionStatus;
 import com.university.lms.curriculum.domain.ProgrammeRequirementBlock;
+import com.university.lms.curriculum.domain.CourseSubstitution;
 import com.university.lms.curriculum.dto.AddRequirementCourseRequest;
+import com.university.lms.curriculum.dto.CourseSubstitutionResponse;
 import com.university.lms.curriculum.dto.CreateRequirementBlockRequest;
 import com.university.lms.curriculum.dto.DegreeProgressResponse;
 import com.university.lms.curriculum.dto.DegreeProgressResponse.CurriculumCourseResponse;
@@ -36,11 +38,13 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +94,64 @@ public class CurriculumService {
                         .map(RequirementBlockResponse::from)
                         .toList())
                 .orElseGet(List::of);
+    }
+
+    /**
+     * Every registrar-approved substitution excusing a course this programme's active curriculum
+     * requires, newest approval first. The read counterpart to
+     * {@link com.university.lms.curriculum.api.CourseSubstitutions#record}: scoped by required
+     * course — the programme's own list of granted exceptions — rather than by student.
+     */
+    public List<CourseSubstitutionResponse> substitutionsOfProgramme(UUID programmeId) {
+        requireProgramme(programmeId);
+        Set<UUID> requiredCourseIds = findActiveVersion(programmeId)
+                .map(version -> blockRepository.findByCurriculumVersionIdOrderByPositionAsc(version.getId()).stream()
+                        .flatMap(block -> block.getCourseIds().stream())
+                        .collect(Collectors.toCollection(LinkedHashSet::new)))
+                .orElseGet(LinkedHashSet::new);
+        if (requiredCourseIds.isEmpty()) {
+            return List.of();
+        }
+        List<CourseSubstitution> rows =
+                substitutionRepository.findByRequiredCourseIdInOrderByApprovedAtDesc(requiredCourseIds);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+
+        Set<UUID> courseIds = new HashSet<>();
+        Set<UUID> studentIds = new HashSet<>();
+        for (CourseSubstitution row : rows) {
+            courseIds.add(row.getRequiredCourseId());
+            courseIds.add(row.getSubstituteCourseId());
+            studentIds.add(row.getStudentId());
+        }
+        Map<UUID, CourseCatalog.CourseSummary> courses = courseCatalog.findCourses(courseIds).stream()
+                .collect(Collectors.toMap(CourseCatalog.CourseSummary::id, course -> course));
+        Map<UUID, String> studentNumbers = new HashMap<>();
+        for (UUID studentId : studentIds) {
+            studentDirectory
+                    .findById(studentId)
+                    .ifPresent(student -> studentNumbers.put(studentId, student.studentNumber()));
+        }
+
+        List<CourseSubstitutionResponse> result = new ArrayList<>(rows.size());
+        for (CourseSubstitution row : rows) {
+            CourseCatalog.CourseSummary required = courses.get(row.getRequiredCourseId());
+            CourseCatalog.CourseSummary substitute = courses.get(row.getSubstituteCourseId());
+            result.add(new CourseSubstitutionResponse(
+                    row.getStudentId(),
+                    studentNumbers.get(row.getStudentId()),
+                    row.getRequiredCourseId(),
+                    required == null ? null : required.courseCode(),
+                    required == null ? null : required.title(),
+                    row.getSubstituteCourseId(),
+                    substitute == null ? null : substitute.courseCode(),
+                    substitute == null ? null : substitute.title(),
+                    row.getServiceRequestId(),
+                    row.getApprovedBy(),
+                    row.getApprovedAt()));
+        }
+        return result;
     }
 
     public DegreeProgressResponse ownProgress() {

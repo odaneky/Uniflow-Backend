@@ -130,6 +130,21 @@ public class AcademicFixtures {
                 new Student(user.getId(), "S" + token(next()), programme.getId(), LocalDate.of(2026, 9, 1)));
     }
 
+    /** A standalone active course in the given programme's department. */
+    @Transactional
+    public Course course(Programme programme) {
+        int n = next();
+        Course course = new Course(
+                "C" + token(n),
+                "Test Course " + n,
+                3,
+                1,
+                programme.getDepartment().getId(),
+                Set.of(CourseComponent.LECTURE));
+        course.activate();
+        return courseRepository.save(course);
+    }
+
     /** An OPEN section with the requested capacity, ready to accept enrolments. */
     @Transactional
     public CourseSection openSection(AcademicTerm term, int capacity) {
